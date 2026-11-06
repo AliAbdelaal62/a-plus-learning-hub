@@ -1,8 +1,9 @@
-# A+ Hub migration roadmap
+# A+ Hub experimental preview roadmap
 
-- [x] Phase 1 — core: login & team roles, students, teachers, subjects, lessons, schedule, dashboard (Arabic default)
-- [ ] Import existing academy records (waiting on CSV exports from the user)
-- [ ] Phase 2 — finance: student/teacher payments, currencies & exchange rates, ledger, treasury, teacher batch payments
-- [ ] Phase 3 — projects, recorded courses, enrollments, reminders
-- [ ] Phase 4 — operations: attendance, follow-up tasks, registrations, teacher portal, single-occurrence schedule changes
-- [ ] Dark mode, Excel export, audit history
+- [ ] Vendor original source (commit 86e86d7) into the project, read-only reference
+- [ ] Browser runtime: original server + modules running in-page (SQLite WASM, in-memory files saved in browser storage)
+- [ ] Original interface served unchanged (index.html, team login, vendor libs)
+- [ ] Synthetic data + synthetic team accounts for each role
+- [ ] Compare financial outputs with original tests/fixtures
+- [ ] Browser-test main workflows and role permissions
+- [ ] Document unsupported/limited features
