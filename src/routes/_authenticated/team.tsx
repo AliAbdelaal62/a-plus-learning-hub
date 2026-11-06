@@ -40,7 +40,7 @@ function TeamPage() {
       const res =
         role === ""
           ? await supabase.rpc("remove_user_access", { _user_id: id })
-          : await supabase.rpc("set_user_role", { _user_id: id, _role: role as Role, _teacher_id: teacher ?? undefined });
+          : await supabase.rpc("set_user_role", teacher ? { _user_id: id, _role: role as Role, _teacher_id: teacher } : { _user_id: id, _role: role as Role });
       if (res.error) throw res.error;
     },
     onSuccess: () => {
@@ -104,7 +104,7 @@ function TeamPage() {
                     <option value="">—</option>
                     {(teachers.data ?? []).map((x) => (
                       <option key={x.id} value={x.id}>
-                        {x.name as string}
+                        {x["name"] as string}
                       </option>
                     ))}
                   </select>

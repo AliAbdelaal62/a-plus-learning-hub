@@ -18,8 +18,8 @@ function SchedulePage() {
       ascending
       fields={[
         { key: "recurring", label: "recurring", type: "bool" },
-        { key: "date", label: "date", type: "date", showIf: (v) => !v.recurring },
-        { key: "weekday", label: "weekday", type: "weekday", showIf: (v) => !!v.recurring },
+        { key: "date", label: "date", type: "date", showIf: (v) => !v["recurring"] },
+        { key: "weekday", label: "weekday", type: "weekday", showIf: (v) => !!v["recurring"] },
         { key: "start_time", label: "start", type: "time", required: true },
         { key: "end_time", label: "end", type: "time", required: true },
         { key: "subject_id", label: "subject", type: "ref", ref: "subjects" },

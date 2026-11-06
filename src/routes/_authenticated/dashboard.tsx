@@ -39,8 +39,8 @@ function Dashboard() {
   const name = (list: { id: string; name?: unknown }[] | undefined, id: unknown) => (list?.find((x) => x.id === id)?.name as string) ?? "—";
   const done = (lessons.data ?? []).filter((l) => l.status === "completed");
   const stats: [TKey, number | string][] = [
-    ["activeStudents", (students.data ?? []).filter((s) => s.status === "active").length],
-    ["activeTeachers", (teachers.data ?? []).filter((s) => s.status === "active").length],
+    ["activeStudents", (students.data ?? []).filter((s) => s["status"] === "active").length],
+    ["activeTeachers", (teachers.data ?? []).filter((s) => s["status"] === "active").length],
     ["lessonsMonth", done.length],
     ["hoursMonth", done.reduce((a, l) => a + Number(l.hours), 0).toFixed(1)],
   ];

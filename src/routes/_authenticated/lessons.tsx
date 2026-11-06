@@ -26,14 +26,14 @@ export const Route = createFileRoute("/_authenticated/lessons")({
       onFieldChange={(key, v, lookups) => {
         // Picking a subject fills in its teacher and agreed rates, as in the original system.
         if (key !== "subject_id") return {};
-        const s = lookups.subjects.find((x) => x.id === v.subject_id);
+        const s = lookups.subjects.find((x) => x.id === v["subject_id"]);
         if (!s) return {};
         return {
-          teacher_id: s.teacher_id ?? v.teacher_id,
-          teacher_rate: s.teacher_rate ?? v.teacher_rate,
-          teacher_currency: s.teacher_currency ?? v.teacher_currency,
-          student_rate: s.student_rate ?? v.student_rate,
-          student_currency: s.student_currency ?? v.student_currency,
+          teacher_id: s["teacher_id"] ?? v["teacher_id"],
+          teacher_rate: s["teacher_rate"] ?? v["teacher_rate"],
+          teacher_currency: s["teacher_currency"] ?? v["teacher_currency"],
+          student_rate: s["student_rate"] ?? v["student_rate"],
+          student_currency: s["student_currency"] ?? v["student_currency"],
         };
       }}
     />
