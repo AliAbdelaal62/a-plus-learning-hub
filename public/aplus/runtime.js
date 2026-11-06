@@ -32682,7 +32682,20 @@ CREATE TABLE IF NOT EXISTS preview_notifications(\r
  recipient_id INTEGER NOT NULL,kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,\r
  UNIQUE(event_key,recipient_kind,recipient_id)\r
 );\r
-CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);` };
+CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);\r
+CREATE TABLE IF NOT EXISTS preview_reschedule_votes(\r
+ request_id INTEGER NOT NULL REFERENCES preview_requests(id),\r
+ vote_role TEXT NOT NULL CHECK(vote_role IN('Admin','Teacher')),\r
+ voter_id INTEGER NOT NULL REFERENCES team_users(id),\r
+ status TEXT NOT NULL CHECK(status IN('Approved','Rejected')),reason TEXT NOT NULL,created_at TEXT NOT NULL,\r
+ PRIMARY KEY(request_id,vote_role)\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL,recipient_id INTEGER NOT NULL REFERENCES team_users(id),\r
+ kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,\r
+ UNIQUE(event_key,recipient_id)\r
+);\r
+` };
   });
 
   // node_modules/base64-js/index.js
@@ -42027,6 +42040,176 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
     module.exports = { student, teacher, kwd, range };
   });
 
+  // aplus-preview/extensions/rescheduling.js
+  var require_rescheduling = __commonJS(function(exports, module) {
+    var { assemble } = require_state();
+    var M = require_management();
+    var S = require_save();
+    var { tx } = require_db();
+    var store = require_store();
+    var T = require_teacher_portal();
+    var cairo = require_cairo();
+    var rules = require_rules();
+    var fail = (code, message) => {
+      throw Object.assign(Error(message), { code });
+    };
+    var stamp = (x) => JSON.stringify([x.source, x.id, x.originalDate, x.date, x.startsAt, x.endsAt, x.teacherId, x.subject, x.group, x.status]);
+    function install(getDb, { clock, request, audit, notify }) {
+      const db = () => getDb(), today2 = () => cairo.today(clock());
+      function choices(student) {
+        const st = assemble(db()), bookings = db().prepare("SELECT * FROM managed_sessions WHERE student_id=?").all(student);
+        const filtered = { ...st, s: st.s.filter((s) => s.id === student), l: st.l.filter((l) => l.s === student), tt: st.tt.filter((t) => (t.s || []).includes(student)) };
+        const teachers = new Set([...filtered.tt.map((t) => t.t), ...bookings.map((s) => s.teacher_id)]);
+        return [...teachers].filter(Boolean).flatMap((id) => T.schedule(filtered, id, bookings, { from: today2(), to: cairo.addDays(today2(), 62) }).filter((r) => ["Timetable", "Booking"].includes(r.source) && !["Completed", "Cancelled", "Skipped"].includes(r.status) && !(r.source === "Timetable" && st.l.some((l) => l.tt === r.id && (l.od || l.date) === r.originalDate))).map((r) => {
+          const group = r.source === "Timetable" && (st.tt.find((t) => t.id === r.id)?.s || []).length > 1;
+          return { key: r.source + ":" + r.id + ":" + r.originalDate, source: r.source, id: r.id, originalDate: r.originalDate, date: r.date, startsAt: r.startsAt, endsAt: r.endsAt, subject: r.subject, teacherId: id, teacher: st.t.find((t) => t.id === id)?.name || "", group, status: r.status };
+        }));
+      }
+      function staffNotice(id, key, kind, reference) {
+        db().prepare("INSERT OR IGNORE INTO preview_staff_notifications(event_key,recipient_id,kind,reference,created_at) VALUES(?,?,?,?,?)").run(key, id, kind, String(reference), clock().toISOString());
+      }
+      function create(u, r) {
+        if (!["Student", "Teacher"].includes(u.role))
+          fail(403, "Only the assigned student or teacher can request a change.");
+        let student = u.student_id;
+        if (u.role === "Teacher") {
+          const booking = db().prepare("SELECT * FROM managed_sessions WHERE id=?").get(r.session_id);
+          if (!booking || booking.teacher_id !== u.teacher_id)
+            fail(403, "This lesson is not assigned to you.");
+          student = booking.student_id;
+          r.lesson_key = "Booking:" + booking.id + ":" + booking.date;
+        }
+        const selected = choices(student).find((x) => x.key === r.lesson_key);
+        if (!selected)
+          fail(422, "Choose an upcoming lesson from your schedule.");
+        if (!rules.isDate(r.date) || r.date < today2() || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.starts_at || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.ends_at || "") || r.ends_at <= r.starts_at)
+          fail(422, "Choose a future date and valid start/end times.");
+        if (r.date === selected.date && r.starts_at === selected.startsAt && r.ends_at === selected.endsAt)
+          fail(422, "Choose a different time.");
+        if (selected.group && r.acknowledge_group !== true)
+          fail(422, "This is a group lesson. Confirm that the requested change affects the whole group.");
+        const reason = String(r.reason || "").trim();
+        if (!reason || !rules.plain(reason, 500))
+          fail(422, "A short valid reason is required.");
+        return tx(db(), () => {
+          const existing = db().prepare("SELECT * FROM preview_requests WHERE kind='reschedule' AND status='Pending'").all().find((q) => {
+            const old = JSON.parse(q.record);
+            return old.lesson_key === selected.key;
+          });
+          if (existing) {
+            if (existing.actor === u.username && existing.request_key === r.request_key)
+              return existing;
+            fail(409, "A change request for this lesson is already awaiting approval.");
+          }
+          const q = request(u, "reschedule", { version: 2, lesson_key: selected.key, teacher_id: selected.teacherId, student_id: student, subject: selected.subject, previous: selected, fingerprint: stamp(selected), proposed: { date: r.date, starts_at: r.starts_at, ends_at: r.ends_at } }, r.request_key, reason, student);
+          notify("reschedule-request:" + q.id, "Teacher", selected.teacherId, "RescheduleRequested", q.id);
+          for (const a of db().prepare("SELECT id FROM team_users WHERE role='Admin' AND active=1").all())
+            staffNotice(a.id, "reschedule-request:" + q.id, "RescheduleRequested", q.id);
+          return q;
+        });
+      }
+      function details(q, u) {
+        const record = JSON.parse(q.record), votes = db().prepare("SELECT vote_role,status,reason,created_at FROM preview_reschedule_votes WHERE request_id=?").all(q.id);
+        const student = assemble(db()).s.find((s) => s.id === q.student_id)?.name || "";
+        return { ...q, record: JSON.stringify(record), studentName: u.role === "Student" ? "" : student, adminApproval: votes.find((v) => v.vote_role === "Admin")?.status || "Pending", teacherApproval: votes.find((v) => v.vote_role === "Teacher")?.status || "Pending", votes };
+      }
+      function visible(q, u) {
+        if (q.kind !== "reschedule")
+          return false;
+        if (u.role === "Admin")
+          return true;
+        const r = JSON.parse(q.record);
+        return u.role === "Teacher" ? r.teacher_id === u.teacher_id : u.role === "Student" ? q.student_id === u.student_id : false;
+      }
+      function move(record, u) {
+        const current = choices(record.student_id).find((x) => x.key === record.lesson_key);
+        if (!current || stamp(current) !== record.fingerprint)
+          fail(409, "The original lesson changed. Submit a new request for its current time.");
+        const st = assemble(db()), next = record.proposed;
+        let affected = [record.student_id], entry;
+        if (current.source === "Timetable") {
+          entry = st.tt.find((e) => e.id === current.id);
+          affected = entry.s || [];
+          const hidden = JSON.parse(JSON.stringify(entry));
+          if (entry.sched === "rec")
+            hidden.ex = { ...hidden.ex || {}, [current.originalDate]: { ...(hidden.ex || {})[current.originalDate], deleted: true } };
+          else
+            hidden.date = "1900-01-01";
+          store.updateRow(db(), "tt", hidden);
+        }
+        const draft = { teacher_id: record.teacher_id, student_id: record.student_id, date: next.date, starts_at: next.starts_at, ends_at: next.ends_at };
+        const hasAvailability = db().prepare("SELECT 1 FROM teacher_availability WHERE teacher_id=? AND active=1").get(record.teacher_id);
+        if (hasAvailability && !M.available(db(), draft))
+          fail(422, "The requested time is outside teacher availability.");
+        for (const student_id of affected) {
+          const conflicts2 = M.conflicts(db(), { ...draft, student_id }, current.source === "Booking" ? current.id : undefined);
+          if (conflicts2.length)
+            fail(422, "Time conflict: " + conflicts2.join(", "));
+        }
+        if (entry) {
+          if (entry.sched === "rec")
+            entry.ex = { ...entry.ex || {}, [current.originalDate]: { ...(entry.ex || {})[current.originalDate], moved: { date: next.date, st: next.starts_at, en: next.ends_at } } };
+          else {
+            entry.date = next.date;
+            entry.st = next.starts_at;
+            entry.en = next.ends_at;
+          }
+          store.updateRow(db(), "tt", entry);
+        } else {
+          db().prepare("UPDATE managed_sessions SET date=?,starts_at=?,ends_at=? WHERE id=?").run(next.date, next.starts_at, next.ends_at, current.id);
+          db().prepare("DELETE FROM session_confirmations WHERE session_id=?").run(current.id);
+        }
+        db().prepare("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('rev',?)").run(String(S.getRev(db()) + 1));
+        audit(u, "update", "approved-reschedule", current.id, record.previous, next);
+        return affected;
+      }
+      function decide(u, r) {
+        const q = db().prepare("SELECT * FROM preview_requests WHERE id=? AND kind='reschedule'").get(r.id);
+        if (!q)
+          fail(404, "Change request not found.");
+        if (!visible(q, u) || !["Admin", "Teacher"].includes(u.role))
+          fail(403, "Only administration and the assigned teacher may approve this request.");
+        if (!["Approved", "Rejected"].includes(r.status))
+          fail(422, "Choose approved or rejected.");
+        if (!r.reason || !rules.plain(r.reason, 500))
+          fail(422, "A decision reason is required.");
+        return tx(db(), () => {
+          if (q.status !== "Pending")
+            return details(q, u);
+          const previous = db().prepare("SELECT status FROM preview_reschedule_votes WHERE request_id=? AND vote_role=?").get(q.id, u.role);
+          if (previous) {
+            if (previous.status !== r.status)
+              fail(409, "Your decision is already recorded.");
+            return details(q, u);
+          }
+          db().prepare("INSERT INTO preview_reschedule_votes VALUES(?,?,?,?,?,?)").run(q.id, u.role, u.id, r.status, r.reason.trim(), clock().toISOString());
+          const votes = db().prepare("SELECT status FROM preview_reschedule_votes WHERE request_id=?").all(q.id);
+          let state = r.status === "Rejected" ? "Rejected" : votes.length === 2 && votes.every((v) => v.status === "Approved") ? "Approved" : "Pending", affected = [];
+          const record = JSON.parse(q.record);
+          if (state === "Approved") {
+            if (record.version !== 2)
+              fail(409, "This older request must be resubmitted using the lesson selector.");
+            affected = move(record, u);
+          }
+          if (state !== "Pending")
+            db().prepare("UPDATE preview_requests SET status=?,decided_at=?,decided_by=?,result=? WHERE id=?").run(state, clock().toISOString(), u.username, JSON.stringify({ reason: r.reason, proposed: record.proposed }), q.id);
+          audit(u, "update", "reschedule-vote", q.id, null, { role: u.role, status: r.status, requestStatus: state, reason: r.reason });
+          if (state !== "Approved")
+            notify("reschedule-vote:" + q.id + ":" + u.role, "Student", q.student_id, state === "Rejected" ? "RescheduleRejected" : "RescheduleAwaitingSecondApproval", q.id);
+          if (state === "Approved")
+            for (const student of affected)
+              notify("reschedule-final:" + q.id, "Student", student, "ScheduleChanged", q.id);
+          notify("reschedule-state:" + q.id + ":" + u.role, "Teacher", record.teacher_id, state === "Approved" ? "ScheduleChanged" : state === "Rejected" ? "RescheduleRejected" : "RescheduleAwaitingSecondApproval", q.id);
+          for (const a of db().prepare("SELECT id FROM team_users WHERE role='Admin' AND active=1").all())
+            staffNotice(a.id, "reschedule-state:" + q.id + ":" + u.role, state === "Approved" ? "ScheduleChanged" : state === "Rejected" ? "RescheduleRejected" : "RescheduleAwaitingSecondApproval", q.id);
+          return details(db().prepare("SELECT * FROM preview_requests WHERE id=?").get(q.id), u);
+        });
+      }
+      return { choices, create, decide, details, visible };
+    }
+    module.exports = { install };
+  });
+
   // aplus-preview/extensions/service.js
   var require_service = __commonJS(function(exports, module) {
     var crypto2 = require_crypto2();
@@ -42149,6 +42332,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
           student: { id: s, name: label(st.s, s) },
           timezone: "Africa/Cairo",
           schedule,
+          rescheduleChoices: RESCHEDULE.choices(s),
           subjects: st.sub.filter((x) => (x.studs || []).includes(s) || regs.some((r) => r.subject_id === x.id) || st.l.some((l) => l.s === s && l.sub === x.id)).map((x) => ({ id: x.id, name: x.name, type: x.type, teacher: label(st.t, x.inst) })),
           lessons: st.l.filter((l) => l.s === s && l.st === "Completed").map((l) => ({ id: l.id, date: l.date, subject: label(st.sub, l.sub), teacher: label(st.t, l.t), hours: l.d, status: l.st, attendance: db().prepare("SELECT status FROM lesson_attendance WHERE lesson_id=?").get(l.id)?.status || "", summary: shares.filter((x) => x.kind === "Lesson" && x.source_id === l.id) })),
           projects: st.pr.filter((p) => p.s === s).map((p) => ({ id: p.id, name: p.name, teacher: label(st.t, p.t), status: p.status, due: p.due, stages: db().prepare("SELECT id,title,due_on,status FROM project_stages WHERE project_id=?").all(p.id) })),
@@ -42190,6 +42374,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         audit(u, "create", "approval", id, null, { kind, status: "Pending" });
         return db().prepare("SELECT * FROM preview_requests WHERE id=?").get(id);
       }
+      const RESCHEDULE = require_rescheduling().install(db, { clock, request, audit, notify });
       function handler(method, path, headers, body) {
         const url = new URL(path, "http://localhost"), p = url.pathname, u = actor(headers), write2 = !["GET", "HEAD"].includes(method);
         let b;
@@ -42276,16 +42461,14 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
               const cond = u.role === "Student" ? ["Student", u.student_id] : u.role === "Teacher" ? ["Teacher", u.teacher_id] : null;
               if (!cond) {
                 finance(u);
-                return response({ ok: true, rows: db().prepare("SELECT * FROM preview_notifications ORDER BY id DESC LIMIT 200").all() });
+                const staff = u.role === "Admin" ? db().prepare("SELECT * FROM preview_staff_notifications WHERE recipient_id=? ORDER BY id DESC").all(u.id).map((n) => ({ ...n, id: "staff:" + n.id, recipient_kind: "Admin" })) : [];
+                return response({ ok: true, rows: [...staff, ...db().prepare("SELECT * FROM preview_notifications ORDER BY id DESC LIMIT 200").all()] });
               }
               return response({ ok: true, rows: db().prepare("SELECT * FROM preview_notifications WHERE recipient_kind=? AND recipient_id=? ORDER BY id DESC").all(...cond) });
             }
             if (p === "/api/preview/requests") {
-              if (["Admin", "Accountant", "Coordinator"].includes(u.role)) {
-                const all = db().prepare("SELECT * FROM preview_requests ORDER BY id DESC").all();
-                return response({ ok: true, rows: all.filter((r) => u.role === "Admin" || (u.role === "Coordinator" ? r.kind === "reschedule" : r.kind !== "reschedule")) });
-              }
-              return response({ ok: true, rows: db().prepare("SELECT * FROM preview_requests WHERE actor=? ORDER BY id DESC").all(u.username) });
+              const all = db().prepare("SELECT * FROM preview_requests ORDER BY id DESC").all();
+              return response({ ok: true, rows: all.filter((q) => q.kind === "reschedule" ? RESCHEDULE.visible(q, u) : u.role === "Admin" || u.role === "Accountant" && q.kind !== "reschedule" || q.actor === u.username).map((q) => q.kind === "reschedule" ? RESCHEDULE.details(q, u) : q) });
             }
             if (p === "/api/preview/education") {
               if (!["Admin", "Coordinator", "Teacher"].includes(u.role))
@@ -42303,18 +42486,18 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
           const r = parse();
           if (p === "/api/preview/accounts")
             return response({ ok: true, account: createAccount(r, u) });
-          if (p === "/api/preview/password") {
-            if (u.role !== "Student")
-              fail(403, "Student account required.");
-            const a = db().prepare("SELECT * FROM preview_student_accounts WHERE id=?").get(u.id);
-            if (!matches(r.current, a.password_hash))
-              fail(401, "Current password is incorrect.");
-            db().prepare("UPDATE preview_student_accounts SET password_hash=? WHERE id=?").run(password(r.password), u.id);
-            db().prepare("DELETE FROM preview_student_sessions WHERE account_id=?").run(u.id);
-            audit(u, "update", "password", u.id, null, null);
-            return response({ ok: true }, 200, { "set-cookie": cookieName + "=; Max-Age=0; Path=/" });
-          }
+          if (p === "/api/preview/password")
+            fail(403, "Student passwords are managed by the administrator.");
           if (p === "/api/preview/read") {
+            if (typeof r.id === "string" && r.id.startsWith("staff:")) {
+              if (u.role !== "Admin")
+                fail(403, "Administrator access required.");
+              const id = Number(r.id.slice(6)), row = db().prepare("SELECT * FROM preview_staff_notifications WHERE id=? AND recipient_id=?").get(id, u.id);
+              if (!row)
+                fail(403, "Only your own notifications are available.");
+              db().prepare("UPDATE preview_staff_notifications SET read_at=coalesce(read_at,?) WHERE id=?").run(now(), id);
+              return response({ ok: true });
+            }
             const n = db().prepare("SELECT * FROM preview_notifications WHERE id=?").get(r.id);
             if (!n)
               fail(404, "Notification not found.");
@@ -42323,16 +42506,8 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
             db().prepare("UPDATE preview_notifications SET read_at=coalesce(read_at,?) WHERE id=?").run(now(), r.id);
             return response({ ok: true });
           }
-          if (p === "/api/preview/reschedule") {
-            if (!["Student", "Teacher"].includes(u.role))
-              fail(403, "Student or teacher request required.");
-            const s = db().prepare("SELECT * FROM managed_sessions WHERE id=?").get(r.session_id);
-            if (!s || (u.role === "Student" ? s.student_id !== u.student_id : s.teacher_id !== u.teacher_id))
-              fail(403, "This booking is not assigned to you.");
-            if (!rules.isDate(r.date) || !/^\d{2}:\d{2}$/.test(r.starts_at || "") || !/^\d{2}:\d{2}$/.test(r.ends_at || ""))
-              fail(422, "Choose a date and times.");
-            return response({ ok: true, request: request(u, "reschedule", { ...s, date: r.date, starts_at: r.starts_at, ends_at: r.ends_at, status: "Proposed" }, r.request_key, r.reason, s.student_id) });
-          }
+          if (p === "/api/preview/reschedule")
+            return response({ ok: true, request: RESCHEDULE.create(u, r) });
           if (p === "/api/preview/plan") {
             finance(u);
             const c = contractsForId(r.record?.contract_id), existing = db().prepare("SELECT id FROM billing_installments WHERE contract_id=?").get(c.id);
@@ -42353,6 +42528,8 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
             const q = db().prepare("SELECT * FROM preview_requests WHERE id=?").get(r.id);
             if (!q)
               fail(404, "Request not found.");
+            if (q.kind === "reschedule")
+              return response({ ok: true, request: RESCHEDULE.decide(u, r) });
             if (q.kind === "reschedule" ? !["Admin", "Coordinator"].includes(u.role) : u.role !== "Admin")
               fail(403, "Approval permission required.");
             if (q.status !== "Pending")
@@ -42869,11 +43046,11 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       };
       const field = (name, en, ar, type = "text", value = "") => "<label>" + esc(tr(en, ar)) + '<input name="' + name + '" type="' + type + '" value="' + esc(value) + '" ' + (type === "password" ? 'autocomplete="new-password"' : "") + "></label>";
       let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null;
-      const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"], ["account", "Account details", "تفاصيل الحساب"]] : [
+      const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["requests", "My Change Requests", "طلبات تغيير مواعيدي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"]] : [
         ...financial ? [["student-statement", "Student Statements", "كشوف الطلاب"], ["teacher-statement", "Teacher Statements", "كشوف المعلمين"], ["plans", "Installment Plans", "خطط الأقساط"]] : teacher ? [["teacher-statement", "Teacher Statement", "كشف المعلم"]] : [],
         ...user.role === "Admin" ? [["accounts", "Student Accounts", "حسابات الطلاب"]] : [],
         ...["Admin", "Accountant", "Coordinator", "Student", "Teacher"].includes(user.role) ? [["requests", "Pending Approvals", "طلبات الموافقة"]] : [],
-        ...["Admin", "Coordinator", "Teacher"].includes(user.role) ? [["education", "Shared Learning", "التعلم المشترك"]] : [],
+        ...["Admin", "Coordinator", "Teacher"].includes(user.role) ? [["education", "Learning Materials & Assignments", "المحتوى والواجبات"]] : [],
         ...financial || teacher ? [["notifications", "Notifications", "الإشعارات"]] : [],
         ...financial ? [["audit", "Extension Audit", "سجل الإضافات"]] : []
       ];
@@ -42997,14 +43174,51 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         const prefix = picker("student"), s = api("plans?student=" + selection);
         return '<div class="bar">' + prefix + "</div>" + installments(s) + '<form id="extension-plan-form"><div class="fg">' + field("id", "Installment ID (blank for new)", "رقم القسط (فارغ للجديد)", "number") + "<label>" + tr("Existing obligation", "الالتزام القائم") + '<select name="contract_id">' + s.installments.map((c) => '<option value="' + c.id + '">' + esc(c.title) + " #" + c.id + "</option>").join("") + "</select></label>" + field("due_on", "Due date", "تاريخ الاستحقاق", "date") + field("amount", "Amount (original currency)", "المبلغ (العملة الأصلية)", "number") + field("reason", "Student-facing reason", "السبب الظاهر للطالب") + '</div><button class="b" type="submit">' + tr("Submit plan", "إرسال الخطة") + "</button></form>";
       }
-      const notificationsText = (k) => ({ PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
+      const notificationsText = (k) => ({ RescheduleRequested: tr("Lesson time-change request awaiting your decision", "طلب تغيير موعد حصة بانتظار قرارك"), RescheduleRejected: tr("Lesson time-change request rejected", "تم رفض طلب تغيير موعد الحصة"), RescheduleAwaitingSecondApproval: tr("One approval recorded; waiting for the other party", "تم تسجيل موافقة وبانتظار الطرف الآخر"), PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
       function requests() {
         const rows = api("requests").rows;
-        return table([tr("Reference", "المرجع"), tr("Kind", "النوع"), tr("Status", "الحالة"), tr("Reason", "السبب"), tr("Decision", "القرار")], rows.map((q) => [text("#" + q.id), text(q.kind), text(status(q.status)), text(q.reason), q.status === "Pending" && (user.role === "Admin" || user.role === "Coordinator" && q.kind === "reschedule") ? '<button class="b2" data-decide="' + q.id + '" data-status="Approved">' + tr("Approve", "موافقة") + '</button> <button class="b2" data-decide="' + q.id + '" data-status="Rejected">' + tr("Reject", "رفض") + "</button>" : text(q.result ? JSON.parse(q.result).reason : "")]));
+        return table([tr("Subject / student", "المادة / الطالب"), tr("Current lesson", "الحصة الحالية"), tr("Requested time", "الموعد المطلوب"), tr("Status", "الحالة"), tr("Administration", "الإدارة"), tr("Teacher", "المدرس"), tr("Reason / result", "السبب / النتيجة"), tr("Decision", "القرار")], rows.map((q) => {
+          const r = JSON.parse(q.record), reschedule = q.kind === "reschedule", { previous: old, proposed: next } = r;
+          const can = q.status === "Pending" && (reschedule ? user.role === "Admin" && q.adminApproval === "Pending" || user.role === "Teacher" && q.teacherApproval === "Pending" : user.role === "Admin");
+          return [text(reschedule ? (r.subject || "") + (q.studentName ? " · " + q.studentName : "") : q.kind), text(old ? old.date + " · " + old.startsAt + "–" + old.endsAt : ""), text(next ? next.date + " · " + next.starts_at + "–" + next.ends_at : ""), text(status(q.status)), reschedule ? text(status(q.adminApproval)) : "", reschedule ? text(status(q.teacherApproval)) : "", text(q.reason) + (q.result ? "<br>" + text(JSON.parse(q.result).reason) : ""), can ? '<button class="b2" data-decide="' + q.id + '" data-status="Approved">' + tr("Approve", "موافقة") + '</button> <button class="b2" data-decide="' + q.id + '" data-status="Rejected">' + tr("Reject", "رفض") + "</button>" : ""];
+        }));
+      }
+      function rescheduleForm(s) {
+        const choices = s.rescheduleChoices || [];
+        if (!choices.length)
+          return "<p>" + tr("No upcoming lessons are available for a change request.", "لا توجد حصص قادمة متاحة لطلب تغيير موعد.") + "</p>";
+        const subjects = [...new Set(choices.map((x) => x.subject))];
+        return "<h3>" + tr("Request a time change", "طلب تغيير موعد") + "</h3><p>" + tr("Choose a subject and its lesson. The schedule changes only after BOTH the assigned teacher and administration approve.", "اختر المادة والحصة. لن يتغير الجدول إلا بعد موافقة المدرس المسؤول والإدارة معًا.") + '</p><form id="extension-reschedule-form"><div class="fg"><label>' + tr("Subject", "المادة") + '<select id="extension-reschedule-subject">' + subjects.map((x) => "<option>" + esc(x) + "</option>").join("") + "</select></label><label>" + tr("Lesson to change", "الحصة المطلوب تغيير موعدها") + '<select name="lesson_key" id="extension-reschedule-lesson"></select></label>' + field("date", "Requested date", "التاريخ المطلوب", "date") + field("starts_at", "Requested start", "البداية المطلوبة", "time") + field("ends_at", "Requested end", "النهاية المطلوبة", "time") + field("reason", "Reason", "السبب") + '</div><label id="extension-reschedule-group" style="display:none"><input type="checkbox" name="acknowledge_group"> ' + tr("This is a group lesson: the request changes the selected lesson for the whole group.", "هذه حصة جماعية: الطلب يغيّر موعد الحصة المحددة لكل المجموعة.") + '</label><button class="b" type="submit">' + tr("Send request", "إرسال الطلب") + "</button></form>";
+      }
+      function bindReschedule() {
+        const form = document.getElementById("extension-reschedule-form");
+        if (!form)
+          return;
+        const choices = data.rescheduleChoices || [], subject = document.getElementById("extension-reschedule-subject"), lesson = document.getElementById("extension-reschedule-lesson");
+        const pick = () => {
+          const row = choices.find((x) => x.key === lesson.value);
+          if (!row)
+            return;
+          form.elements.date.value = row.date;
+          form.elements.starts_at.value = row.startsAt;
+          form.elements.ends_at.value = row.endsAt;
+          const group = document.getElementById("extension-reschedule-group");
+          group.style.display = row.group ? "flex" : "none";
+          form.elements.acknowledge_group.required = row.group;
+          form.elements.acknowledge_group.checked = false;
+        };
+        subject.onchange = () => {
+          lesson.innerHTML = choices.filter((x) => x.subject === subject.value).map((x) => '<option value="' + esc(x.key) + '">' + esc(x.date + " · " + x.startsAt + "–" + x.endsAt + " · " + x.teacher) + "</option>").join("");
+          pick();
+        };
+        lesson.onchange = pick;
+        subject.onchange();
+        for (const field of ["date", "starts_at", "ends_at", "reason"])
+          form.elements[field].required = true;
       }
       function education() {
         const r = api("education");
-        return '<form id="extension-share-form"><div class="fg">' + field("id", "Share ID (blank for new)", "رقم المشاركة (فارغ للجديد)", "number") + field("student_id", "Existing student ID", "رقم الطالب الحالي", "number") + "<label>" + tr("Source kind", "نوع المصدر") + '<select name="kind">' + ["Lesson", "Assignment", "Project", "Stage", "Course", "Meeting"].map((k) => "<option>" + k + "</option>").join("") + "</select></label>" + field("source_id", "Existing source ID", "رقم السجل الأصلي", "number") + field("title", "Title", "العنوان") + field("body", "Shared text", "النص المشترك") + field("url", "HTTPS link", "رابط HTTPS", "url") + field("due_on", "Deadline", "الموعد النهائي", "date") + "<label>" + tr("Visibility", "الظهور") + '<select name="released"><option value="0">' + tr("Private draft", "مسودة خاصة") + '</option><option value="1">' + tr("Released to student", "منشور للطالب") + '</option></select></label></div><button class="b" type="submit">' + tr("Save learning item", "حفظ المادة") + "</button></form>" + table([tr("ID", "الرقم"), tr("Title", "العنوان"), tr("Student", "الطالب"), tr("Released", "منشور")], r.shares.map((s) => [text(s.id), text(s.title), text(s.student_id), text(s.released)])) + "<h3>" + tr("Submissions and feedback", "التسليمات والملاحظات") + "</h3>" + table([tr("ID", "الرقم"), tr("Assignment", "التكليف"), tr("Submission", "التسليم"), tr("Feedback", "الملاحظات")], r.submissions.map((s) => [text(s.id), text(s.title), text(s.body) + " " + link(s.url), text(s.feedback || "")])) + '<form id="extension-feedback-form"><div class="fg">' + field("submission_id", "Submission ID", "رقم التسليم", "number") + field("body", "Feedback", "الملاحظات") + "<label>" + tr("Visibility", "الظهور") + '<select name="published"><option value="0">' + tr("Private", "خاص") + '</option><option value="1">' + tr("Published", "منشور") + '</option></select></label></div><button class="b" type="submit">' + tr("Save feedback", "حفظ الملاحظات") + "</button></form>";
+        return "<p>" + tr("Share lesson files, HTTPS links and assignments with the assigned student; review submissions and publish feedback. Drafts and internal notes stay private.", "شارك ملفات الحصة وروابطها والواجبات مع الطالب المسؤول عنه، وراجع تسليماته وانشر الملاحظات له. المسودات والملاحظات الداخلية تظل خاصة.") + "</p>" + '<form id="extension-share-form"><div class="fg">' + field("id", "Share ID (blank for new)", "رقم المشاركة (فارغ للجديد)", "number") + field("student_id", "Existing student ID", "رقم الطالب الحالي", "number") + "<label>" + tr("Source kind", "نوع المصدر") + '<select name="kind">' + ["Lesson", "Assignment", "Project", "Stage", "Course", "Meeting"].map((k) => "<option>" + k + "</option>").join("") + "</select></label>" + field("source_id", "Existing source ID", "رقم السجل الأصلي", "number") + field("title", "Title", "العنوان") + field("body", "Shared text", "النص المشترك") + field("url", "HTTPS link", "رابط HTTPS", "url") + field("due_on", "Deadline", "الموعد النهائي", "date") + "<label>" + tr("Visibility", "الظهور") + '<select name="released"><option value="0">' + tr("Private draft", "مسودة خاصة") + '</option><option value="1">' + tr("Released to student", "منشور للطالب") + '</option></select></label></div><button class="b" type="submit">' + tr("Save learning item", "حفظ المادة") + "</button></form>" + table([tr("ID", "الرقم"), tr("Title", "العنوان"), tr("Student", "الطالب"), tr("Released", "منشور")], r.shares.map((s) => [text(s.id), text(s.title), text(s.student_id), text(s.released)])) + "<h3>" + tr("Submissions and feedback", "التسليمات والملاحظات") + "</h3>" + table([tr("ID", "الرقم"), tr("Assignment", "التكليف"), tr("Submission", "التسليم"), tr("Feedback", "الملاحظات")], r.submissions.map((s) => [text(s.id), text(s.title), text(s.body) + " " + link(s.url), text(s.feedback || "")])) + '<form id="extension-feedback-form"><div class="fg">' + field("submission_id", "Submission ID", "رقم التسليم", "number") + field("body", "Feedback", "الملاحظات") + "<label>" + tr("Visibility", "الظهور") + '<select name="published"><option value="0">' + tr("Private", "خاص") + '</option><option value="1">' + tr("Published", "منشور") + '</option></select></label></div><button class="b" type="submit">' + tr("Save feedback", "حفظ الملاحظات") + "</button></form>";
       }
       function learning() {
         data = api("student");
@@ -43017,7 +43231,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         if (page === "subjects")
           return table([tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Service", "الخدمة")], s.subjects.map((x) => [text(x.name), text(x.teacher), text(x.type)]));
         if (page === "schedule")
-          return "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p>" + lessonRows(s.schedule) + "<h3>" + tr("Request rescheduling — staff approval required", "طلب إعادة جدولة — يتطلب موافقة الموظفين") + '</h3><form id="extension-reschedule-form"><div class="fg">' + field("session_id", "Booking ID", "رقم الحجز", "number") + field("date", "Requested date", "التاريخ المطلوب", "date") + field("starts_at", "Start", "البداية", "time") + field("ends_at", "End", "النهاية", "time") + field("reason", "Reason", "السبب") + '</div><button class="b" type="submit">' + tr("Send request", "إرسال الطلب") + "</button></form>";
+          return "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p>" + lessonRows(s.schedule) + rescheduleForm(s);
         if (page === "lessons")
           return table([tr("Date", "التاريخ"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Hours", "الساعات"), tr("Attendance", "الحضور"), tr("Shared summary", "الملخص المشترك")], s.lessons.map((l) => [text(l.date), text(l.subject), text(l.teacher), text(l.hours), text(l.attendance), l.summary.map((x) => text(x.body)).join("<br>")]));
         if (page === "courses")
@@ -43034,7 +43248,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
           if (!v)
             return;
           const name = pages.find((x) => x[0] === page);
-          v.innerHTML = '<section id="extension-view" data-ui-user-content><h2>' + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p id="extension-error" class="neg" role="alert"></p>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : page === "account" ? "<h3>" + text(user.display_name) + "</h3><p>" + text(user.username) + '</p><form id="extension-password-form"><div class="fg">' + field("current", "Current password", "كلمة المرور الحالية", "password") + field("password", "New password (12+ characters)", "كلمة المرور الجديدة (١٢ حرفاً أو أكثر)", "password") + '</div><button class="b" type="submit">' + tr("Change password", "تغيير كلمة المرور") + "</button></form>" : learning()) + "</section>";
+          v.innerHTML = '<section id="extension-view" data-ui-user-content><h2>' + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p id="extension-error" class="neg" role="alert"></p>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.kind.startsWith("Reschedule") ? "requests" : n.kind === "ScheduleChanged" ? student ? "schedule" : "requests" : n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher || n.recipient_kind === "Admin" ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : learning()) + "</section>";
           bindPeriod();
           form("extension-account-form", (r) => api("accounts", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), active: Number(r.active) }));
           form("extension-plan-form", (r) => api("plan", { request_key: token(), reason: r.reason, record: { id: r.id ? Number(r.id) : undefined, contract_id: Number(r.contract_id), due_on: r.due_on, amount: Math.round(Number(r.amount) * 1000), note: r.reason } }));
@@ -43044,11 +43258,8 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
               selection = person.value;
               render();
             };
-          form("extension-password-form", (r) => {
-            api("password", r);
-            location.href = "/";
-          });
-          form("extension-reschedule-form", (r) => api("reschedule", { ...r, session_id: Number(r.session_id), request_key: token() }));
+          bindReschedule();
+          form("extension-reschedule-form", (r) => api("reschedule", { ...r, acknowledge_group: r.acknowledge_group === "on", request_key: token() }));
           form("extension-share-form", (r) => api("share", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), source_id: Number(r.source_id), released: Number(r.released) }));
           form("extension-feedback-form", (r) => api("feedback", { ...r, submission_id: Number(r.submission_id), published: Number(r.published) }));
           document.querySelectorAll("[data-submit]").forEach((el) => el.onsubmit = (e) => {
@@ -43062,21 +43273,30 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
           });
           document.querySelectorAll("[data-read]").forEach((el) => el.onclick = () => {
             try {
-              api("read", { id: Number(el.dataset.read) });
+              api("read", { id: el.dataset.read.startsWith("staff:") ? el.dataset.read : Number(el.dataset.read) });
               render();
             } catch (e) {
               error(e);
             }
           });
           document.querySelectorAll("[data-decide]").forEach((el) => el.onclick = () => {
-            const reason = prompt(tr("Student-facing decision reason", "سبب القرار الظاهر للطالب"));
-            if (reason)
+            const cell = el.closest("td");
+            cell.querySelector("form")?.remove();
+            const panel = document.createElement("form");
+            panel.innerHTML = field("reason", "Decision reason visible to the student", "سبب القرار الظاهر للطالب") + '<button class="b" type="submit">' + tr("Confirm decision", "تأكيد القرار") + '</button> <button class="b2" type="button">' + tr("Cancel", "إلغاء") + "</button>";
+            cell.append(panel);
+            panel.elements.reason.required = true;
+            panel.elements.reason.focus();
+            panel.querySelector('[type="button"]').onclick = () => panel.remove();
+            panel.onsubmit = (e) => {
+              e.preventDefault();
               try {
-                api("decision", { id: Number(el.dataset.decide), status: el.dataset.status, reason });
+                api("decision", { id: Number(el.dataset.decide), status: el.dataset.status, reason: panel.elements.reason.value });
                 render();
-              } catch (e) {
-                error(e);
+              } catch (err) {
+                error(err);
               }
+            };
           });
         } catch (e) {
           error(e);

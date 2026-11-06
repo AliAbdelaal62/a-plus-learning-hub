@@ -34,3 +34,15 @@ CREATE TABLE IF NOT EXISTS preview_notifications(
  UNIQUE(event_key,recipient_kind,recipient_id)
 );
 CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS preview_reschedule_votes(
+ request_id INTEGER NOT NULL REFERENCES preview_requests(id),
+ vote_role TEXT NOT NULL CHECK(vote_role IN('Admin','Teacher')),
+ voter_id INTEGER NOT NULL REFERENCES team_users(id),
+ status TEXT NOT NULL CHECK(status IN('Approved','Rejected')),reason TEXT NOT NULL,created_at TEXT NOT NULL,
+ PRIMARY KEY(request_id,vote_role)
+);
+CREATE TABLE IF NOT EXISTS preview_staff_notifications(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL,recipient_id INTEGER NOT NULL REFERENCES team_users(id),
+ kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,
+ UNIQUE(event_key,recipient_id)
+);
