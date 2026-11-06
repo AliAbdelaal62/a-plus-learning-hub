@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS preview_notifications(
  UNIQUE(event_key,recipient_kind,recipient_id)
 );
 CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS preview_student_preferences(
+ student_id INTEGER PRIMARY KEY REFERENCES students(id),
+ timezone TEXT NOT NULL CHECK(timezone IN('Africa/Cairo','Asia/Kuwait','Europe/London')),
+ updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS preview_reschedule_votes(
  request_id INTEGER NOT NULL REFERENCES preview_requests(id),
  vote_role TEXT NOT NULL CHECK(vote_role IN('Admin','Teacher')),

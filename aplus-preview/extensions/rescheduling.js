@@ -2,6 +2,7 @@
 const {assemble}=require('../original/src/state'),M=require('../original/src/management'),S=require('../original/src/save');
 const {tx}=require('../original/src/db'),store=require('../original/src/store'),T=require('../original/src/teacher-portal'),cairo=require('../original/src/cairo'),rules=require('../original/src/rules');
 const fail=(code,message)=>{throw Object.assign(Error(message),{code});};
+const TZ=require('./timezones');
 const stamp=x=>JSON.stringify([x.source,x.id,x.originalDate,x.date,x.startsAt,x.endsAt,x.teacherId,x.subject,x.group,x.status]);
 function install(getDb,{clock,request,audit,notify}){
  const db=()=>getDb(),today=()=>cairo.today(clock());
@@ -20,6 +21,9 @@ function install(getDb,{clock,request,audit,notify}){
   let student=u.student_id;
   if(u.role==='Teacher'){const booking=db().prepare('SELECT * FROM managed_sessions WHERE id=?').get(r.session_id);if(!booking||booking.teacher_id!==u.teacher_id)fail(403,'This lesson is not assigned to you.');student=booking.student_id;r.lesson_key='Booking:'+booking.id+':'+booking.date;}
   const selected=choices(student).find(x=>x.key===r.lesson_key);if(!selected)fail(422,'Choose an upcoming lesson from your schedule.');
+  const requestedTimezone=u.role==='Student'?TZ.preference(db(),student):TZ.ACADEMY;
+  if(r.timezone&&r.timezone!==requestedTimezone)fail(409,'Your timezone preference changed. Reload the schedule before requesting a new time.');
+  const canonical=TZ.proposal(r,requestedTimezone);r={...r,...canonical};
   if(!rules.isDate(r.date)||r.date<today()||!/^([01]\d|2[0-3]):[0-5]\d$/.test(r.starts_at||'')||!/^([01]\d|2[0-3]):[0-5]\d$/.test(r.ends_at||'')||r.ends_at<=r.starts_at)fail(422,'Choose a future date and valid start/end times.');
   if(r.date===selected.date&&r.starts_at===selected.startsAt&&r.ends_at===selected.endsAt)fail(422,'Choose a different time.');
   if(selected.group&&r.acknowledge_group!==true)fail(422,'This is a group lesson. Confirm that the requested change affects the whole group.');
@@ -27,7 +31,7 @@ function install(getDb,{clock,request,audit,notify}){
   return tx(db(),()=>{
    const existing=db().prepare("SELECT * FROM preview_requests WHERE kind='reschedule' AND status='Pending'").all().find(q=>{const old=JSON.parse(q.record);return old.lesson_key===selected.key;});
    if(existing){if(existing.actor===u.username&&existing.request_key===r.request_key)return existing;fail(409,'A change request for this lesson is already awaiting approval.');}
-   const q=request(u,'reschedule',{version:2,lesson_key:selected.key,teacher_id:selected.teacherId,student_id:student,subject:selected.subject,previous:selected,fingerprint:stamp(selected),proposed:{date:r.date,starts_at:r.starts_at,ends_at:r.ends_at}},r.request_key,reason,student);
+   const q=request(u,'reschedule',{version:2,lesson_key:selected.key,teacher_id:selected.teacherId,student_id:student,subject:selected.subject,previous:selected,fingerprint:stamp(selected),requested_timezone:requestedTimezone,proposed:{date:r.date,starts_at:r.starts_at,ends_at:r.ends_at}},r.request_key,reason,student);
    notify('reschedule-request:'+q.id,'Teacher',selected.teacherId,'RescheduleRequested',q.id);
    for(const a of db().prepare("SELECT id FROM team_users WHERE role='Admin' AND active=1").all())staffNotice(a.id,'reschedule-request:'+q.id,'RescheduleRequested',q.id);
    return q;
@@ -36,7 +40,8 @@ function install(getDb,{clock,request,audit,notify}){
  function details(q,u){
   const record=JSON.parse(q.record),votes=db().prepare('SELECT vote_role,status,reason,created_at FROM preview_reschedule_votes WHERE request_id=?').all(q.id);
   const student=assemble(db()).s.find(s=>s.id===q.student_id)?.name||'';
-  return {...q,record:JSON.stringify(record),studentName:u.role==='Student'?'':student,adminApproval:votes.find(v=>v.vote_role==='Admin')?.status||'Pending',teacherApproval:votes.find(v=>v.vote_role==='Teacher')?.status||'Pending',votes};
+  const displayTimezone=u.role==='Student'?TZ.preference(db(),u.student_id):TZ.ACADEMY;
+  return {...q,record:JSON.stringify(record),displayTimezone,studentName:u.role==='Student'?'':student,adminApproval:votes.find(v=>v.vote_role==='Admin')?.status||'Pending',teacherApproval:votes.find(v=>v.vote_role==='Teacher')?.status||'Pending',votes};
  }
  function visible(q,u){if(q.kind!=='reschedule')return false;if(u.role==='Admin')return true;const r=JSON.parse(q.record);return u.role==='Teacher'?r.teacher_id===u.teacher_id:u.role==='Student'?q.student_id===u.student_id:false;}
  function move(record,u){

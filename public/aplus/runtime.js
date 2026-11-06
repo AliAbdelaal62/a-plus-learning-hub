@@ -32647,6 +32647,48 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
   },\r
   "devDependencies": {}\r
 }\r
+`, "/app/preview/presentation.css": `/* Shared presentation for every portal/staff extension; no business-state changes. */
+#extension-view{color:var(--ink);letter-spacing:0;min-width:0;max-width:1400px;margin-inline:auto}
+#extension-view .extension-heading{margin-block-end:24px}
+#extension-view .extension-eyebrow{color:var(--mut);font-size:12px;margin:0 0 6px}
+#extension-view .extension-heading h2{margin:0;font-size:26px;letter-spacing:-.025em;line-height:1.3}
+#extension-view .extension-description{color:var(--mut);margin:8px 0 0;max-width:850px;line-height:1.7}
+#extension-view>h3,#extension-statement>h3{margin-block:24px 12px}
+#extension-view .tw{width:100%;max-width:100%;overflow:auto;border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-block:14px 24px}
+#extension-view table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+#extension-view th{background:var(--soft);color:var(--mut);font-size:12px;font-weight:600;text-align:start;padding:12px 16px;white-space:nowrap}
+#extension-view td{padding:13px 16px;border-bottom:1px solid var(--bd);overflow-wrap:anywhere;vertical-align:middle;line-height:1.6}
+#extension-view tbody tr:last-child td{border-bottom:0}
+#extension-view tbody tr:hover td{background:var(--soft)}
+#extension-view .extension-empty{text-align:center;color:var(--mut);padding:36px 16px}
+#extension-view form{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px;margin:18px 0 26px;min-width:0}
+#extension-view td form{min-width:230px;padding:14px;margin:12px 0 0}
+#extension-view label{display:flex;flex-direction:column;gap:8px;font-weight:500;color:var(--ink);font-size:13px;min-width:0}
+#extension-view .fg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:0 0 20px}
+#extension-view input,#extension-view select,#extension-view textarea{width:100%;max-width:100%;min-height:42px;background:var(--card);color:var(--ink);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;box-sizing:border-box}
+#extension-view input[type=checkbox]{width:17px;height:17px;min-height:17px;padding:0;flex:0 0 auto;accent-color:var(--acc)}
+#extension-view #extension-reschedule-group{flex-direction:row;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:8px;background:var(--soft);font-weight:400;line-height:1.6;margin-block:4px 18px}
+#extension-view .extension-controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-block-end:20px}
+#extension-view .extension-controls label{flex:1 1 160px}
+#extension-view .extension-controls>select{flex:1 1 220px;width:auto;min-height:42px}
+#extension-view button{min-height:38px;border-radius:8px}
+#extension-view button:disabled{opacity:.55;cursor:default}
+#extension-view input:focus-visible,#extension-view select:focus-visible,#extension-view textarea:focus-visible,#extension-view button:focus-visible{outline:3px solid var(--baby);outline-offset:2px;border-color:var(--acc)}
+#extension-view [aria-invalid=true]{border-color:var(--bad)}
+.extension-feedback{padding:12px 14px;border-radius:8px;line-height:1.7;margin:12px 0;border:1px solid var(--bd);background:var(--soft);color:var(--ink);scroll-margin-block-end:140px}
+.extension-feedback[data-kind=error]{border-color:var(--bad);color:var(--bad)}
+.extension-feedback[data-kind=success]{border-color:var(--good);color:var(--good)}
+.extension-feedback:empty{display:none}
+#extension-view bdi{font-variant-numeric:tabular-nums}
+#extension-view .extension-timezone-settings{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px 20px;background:var(--card);border:1px solid var(--bd);border-radius:12px;margin-block:16px}
+#extension-view .extension-timezone-settings label{flex:1 1 230px}
+#extension-view .extension-timezone-settings p{flex:2 1 300px;margin:0;color:var(--mut);line-height:1.7}
+#extension-view td .b2{margin:2px}
+#extension-view .extension-form-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#nv [data-extension]{display:flex;align-items:center;gap:10px}
+#nv [data-extension] svg{width:18px;height:18px;flex:0 0 18px}
+@media(max-width:640px){#extension-view .fg{grid-template-columns:1fr}#extension-view form{padding:16px}#extension-view .extension-heading h2{font-size:23px}#extension-view th,#extension-view td{padding:11px 12px}#extension-view .extension-controls>*{width:100%}#extension-view .extension-controls button{flex:1 1 140px}}
+@media print{#extension-view .extension-heading{margin-bottom:16px}#extension-view .tw{overflow:visible;break-inside:auto}#extension-view tbody tr:hover td{background:transparent}.extension-feedback{display:none!important}}
 `, "/app/preview/schema.sql": `-- Additive browser-preview schema; original academy schema/version remains unchanged.\r
 CREATE TABLE IF NOT EXISTS preview_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);\r
 CREATE TABLE IF NOT EXISTS preview_student_accounts(\r
@@ -32683,6 +32725,11 @@ CREATE TABLE IF NOT EXISTS preview_notifications(\r
  UNIQUE(event_key,recipient_kind,recipient_id)\r
 );\r
 CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);\r
+CREATE TABLE IF NOT EXISTS preview_student_preferences(\r
+ student_id INTEGER PRIMARY KEY REFERENCES students(id),\r
+ timezone TEXT NOT NULL CHECK(timezone IN('Africa/Cairo','Asia/Kuwait','Europe/London')),\r
+ updated_at TEXT NOT NULL\r
+);\r
 CREATE TABLE IF NOT EXISTS preview_reschedule_votes(\r
  request_id INTEGER NOT NULL REFERENCES preview_requests(id),\r
  vote_role TEXT NOT NULL CHECK(vote_role IN('Admin','Teacher')),\r
@@ -42040,6 +42087,73 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
     module.exports = { student, teacher, kwd, range };
   });
 
+  // aplus-preview/extensions/timezones.js
+  var require_timezones = __commonJS(function(exports, module) {
+    var ACADEMY = "Africa/Cairo";
+    var ZONES = [{ id: "Africa/Cairo", en: "Egypt — Cairo", ar: "مصر — القاهرة" }, { id: "Asia/Kuwait", en: "Kuwait", ar: "الكويت" }, { id: "Europe/London", en: "United Kingdom — London", ar: "بريطانيا — لندن" }];
+    var formatters = new Map;
+    var fail = (message) => {
+      throw Object.assign(Error(message), { code: 422 });
+    };
+    var valid = (zone) => ZONES.some((z) => z.id === zone);
+    function parts(ms, zone) {
+      if (!valid(zone))
+        fail("Choose Egypt, Kuwait or the United Kingdom.");
+      if (!formatters.has(zone))
+        formatters.set(zone, new Intl.DateTimeFormat("en-CA", { timeZone: zone, calendar: "gregory", numberingSystem: "latn", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }));
+      const p = Object.fromEntries(formatters.get(zone).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+      return { date: p.year + "-" + p.month + "-" + p.day, time: p.hour + ":" + p.minute };
+    }
+    function wall(date, time, zone) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || ""))
+        fail("Choose a valid date and time.");
+      const base = Date.parse(date + "T" + time + ":00Z");
+      if (!Number.isFinite(base) || new Date(base).toISOString().slice(0, 10) !== date)
+        fail("Choose a valid date and time.");
+      const offsets = new Set;
+      for (let hours = -36;hours <= 36; hours += 6) {
+        const sample = base + hours * 3600000, p = parts(sample, zone);
+        offsets.add(Date.parse(p.date + "T" + p.time + ":00Z") - sample);
+      }
+      const candidates = [...offsets].map((offset) => base - offset).filter((ms) => {
+        const p = parts(ms, zone);
+        return p.date === date && p.time === time;
+      });
+      if (!candidates.length)
+        fail("This local time does not exist because of a daylight-saving change. Choose another time.");
+      if (candidates.length > 1)
+        fail("This local time occurs twice because of a daylight-saving change. Choose another time.");
+      return candidates[0];
+    }
+    function convert(date, time, from, to) {
+      return parts(wall(date, time, from), to);
+    }
+    function display(row, zone) {
+      try {
+        const start = convert(row.date, row.startsAt, ACADEMY, zone), end = convert(row.date, row.endsAt, ACADEMY, zone);
+        return { ...row, displayDate: start.date, displayStart: start.time, displayEndDate: end.date, displayEnd: end.time, displayTimezone: zone };
+      } catch (error) {
+        return { ...row, displayDate: null, displayStart: null, displayEndDate: null, displayEnd: null, displayTimezone: zone, timeIssue: error.message };
+      }
+    }
+    function proposal(input, zone) {
+      if (!valid(zone))
+        fail("Choose Egypt, Kuwait or the United Kingdom.");
+      const start = wall(input.date, input.starts_at, zone), end = wall(input.end_date || input.date, input.ends_at, zone);
+      if (end <= start)
+        fail("The requested end must follow the requested start.");
+      const a = parts(start, ACADEMY), b = parts(end, ACADEMY);
+      if (a.date !== b.date || b.time <= a.time)
+        fail("The requested lesson must fit within one academy day.");
+      return { date: a.date, starts_at: a.time, ends_at: b.time };
+    }
+    function preference(db, id) {
+      const row = db.prepare("SELECT timezone FROM preview_student_preferences WHERE student_id=?").get(id);
+      return row && valid(row.timezone) ? row.timezone : ACADEMY;
+    }
+    module.exports = { ACADEMY, ZONES, valid, parts, wall, convert, display, proposal, preference };
+  });
+
   // aplus-preview/extensions/rescheduling.js
   var require_rescheduling = __commonJS(function(exports, module) {
     var { assemble } = require_state();
@@ -42053,6 +42167,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
     var fail = (code, message) => {
       throw Object.assign(Error(message), { code });
     };
+    var TZ = require_timezones();
     var stamp = (x) => JSON.stringify([x.source, x.id, x.originalDate, x.date, x.startsAt, x.endsAt, x.teacherId, x.subject, x.group, x.status]);
     function install(getDb, { clock, request, audit, notify }) {
       const db = () => getDb(), today2 = () => cairo.today(clock());
@@ -42082,6 +42197,11 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         const selected = choices(student).find((x) => x.key === r.lesson_key);
         if (!selected)
           fail(422, "Choose an upcoming lesson from your schedule.");
+        const requestedTimezone = u.role === "Student" ? TZ.preference(db(), student) : TZ.ACADEMY;
+        if (r.timezone && r.timezone !== requestedTimezone)
+          fail(409, "Your timezone preference changed. Reload the schedule before requesting a new time.");
+        const canonical = TZ.proposal(r, requestedTimezone);
+        r = { ...r, ...canonical };
         if (!rules.isDate(r.date) || r.date < today2() || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.starts_at || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.ends_at || "") || r.ends_at <= r.starts_at)
           fail(422, "Choose a future date and valid start/end times.");
         if (r.date === selected.date && r.starts_at === selected.startsAt && r.ends_at === selected.endsAt)
@@ -42101,7 +42221,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
               return existing;
             fail(409, "A change request for this lesson is already awaiting approval.");
           }
-          const q = request(u, "reschedule", { version: 2, lesson_key: selected.key, teacher_id: selected.teacherId, student_id: student, subject: selected.subject, previous: selected, fingerprint: stamp(selected), proposed: { date: r.date, starts_at: r.starts_at, ends_at: r.ends_at } }, r.request_key, reason, student);
+          const q = request(u, "reschedule", { version: 2, lesson_key: selected.key, teacher_id: selected.teacherId, student_id: student, subject: selected.subject, previous: selected, fingerprint: stamp(selected), requested_timezone: requestedTimezone, proposed: { date: r.date, starts_at: r.starts_at, ends_at: r.ends_at } }, r.request_key, reason, student);
           notify("reschedule-request:" + q.id, "Teacher", selected.teacherId, "RescheduleRequested", q.id);
           for (const a of db().prepare("SELECT id FROM team_users WHERE role='Admin' AND active=1").all())
             staffNotice(a.id, "reschedule-request:" + q.id, "RescheduleRequested", q.id);
@@ -42111,7 +42231,8 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       function details(q, u) {
         const record = JSON.parse(q.record), votes = db().prepare("SELECT vote_role,status,reason,created_at FROM preview_reschedule_votes WHERE request_id=?").all(q.id);
         const student = assemble(db()).s.find((s) => s.id === q.student_id)?.name || "";
-        return { ...q, record: JSON.stringify(record), studentName: u.role === "Student" ? "" : student, adminApproval: votes.find((v) => v.vote_role === "Admin")?.status || "Pending", teacherApproval: votes.find((v) => v.vote_role === "Teacher")?.status || "Pending", votes };
+        const displayTimezone = u.role === "Student" ? TZ.preference(db(), u.student_id) : TZ.ACADEMY;
+        return { ...q, record: JSON.stringify(record), displayTimezone, studentName: u.role === "Student" ? "" : student, adminApproval: votes.find((v) => v.vote_role === "Admin")?.status || "Pending", teacherApproval: votes.find((v) => v.vote_role === "Teacher")?.status || "Pending", votes };
       }
       function visible(q, u) {
         if (q.kind !== "reschedule")
@@ -42219,6 +42340,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
     var MAN = require_management();
     var { tx } = require_db();
     var F = require_finance2();
+    var TZ = require_timezones();
     var rules = require_rules();
     var hash = (t) => crypto2.createHash("sha256").update(t).digest("hex");
     var fail = (code, msg) => {
@@ -42328,11 +42450,14 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           const { students, ...safe } = r;
           return { ...safe, teacher: label(st.t, t), meetingLink: shares.find((x) => x.kind === "Meeting" && x.source_id === r.id)?.url || "", duration: r.startsAt && r.endsAt ? Math.round((Date.parse("2000-01-01T" + r.endsAt) - Date.parse("2000-01-01T" + r.startsAt)) / 60000) : null };
         }));
+        const timezone = TZ.preference(db(), s);
         return {
           student: { id: s, name: label(st.s, s) },
-          timezone: "Africa/Cairo",
-          schedule,
-          rescheduleChoices: RESCHEDULE.choices(s),
+          timezone,
+          academyTimezone: TZ.ACADEMY,
+          timezoneOptions: TZ.ZONES,
+          schedule: schedule.map((row) => TZ.display(row, timezone)),
+          rescheduleChoices: RESCHEDULE.choices(s).map((row) => TZ.display(row, timezone)),
           subjects: st.sub.filter((x) => (x.studs || []).includes(s) || regs.some((r) => r.subject_id === x.id) || st.l.some((l) => l.s === s && l.sub === x.id)).map((x) => ({ id: x.id, name: x.name, type: x.type, teacher: label(st.t, x.inst) })),
           lessons: st.l.filter((l) => l.s === s && l.st === "Completed").map((l) => ({ id: l.id, date: l.date, subject: label(st.sub, l.sub), teacher: label(st.t, l.t), hours: l.d, status: l.st, attendance: db().prepare("SELECT status FROM lesson_attendance WHERE lesson_id=?").get(l.id)?.status || "", summary: shares.filter((x) => x.kind === "Lesson" && x.source_id === l.id) })),
           projects: st.pr.filter((p) => p.s === s).map((p) => ({ id: p.id, name: p.name, teacher: label(st.t, p.t), status: p.status, due: p.due, stages: db().prepare("SELECT id,title,due_on,status FROM project_stages WHERE project_id=?").all(p.id) })),
@@ -42486,6 +42611,17 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           const r = parse();
           if (p === "/api/preview/accounts")
             return response({ ok: true, account: createAccount(r, u) });
+          if (p === "/api/preview/timezone") {
+            if (u.role !== "Student")
+              fail(403, "Only students can set their own timezone.");
+            if (!TZ.valid(r.timezone))
+              fail(422, "Choose Egypt, Kuwait or the United Kingdom.");
+            const old = TZ.preference(db(), u.student_id);
+            db().prepare("INSERT INTO preview_student_preferences(student_id,timezone,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET timezone=excluded.timezone,updated_at=excluded.updated_at").run(u.student_id, r.timezone, now());
+            if (old !== r.timezone)
+              audit(u, "update", "student-timezone", u.student_id, { timezone: old }, { timezone: r.timezone });
+            return response({ ok: true, timezone: r.timezone });
+          }
           if (p === "/api/preview/password")
             fail(403, "Student passwords are managed by the administrator.");
           if (p === "/api/preview/read") {
@@ -42723,19 +42859,19 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         };
       };
       const historyPath = () => ctx().backupDir + "/transfer-history.json";
-      const history = () => {
+      const history2 = () => {
         try {
           return JSON.parse(fs.readFileSync(historyPath(), "utf8"));
         } catch (_) {
           return [];
         }
       };
-      const recordHistory = (event) => fs.writeFileSync(historyPath(), JSON.stringify([...history(), event]));
+      const recordHistory = (event) => fs.writeFileSync(historyPath(), JSON.stringify([...history2(), event]));
       const captureSidecars = (file) => {
         const configFile = ctx().file + ".config.json", sidecars = {};
         if (fs.existsSync(configFile))
           sidecars.config = JSON.parse(fs.readFileSync(configFile, "utf8"));
-        sidecars.transferHistory = history();
+        sidecars.transferHistory = history2();
         fs.writeFileSync(file + ".sidecars.json", JSON.stringify(sidecars));
         return sidecars;
       };
@@ -42973,7 +43109,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           const u = actor(headers);
           admin(u);
           if (method === "GET" && path === "/api/preview/backups")
-            return response({ ok: true, history: history(), backups: B.list(ctx()), limitBytes: MAX });
+            return response({ ok: true, history: history2(), backups: B.list(ctx()), limitBytes: MAX });
           if (method !== "POST")
             fail(405, "Method not allowed.");
           if (headers["x-aplus-token"] !== token || !/^application\/json/.test(headers["content-type"] || ""))
@@ -43002,9 +43138,83 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           return response({ ok: false, error: e.message }, Number.isInteger(e.code) ? e.code : 422);
         }
       }
-      return { handler, prepare, replace, history };
+      return { handler, prepare, replace, history: history2 };
     }
     module.exports = { install, MAX, FORMAT };
+  });
+
+  // aplus-preview/extensions/navigation.js
+  var require_navigation = __commonJS(function(exports, module) {
+    var sections = [
+      { key: "workspace", en: "Workspace", ar: "مساحة العمل", routes: ["Dashboard", "Daily Desk"], pages: ["overview", "notifications"] },
+      { key: "schedule", en: "Scheduling", ar: "المواعيد والجدولة", routes: ["Timetable", "Scheduling", "My Schedule"], pages: ["schedule", "requests"] },
+      { key: "academy", en: "Academy", ar: "الأكاديمية", routes: ["Students", "Teachers", "Subjects", "Lessons", "Recorded Courses", "Projects", "My Subjects", "My Projects", "Delivery"], pages: ["subjects", "lessons", "courses", "projects", "education"] },
+      { key: "finance", en: "Finance", ar: "المالية", routes: ["Payments", "Batch Payments", "Treasury", "Reports", "Cash Flow", "Billing", "Financial Summary"], pages: ["student-statement", "teacher-statement", "plans"] },
+      { key: "operations", en: "Operations", ar: "التشغيل والمتابعة", routes: ["Registrations", "Attendance & Notes", "Follow-up Tasks"], pages: [] },
+      { key: "administration", en: "Administration", ar: "الإدارة", routes: ["Teacher Preview", "Team", "Settings"], pages: ["accounts", "audit"] }
+    ];
+    var paths = { grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z", calendar: "M4 5h16v16H4z M4 10h16 M8 3v4 M16 3v4", book: "M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1z M12 5v15", file: "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h7", bell: "M6 9a6 6 0 0 1 12 0v6l2 3H4l2-3z M10 21h4", users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M17 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3", check: "M4 4h16v16H4z M8 12l3 3 5-6" };
+    var icons = { overview: "grid", notifications: "bell", schedule: "calendar", requests: "check", subjects: "book", lessons: "book", courses: "book", projects: "file", education: "book", "student-statement": "file", "teacher-statement": "file", plans: "calendar", accounts: "users", audit: "file" };
+    var icon = (key) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + paths[icons[key] || "file"] + '"/></svg>';
+    function integrate(scroll, pages, { lang = "en", active = null } = {}) {
+      if (!scroll)
+        return;
+      const signature = JSON.stringify([lang, active, pages.map((p) => p[0])]);
+      if (scroll.dataset.portalNavigation === signature)
+        return;
+      const native = [...scroll.querySelectorAll("a[data-route]")], existing = new Map([...scroll.querySelectorAll("a[data-extension]")].map((a) => [a.dataset.extension, a]));
+      const extensions = pages.map(([key, en, ar]) => {
+        const a = existing.get(key) || document.createElement("a");
+        a.href = "#preview-" + key;
+        a.dataset.extension = key;
+        a.title = lang === "ar" ? ar : en;
+        a.setAttribute("aria-label", a.title);
+        a.innerHTML = icon(key) + '<span class="ui-nav-text">' + (lang === "ar" ? ar : en) + "</span>";
+        a.classList.toggle("on", key === active);
+        if (key === active)
+          a.setAttribute("aria-current", "page");
+        else
+          a.removeAttribute("aria-current");
+        return a;
+      });
+      const known = new Set;
+      scroll.replaceChildren();
+      for (const section of sections) {
+        const links = [...native.filter((a) => section.routes.includes(a.dataset.route)), ...extensions.filter((a) => section.pages.includes(a.dataset.extension))];
+        if (!links.length)
+          continue;
+        const group = document.createElement("div");
+        group.className = "ui-nav-group";
+        group.dataset.navSection = section.key;
+        const label = document.createElement("div");
+        label.className = "ui-nav-label";
+        label.textContent = lang === "ar" ? section.ar : section.en;
+        group.append(label);
+        for (const a of links) {
+          if (active && a.dataset.route) {
+            a.classList.remove("on");
+            a.removeAttribute("aria-current");
+          }
+          group.append(a);
+          known.add(a);
+        }
+        scroll.append(group);
+      }
+      const unknown = [...native, ...extensions].filter((a) => !known.has(a));
+      if (unknown.length) {
+        const group = document.createElement("div");
+        group.className = "ui-nav-group";
+        group.dataset.navSection = "other";
+        for (const a of unknown)
+          group.append(a);
+        scroll.append(group);
+      }
+      scroll.dataset.portalNavigation = signature;
+    }
+    function groupFor(page) {
+      return sections.find((s) => s.pages.includes(page));
+    }
+    module.exports = { integrate, groupFor, icon };
   });
 
   // aplus-preview/extensions/ui.js
@@ -43018,6 +43228,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       const user = window.APLUS_STUDENT || window.__APLUS_PREVIEW__?.dispatch("GET", "/api/auth/status").text() && JSON.parse(window.__APLUS_PREVIEW__.dispatch("GET", "/api/auth/status").text()).user;
       if (!user)
         return;
+      const NAV = require_navigation(), TZ = require_timezones();
       const student = user.role === "Student", financial = ["Admin", "Accountant"].includes(user.role), teacher = user.role === "Teacher";
       const tr = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
       const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -43033,7 +43244,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       };
       const token = () => crypto.randomUUID();
       const button = (id, en, ar, icon = "") => '<button class="b2" type="button" id="' + id + '">' + icon + esc(tr(en, ar)) + "</button>";
-      const table = (headers, rows) => '<div class="tw"><table><thead><tr>' + headers.map((x) => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + (rows.length ? rows.map((r) => "<tr>" + r.map((x) => "<td>" + x + "</td>").join("") + "</tr>").join("") : '<tr><td colspan="' + headers.length + '">' + tr("No records", "لا توجد سجلات") + "</td></tr>") + "</tbody></table></div>";
+      const table = (headers, rows) => '<div class="tw"><table><thead><tr>' + headers.map((x) => '<th scope="col">' + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + (rows.length ? rows.map((r) => "<tr>" + r.map((x) => "<td>" + x + "</td>").join("") + "</tr>").join("") : '<tr><td class="extension-empty" colspan="' + headers.length + '">' + tr("No records", "لا توجد سجلات") + "</td></tr>") + "</tbody></table></div>";
       const text = (v) => "<span data-ui-user-content>" + esc(v) + "</span>";
       const link = (u) => {
         try {
@@ -43045,22 +43256,63 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + tr("Open link", "فتح الرابط") + "</a>";
       };
       const field = (name, en, ar, type = "text", value = "") => "<label>" + esc(tr(en, ar)) + '<input name="' + name + '" type="' + type + '" value="' + esc(value) + '" ' + (type === "password" ? 'autocomplete="new-password"' : "") + "></label>";
-      let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null;
+      let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null, extensionActive = student;
       const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["requests", "My Change Requests", "طلبات تغيير مواعيدي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"]] : [
         ...financial ? [["student-statement", "Student Statements", "كشوف الطلاب"], ["teacher-statement", "Teacher Statements", "كشوف المعلمين"], ["plans", "Installment Plans", "خطط الأقساط"]] : teacher ? [["teacher-statement", "Teacher Statement", "كشف المعلم"]] : [],
         ...user.role === "Admin" ? [["accounts", "Student Accounts", "حسابات الطلاب"]] : [],
         ...["Admin", "Accountant", "Coordinator", "Student", "Teacher"].includes(user.role) ? [["requests", "Pending Approvals", "طلبات الموافقة"]] : [],
         ...["Admin", "Coordinator", "Teacher"].includes(user.role) ? [["education", "Learning Materials & Assignments", "المحتوى والواجبات"]] : [],
         ...financial || teacher ? [["notifications", "Notifications", "الإشعارات"]] : [],
-        ...financial ? [["audit", "Extension Audit", "سجل الإضافات"]] : []
+        ...financial ? [["audit", "Activity History", "سجل النشاط"]] : []
       ];
       const status = (s) => ({ Upcoming: tr("Upcoming", "قادم"), Due: tr("Due", "مستحق"), Overdue: tr("Overdue", "متأخر"), Paid: tr("Paid", "مدفوع"), "Partially paid": tr("Partially paid", "مدفوع جزئياً"), Cancelled: tr("Cancelled", "ملغى"), Pending: tr("Pending", "قيد الانتظار"), Approved: tr("Approved", "مقبول"), Rejected: tr("Rejected", "مرفوض") })[s] || s;
-      function error(e) {
-        const v = document.getElementById("extension-error");
-        if (v)
-          v.textContent = e.message;
-        else
-          alert(e.message);
+      const descriptions = {
+        overview: ["Your lessons, learning and next actions in one place.", "حصصك وموادك وخطواتك القادمة في مكان واحد."],
+        schedule: ["Review upcoming lessons or request a different time.", "راجع حصصك القادمة أو اطلب موعدًا مختلفًا."],
+        requests: ["Track requests and the decisions required before a change takes effect.", "تابع الطلبات والموافقات المطلوبة قبل تنفيذ أي تغيير."],
+        notifications: ["Updates about your learning, schedule and account.", "آخر تحديثات الدراسة والمواعيد والحساب."],
+        subjects: ["Your enrolled subjects and assigned teachers.", "المواد المشترك بها والمدرسون المسؤولون عنها."],
+        lessons: ["Completed lessons, attendance and shared summaries.", "الحصص السابقة والحضور والملخصات المنشورة لك."],
+        courses: ["Your recorded courses and released learning materials.", "كورساتك المسجلة والمحتوى المتاح لك."],
+        projects: ["Track project stages, assignments and published feedback.", "تابع مراحل المشاريع والتكليفات والملاحظات المنشورة."],
+        "student-statement": ["Review service charges, receipts, credit and installments.", "راجع رسوم الخدمات والمدفوعات والرصيد والأقساط."],
+        "teacher-statement": ["Review earnings, payments and your statement in Egyptian pounds.", "راجع المستحقات والدفعات وكشف الحساب بالجنيه المصري."],
+        plans: ["Manage installment dates against existing service agreements.", "نظّم مواعيد الأقساط المرتبطة باتفاقات الخدمات الحالية."],
+        accounts: ["Manage student access and linked accounts.", "إدارة دخول الطلاب والحسابات المرتبطة بهم."],
+        education: ["Release materials and assignments, review submissions and share feedback.", "انشر المحتوى والواجبات وراجع التسليمات وشارك الملاحظات."],
+        audit: ["Review recorded administrative and financial changes.", "راجع التغييرات الإدارية والمالية المسجّلة."]
+      };
+      const translatedError = (message) => ({
+        "Choose Egypt, Kuwait or the United Kingdom.": tr("Choose an available country.", "اختر دولة من القائمة المتاحة."),
+        "This local time does not exist because of a daylight-saving change. Choose another time.": tr("This time is skipped by a daylight-saving change. Choose another time.", "هذا الوقت غير موجود بسبب الانتقال للتوقيت الصيفي. اختر وقتًا آخر."),
+        "This local time occurs twice because of a daylight-saving change. Choose another time.": tr("This time occurs twice when clocks change. Choose another time.", "هذا الوقت يتكرر مرتين عند تغيير الساعة. اختر وقتًا آخر لتجنب الالتباس."),
+        "The requested end must follow the requested start.": tr("The lesson end must be after its start.", "موعد نهاية الحصة يجب أن يكون بعد بدايتها."),
+        "The requested lesson must fit within one academy day.": tr("This time crosses midnight in the academy schedule. Choose another slot.", "هذا الموعد يعبر منتصف الليل في جدول الأكاديمية. اختر فترة أخرى."),
+        "Your timezone preference changed. Reload the schedule before requesting a new time.": tr("Your timezone setting changed. Reload the schedule before sending.", "إعداد التوقيت اتغير. حدّث الجدول قبل إرسال الطلب."),
+        "Choose a different time.": tr("Choose a date or time different from the current lesson.", "اختر تاريخًا أو وقتًا مختلفًا عن موعد الحصة الحالي."),
+        "A change request for this lesson is already awaiting approval.": tr("A request for this lesson is already awaiting approval. Check My Change Requests.", "يوجد طلب لهذه الحصة بانتظار الموافقة بالفعل. راجع صفحة طلبات تغيير مواعيدي."),
+        "A short valid reason is required.": tr("Enter a short reason for the requested change.", "اكتب سببًا مختصرًا لطلب تغيير الموعد."),
+        "Choose a future date and valid start/end times.": tr("Check the requested date and make sure the end follows the start.", "راجع التاريخ المطلوب وتأكد أن وقت النهاية بعد وقت البداية."),
+        "This is a group lesson. Confirm that the requested change affects the whole group.": tr("Confirm that this group-lesson change affects the whole group.", "أكد أن تغيير موعد الحصة الجماعية يشمل المجموعة كلها.")
+      })[message] || message;
+      function feedback(target, message, kind = "error") {
+        if (!target)
+          return;
+        target.hidden = false;
+        target.dataset.kind = kind;
+        target.classList.add("extension-feedback");
+        target.setAttribute("role", kind === "error" ? "alert" : "status");
+        target.textContent = message;
+        target.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+      }
+      function error(e, form) {
+        let target = form?.querySelector(".extension-feedback");
+        if (form && !target) {
+          target = document.createElement("div");
+          form.append(target);
+        }
+        target = target || document.getElementById("extension-error");
+        feedback(target, translatedError(e.message));
       }
       function action(id, fn) {
         const el = document.getElementById(id);
@@ -43076,21 +43328,30 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       function form(id, fn) {
         const el = document.getElementById(id);
         if (el)
-          el.onsubmit = (e) => {
+          el.onsubmit = async (e) => {
             e.preventDefault();
+            const button = el.querySelector('[type="submit"]');
+            if (button?.disabled)
+              return;
+            if (button)
+              button.disabled = true;
             try {
-              const r = Object.fromEntries(new FormData(el));
-              fn(r);
+              const r = Object.fromEntries(new FormData(el)), result = await fn(r);
+              await window.__APLUS_SAVE__?.();
               render();
-            } catch (e) {
-              error(e);
+              feedback(document.getElementById("extension-error"), result?.pending ? tr("Sent for approval; the active record has not changed.", "تم إرسال الطلب للموافقة؛ السجل المعتمد لم يتغير.") : tr("Saved successfully.", "تم الحفظ بنجاح."), "success");
+            } catch (err) {
+              error(err, el);
+              if (button)
+                button.disabled = false;
             }
           };
       }
       function nav() {
         if (student) {
           const nv = document.getElementById("nv");
-          nv.innerHTML = '<div class="ui-brand"><div class="ui-logo">A+</div><div><h1>A+ Hub Academy</h1><small>' + esc(user.display_name) + '</small></div></div><div class="ui-nav-scroll">' + pages.map(([k, en, ar]) => '<a href="#preview-' + k + '" data-extension="' + k + '" class="' + (page === k ? "on" : "") + '">' + esc(tr(en, ar)) + "</a>").join("") + "</div>";
+          if (!nv.querySelector(".ui-nav-scroll"))
+            nv.innerHTML = '<div class="ui-brand"><div class="ui-logo">A+</div><div><h1>A+ Hub Academy</h1><small>' + esc(user.display_name) + '</small></div></div><div class="ui-nav-scroll"></div>';
           document.getElementById("topbar").innerHTML = '<div class="ui-header-left">' + button("extension-menu", "☰", "☰") + "<strong>" + esc(tr(pages.find((p) => p[0] === page)?.[1] || "", pages.find((p) => p[0] === page)?.[2] || "")) + '</strong></div><div class="ui-header-right">' + button("extension-language", "العربية", "English") + button("extension-theme", "◐", "◐") + button("extension-logout", "Sign out", "تسجيل الخروج") + "</div>";
           action("extension-menu", () => document.body.classList.toggle("ui-drawer-open"));
           action("extension-language", () => {
@@ -43110,15 +43371,12 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
             window.__APLUS_SAVE__?.();
             location.href = "/";
           });
-        } else {
-          const nv = document.querySelector("#nv .ui-nav-scroll");
-          if (nv && !document.getElementById("extension-nav")) {
-            const group = document.createElement("div");
-            group.id = "extension-nav";
-            group.className = "ui-nav-group";
-            group.innerHTML = '<div class="ui-nav-label">' + tr("Added sections", "الأقسام المضافة") + "</div>" + pages.map(([k, en, ar]) => '<a href="#preview-' + k + '" data-extension="' + k + '">' + esc(tr(en, ar)) + "</a>").join("");
-            nv.append(group);
-          }
+        }
+        NAV.integrate(document.querySelector("#nv .ui-nav-scroll"), pages, { lang: document.documentElement.lang, active: extensionActive ? page : null });
+        if (!student && extensionActive) {
+          const title = pages.find((p) => p[0] === page), crumb = document.querySelector("#topbar .ui-breadcrumb strong"), group = NAV.groupFor(page);
+          if (title && crumb)
+            crumb.textContent = (group ? (document.documentElement.lang === "ar" ? group.ar : group.en) + " / " : "") + tr(title[1], title[2]);
         }
       }
       function picker(kind) {
@@ -43175,46 +43433,156 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         return '<div class="bar">' + prefix + "</div>" + installments(s) + '<form id="extension-plan-form"><div class="fg">' + field("id", "Installment ID (blank for new)", "رقم القسط (فارغ للجديد)", "number") + "<label>" + tr("Existing obligation", "الالتزام القائم") + '<select name="contract_id">' + s.installments.map((c) => '<option value="' + c.id + '">' + esc(c.title) + " #" + c.id + "</option>").join("") + "</select></label>" + field("due_on", "Due date", "تاريخ الاستحقاق", "date") + field("amount", "Amount (original currency)", "المبلغ (العملة الأصلية)", "number") + field("reason", "Student-facing reason", "السبب الظاهر للطالب") + '</div><button class="b" type="submit">' + tr("Submit plan", "إرسال الخطة") + "</button></form>";
       }
       const notificationsText = (k) => ({ RescheduleRequested: tr("Lesson time-change request awaiting your decision", "طلب تغيير موعد حصة بانتظار قرارك"), RescheduleRejected: tr("Lesson time-change request rejected", "تم رفض طلب تغيير موعد الحصة"), RescheduleAwaitingSecondApproval: tr("One approval recorded; waiting for the other party", "تم تسجيل موافقة وبانتظار الطرف الآخر"), PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
+      const zoneLabel = (zone) => {
+        const z = TZ.ZONES.find((z) => z.id === zone);
+        return z ? tr(z.en, z.ar) : zone;
+      };
+      function shown(row, zone = data?.timezone || TZ.ACADEMY) {
+        const x = row.displayTimezone === zone ? row : TZ.display(row, zone);
+        return { date: x.displayDate || row.date, start: x.displayStart || row.startsAt, endDate: x.displayEndDate || row.date, end: x.displayEnd || row.endsAt, issue: x.timeIssue };
+      }
+      function timeText(row, zone) {
+        const x = shown(row, zone);
+        return x.issue ? text(tr("Time needs review", "التوقيت يحتاج مراجعة")) : '<bdi dir="ltr">' + esc(x.date + " · " + x.start + "–" + (x.endDate !== x.date ? x.endDate + " " : "") + x.end) + "</bdi>";
+      }
+      function timezoneSettings(s) {
+        return '<div class="extension-timezone-settings"><label>' + tr("My country / timezone", "دولتي / التوقيت المعتمد") + '<select id="extension-timezone">' + TZ.ZONES.map((z) => '<option value="' + z.id + '" ' + (s.timezone === z.id ? "selected" : "") + ">" + esc(tr(z.en, z.ar)) + "</option>").join("") + "</select></label><p>" + tr("Your lesson times and change requests use this timezone. Daylight-saving changes are handled automatically. Changing this setting does not move a lesson.", "تظهر مواعيد حصصك وطلبات التغيير بهذا التوقيت، مع مراعاة التوقيت الصيفي تلقائيًا. تغيير الإعداد لا يغيّر موعد الحصة.") + '</p></div><div id="extension-timezone-feedback" aria-live="polite"></div>';
+      }
+      function bindTimezone() {
+        const select = document.getElementById("extension-timezone");
+        if (!select)
+          return;
+        select.onchange = async () => {
+          const oldZone = data.timezone, nextZone = select.value, form = document.getElementById("extension-reschedule-form"), draft = form ? Object.fromEntries(new FormData(form)) : null;
+          let a, b;
+          if (draft)
+            try {
+              a = TZ.convert(draft.date, draft.starts_at, oldZone, nextZone);
+              b = TZ.convert(draft.end_date || draft.date, draft.ends_at, oldZone, nextZone);
+            } catch (_) {}
+          select.disabled = true;
+          try {
+            api("timezone", { timezone: nextZone });
+            await window.__APLUS_SAVE__?.();
+            render();
+            const nextForm = document.getElementById("extension-reschedule-form");
+            if (draft && nextForm) {
+              const choice = (data.rescheduleChoices || []).find((x) => x.key === draft.lesson_key);
+              if (choice) {
+                document.getElementById("extension-reschedule-subject").value = choice.subject;
+                document.getElementById("extension-reschedule-subject").onchange();
+                document.getElementById("extension-reschedule-lesson").value = choice.key;
+                document.getElementById("extension-reschedule-lesson").onchange();
+              }
+              if (a && b) {
+                nextForm.elements.date.value = a.date;
+                nextForm.elements.starts_at.value = a.time;
+                nextForm.elements.end_date.value = b.date;
+                nextForm.elements.ends_at.value = b.time;
+                nextForm.dataset.startDate = a.date;
+              }
+              nextForm.elements.reason.value = draft.reason || "";
+              nextForm.elements.acknowledge_group.checked = draft.acknowledge_group === "on";
+            }
+            feedback(document.getElementById("extension-timezone-feedback"), tr("Your timezone is saved. Lesson times now use ", "تم حفظ توقيتك. مواعيد الحصص تُعرض الآن بتوقيت ") + zoneLabel(nextZone), "success");
+          } catch (e) {
+            select.value = oldZone;
+            select.disabled = false;
+            feedback(document.getElementById("extension-timezone-feedback"), translatedError(e.message));
+          }
+        };
+      }
       function requests() {
         const rows = api("requests").rows;
-        return table([tr("Subject / student", "المادة / الطالب"), tr("Current lesson", "الحصة الحالية"), tr("Requested time", "الموعد المطلوب"), tr("Status", "الحالة"), tr("Administration", "الإدارة"), tr("Teacher", "المدرس"), tr("Reason / result", "السبب / النتيجة"), tr("Decision", "القرار")], rows.map((q) => {
+        return '<p class="mut">' + tr("Times shown in: ", "المواعيد بتوقيت: ") + esc(zoneLabel(rows[0]?.displayTimezone || (student ? data?.timezone || TZ.ACADEMY : TZ.ACADEMY))) + "</p>" + table([tr("Subject / student", "المادة / الطالب"), tr("Current lesson", "الحصة الحالية"), tr("Requested time", "الموعد المطلوب"), tr("Status", "الحالة"), tr("Administration", "الإدارة"), tr("Teacher", "المدرس"), tr("Reason / result", "السبب / النتيجة"), tr("Decision", "القرار")], rows.map((q) => {
           const r = JSON.parse(q.record), reschedule = q.kind === "reschedule", { previous: old, proposed: next } = r;
           const can = q.status === "Pending" && (reschedule ? user.role === "Admin" && q.adminApproval === "Pending" || user.role === "Teacher" && q.teacherApproval === "Pending" : user.role === "Admin");
-          return [text(reschedule ? (r.subject || "") + (q.studentName ? " · " + q.studentName : "") : q.kind), text(old ? old.date + " · " + old.startsAt + "–" + old.endsAt : ""), text(next ? next.date + " · " + next.starts_at + "–" + next.ends_at : ""), text(status(q.status)), reschedule ? text(status(q.adminApproval)) : "", reschedule ? text(status(q.teacherApproval)) : "", text(q.reason) + (q.result ? "<br>" + text(JSON.parse(q.result).reason) : ""), can ? '<button class="b2" data-decide="' + q.id + '" data-status="Approved">' + tr("Approve", "موافقة") + '</button> <button class="b2" data-decide="' + q.id + '" data-status="Rejected">' + tr("Reject", "رفض") + "</button>" : ""];
+          return [text(reschedule ? (r.subject || "") + (q.studentName ? " · " + q.studentName : "") : q.kind), old ? timeText(old, q.displayTimezone || TZ.ACADEMY) : "", next ? timeText({ date: next.date, startsAt: next.starts_at, endsAt: next.ends_at }, q.displayTimezone || TZ.ACADEMY) : "", text(status(q.status)), reschedule ? text(status(q.adminApproval)) : "", reschedule ? text(status(q.teacherApproval)) : "", text(q.reason) + (q.result ? "<br>" + text(JSON.parse(q.result).reason) : ""), can ? '<button class="b2" data-decide="' + q.id + '" data-status="Approved">' + tr("Approve", "موافقة") + '</button> <button class="b2" data-decide="' + q.id + '" data-status="Rejected">' + tr("Reject", "رفض") + "</button>" : ""];
         }));
       }
       function rescheduleForm(s) {
-        const choices = s.rescheduleChoices || [];
+        const choices = (s.rescheduleChoices || []).filter((x) => !x.timeIssue);
         if (!choices.length)
           return "<p>" + tr("No upcoming lessons are available for a change request.", "لا توجد حصص قادمة متاحة لطلب تغيير موعد.") + "</p>";
         const subjects = [...new Set(choices.map((x) => x.subject))];
-        return "<h3>" + tr("Request a time change", "طلب تغيير موعد") + "</h3><p>" + tr("Choose a subject and its lesson. The schedule changes only after BOTH the assigned teacher and administration approve.", "اختر المادة والحصة. لن يتغير الجدول إلا بعد موافقة المدرس المسؤول والإدارة معًا.") + '</p><form id="extension-reschedule-form"><div class="fg"><label>' + tr("Subject", "المادة") + '<select id="extension-reschedule-subject">' + subjects.map((x) => "<option>" + esc(x) + "</option>").join("") + "</select></label><label>" + tr("Lesson to change", "الحصة المطلوب تغيير موعدها") + '<select name="lesson_key" id="extension-reschedule-lesson"></select></label>' + field("date", "Requested date", "التاريخ المطلوب", "date") + field("starts_at", "Requested start", "البداية المطلوبة", "time") + field("ends_at", "Requested end", "النهاية المطلوبة", "time") + field("reason", "Reason", "السبب") + '</div><label id="extension-reschedule-group" style="display:none"><input type="checkbox" name="acknowledge_group"> ' + tr("This is a group lesson: the request changes the selected lesson for the whole group.", "هذه حصة جماعية: الطلب يغيّر موعد الحصة المحددة لكل المجموعة.") + '</label><button class="b" type="submit">' + tr("Send request", "إرسال الطلب") + "</button></form>";
+        return "<h3>" + tr("Request a time change", "طلب تغيير موعد") + "</h3><p>" + tr("Choose a subject and its lesson. The schedule changes only after BOTH the assigned teacher and administration approve.", "اختر المادة والحصة. لن يتغير الجدول إلا بعد موافقة المدرس المسؤول والإدارة معًا.") + '</p><form id="extension-reschedule-form"><div class="fg"><label>' + tr("Subject", "المادة") + '<select id="extension-reschedule-subject">' + subjects.map((x) => "<option>" + esc(x) + "</option>").join("") + "</select></label><label>" + tr("Lesson to change", "الحصة المطلوب تغيير موعدها") + '<select name="lesson_key" id="extension-reschedule-lesson" dir="ltr"></select></label>' + field("date", "Requested start date", "تاريخ البداية المطلوب", "date") + field("starts_at", "Requested start", "البداية المطلوبة", "time") + field("end_date", "Requested end date", "تاريخ النهاية المطلوب", "date") + field("ends_at", "Requested end", "النهاية المطلوبة", "time") + field("reason", "Reason", "السبب") + '</div><label id="extension-reschedule-group" style="display:none"><input type="checkbox" name="acknowledge_group"> ' + tr("This is a group lesson: the request changes the selected lesson for the whole group.", "هذه حصة جماعية: الطلب يغيّر موعد الحصة المحددة لكل المجموعة.") + '</label><div id="extension-reschedule-result" hidden></div><div class="extension-form-actions"><small>' + tr("The current lesson stays unchanged until both approvals.", "موعد الحصة الحالي يظل كما هو لحين اكتمال الموافقتين.") + '</small><button class="b" type="submit">' + tr("Send request", "إرسال الطلب") + "</button></div></form>";
       }
       function bindReschedule() {
         const form = document.getElementById("extension-reschedule-form");
         if (!form)
           return;
-        const choices = data.rescheduleChoices || [], subject = document.getElementById("extension-reschedule-subject"), lesson = document.getElementById("extension-reschedule-lesson");
+        const choices = (data.rescheduleChoices || []).filter((x) => !x.timeIssue), subject = document.getElementById("extension-reschedule-subject"), lesson = document.getElementById("extension-reschedule-lesson"), result = document.getElementById("extension-reschedule-result");
+        let sent = false, requestKey = token();
         const pick = () => {
           const row = choices.find((x) => x.key === lesson.value);
           if (!row)
             return;
-          form.elements.date.value = row.date;
-          form.elements.starts_at.value = row.startsAt;
-          form.elements.ends_at.value = row.endsAt;
+          const x = shown(row);
+          form.elements.date.value = x.date;
+          form.elements.starts_at.value = x.start;
+          form.elements.end_date.value = x.endDate;
+          form.elements.ends_at.value = x.end;
+          form.dataset.startDate = x.date;
           const group = document.getElementById("extension-reschedule-group");
           group.style.display = row.group ? "flex" : "none";
           form.elements.acknowledge_group.required = row.group;
           form.elements.acknowledge_group.checked = false;
         };
         subject.onchange = () => {
-          lesson.innerHTML = choices.filter((x) => x.subject === subject.value).map((x) => '<option value="' + esc(x.key) + '">' + esc(x.date + " · " + x.startsAt + "–" + x.endsAt + " · " + x.teacher) + "</option>").join("");
+          lesson.innerHTML = choices.filter((x) => x.subject === subject.value).map((x) => '<option value="' + esc(x.key) + '">' + esc(shown(x).date + " · " + shown(x).start + "–" + shown(x).end + " · " + x.teacher) + "</option>").join("");
           pick();
         };
         lesson.onchange = pick;
         subject.onchange();
-        for (const field of ["date", "starts_at", "ends_at", "reason"])
-          form.elements[field].required = true;
+        for (const key of ["date", "starts_at", "end_date", "ends_at", "reason"])
+          form.elements[key].required = true;
+        form.elements.date.onchange = () => {
+          const previousDate = form.dataset.startDate || form.elements.date.value, difference = Date.parse(form.elements.end_date.value + "T00:00:00Z") - Date.parse(previousDate + "T00:00:00Z");
+          if (Number.isFinite(difference) && Number.isFinite(Date.parse(form.elements.date.value + "T00:00:00Z")))
+            form.elements.end_date.value = new Date(Date.parse(form.elements.date.value + "T00:00:00Z") + difference).toISOString().slice(0, 10);
+          form.dataset.startDate = form.elements.date.value;
+        };
+        form.noValidate = true;
+        form.onsubmit = async (event) => {
+          event.preventDefault();
+          const button = form.querySelector('[type="submit"]');
+          if (sent || button.disabled)
+            return;
+          const row = choices.find((x) => x.key === lesson.value), r = Object.fromEntries(new FormData(form));
+          if (!row) {
+            feedback(result, tr("Choose an upcoming lesson.", "اختر حصة قادمة."));
+            return;
+          }
+          if (!form.checkValidity()) {
+            feedback(result, tr("Complete the required fields and confirm the group notice when shown.", "أكمل الحقول المطلوبة وأكد تنبيه الحصة الجماعية عند ظهوره."));
+            form.reportValidity();
+            return;
+          }
+          const original = shown(row);
+          if (r.date === original.date && r.starts_at === original.start && r.end_date === original.endDate && r.ends_at === original.end) {
+            feedback(result, translatedError("Choose a different time."));
+            form.elements.date.focus();
+            return;
+          }
+          button.disabled = true;
+          button.textContent = tr("Sending…", "جارٍ الإرسال…");
+          try {
+            api("reschedule", { ...r, timezone: data.timezone || TZ.ACADEMY, acknowledge_group: r.acknowledge_group === "on", request_key: requestKey });
+            await window.__APLUS_SAVE__?.();
+            sent = true;
+            button.textContent = tr("Request sent", "تم إرسال الطلب");
+            feedback(result, tr("Your request was sent to the assigned teacher and administration. The current lesson has not changed.", "تم إرسال طلبك للمدرس المسؤول والإدارة. موعد الحصة الحالي لم يتغير."), "success");
+            const a = document.createElement("a");
+            a.href = "#preview-requests";
+            a.dataset.extension = "requests";
+            a.textContent = tr("Track request approvals", "متابعة موافقات الطلب");
+            result.append(document.createElement("br"), a);
+          } catch (err) {
+            error(err, form);
+            button.disabled = false;
+            button.textContent = tr("Send request", "إرسال الطلب");
+          }
+        };
       }
       function education() {
         const r = api("education");
@@ -43223,15 +43591,15 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       function learning() {
         data = api("student");
         const s = data;
-        const lessonRows = (rows) => table([tr("Date", "التاريخ"), tr("Time", "الوقت"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Duration", "المدة"), tr("Status", "الحالة"), tr("Meeting", "الاجتماع")], rows.map((l) => [text(l.date), text(l.startsAt + " → " + l.endsAt), text(l.subject), text(l.teacher), text(l.duration), text(status(l.status)), link(l.meetingLink)]));
+        const lessonRows = (rows) => table([tr("Date", "التاريخ"), tr("Time", "الوقت"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Duration", "المدة"), tr("Status", "الحالة"), tr("Meeting", "الاجتماع")], rows.map((l) => [text(shown(l).date), '<bdi dir="ltr">' + esc(shown(l).start + " → " + (shown(l).endDate !== shown(l).date ? shown(l).endDate + " " : "") + shown(l).end) + "</bdi>", text(l.subject), text(l.teacher), text(l.duration), text(status(l.status)), link(l.meetingLink)]));
         if (page === "overview") {
           const fin = api("student-statement"), next = s.schedule.find((l) => !["Cancelled", "Completed"].includes(l.status)), installment = fin.installments.flatMap((c) => c.installments).filter((i) => i.remaining > 0 && i.status !== "Cancelled").sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
-          return "<h3>" + text(s.student.name) + "</h3><h3>" + tr("Next lesson", "الدرس القادم") + "</h3>" + lessonRows(next ? [next] : []) + "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p><h3>" + tr("Enrolled subjects", "المواد المسجلة") + "</h3>" + s.subjects.map((x) => text(x.name)).join(" · ") + "<h3>" + tr("Active projects and deadlines", "المشاريع النشطة والمواعيد") + "</h3>" + table([tr("Project", "المشروع"), tr("Deadline", "الموعد")], s.projects.filter((p) => !["Completed", "Cancelled"].includes(p.status)).map((p) => [text(p.name), text(p.due)])) + "<h3>" + tr("Next installment", "القسط القادم") + "</h3><p>" + (installment ? money(installment.remaining, fin.installments.find((c) => c.installments.some((i) => i.id === installment.id))?.currency) + " · " + text(installment.due_on) : tr("No scheduled installment", "لا يوجد قسط مجدول")) + "</p>";
+          return "<h3>" + text(s.student.name) + "</h3><h3>" + tr("Next lesson", "الدرس القادم") + "</h3>" + lessonRows(next ? [next] : []) + "<p>" + tr("My timezone", "توقيتي") + ": " + text(zoneLabel(s.timezone)) + "</p><h3>" + tr("Enrolled subjects", "المواد المسجلة") + "</h3>" + s.subjects.map((x) => text(x.name)).join(" · ") + "<h3>" + tr("Active projects and deadlines", "المشاريع النشطة والمواعيد") + "</h3>" + table([tr("Project", "المشروع"), tr("Deadline", "الموعد")], s.projects.filter((p) => !["Completed", "Cancelled"].includes(p.status)).map((p) => [text(p.name), text(p.due)])) + "<h3>" + tr("Next installment", "القسط القادم") + "</h3><p>" + (installment ? money(installment.remaining, fin.installments.find((c) => c.installments.some((i) => i.id === installment.id))?.currency) + " · " + text(installment.due_on) : tr("No scheduled installment", "لا يوجد قسط مجدول")) + "</p>";
         }
         if (page === "subjects")
           return table([tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Service", "الخدمة")], s.subjects.map((x) => [text(x.name), text(x.teacher), text(x.type)]));
         if (page === "schedule")
-          return "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p>" + lessonRows(s.schedule) + rescheduleForm(s);
+          return timezoneSettings(s) + lessonRows(s.schedule) + rescheduleForm(s);
         if (page === "lessons")
           return table([tr("Date", "التاريخ"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Hours", "الساعات"), tr("Attendance", "الحضور"), tr("Shared summary", "الملخص المشترك")], s.lessons.map((l) => [text(l.date), text(l.subject), text(l.teacher), text(l.hours), text(l.attendance), l.summary.map((x) => text(x.body)).join("<br>")]));
         if (page === "courses")
@@ -43243,12 +43611,15 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       }
       function render() {
         try {
+          if (!pages.some((x) => x[0] === page))
+            return;
+          extensionActive = true;
           nav();
           const v = document.getElementById("v");
           if (!v)
             return;
           const name = pages.find((x) => x[0] === page);
-          v.innerHTML = '<section id="extension-view" data-ui-user-content><h2>' + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p id="extension-error" class="neg" role="alert"></p>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.kind.startsWith("Reschedule") ? "requests" : n.kind === "ScheduleChanged" ? student ? "schedule" : "requests" : n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher || n.recipient_kind === "Admin" ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : learning()) + "</section>";
+          v.innerHTML = '<section id="extension-view" data-ui-user-content><header class="extension-heading"><p class="extension-eyebrow">' + esc(NAV.groupFor(page) ? tr(NAV.groupFor(page).en, NAV.groupFor(page).ar) : "") + "</p><h2>" + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p class="extension-description">' + esc(tr(...descriptions[page] || ["", ""])) + '</p></header><div id="extension-error" aria-live="polite"></div>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.kind.startsWith("Reschedule") ? "requests" : n.kind === "ScheduleChanged" ? student ? "schedule" : "requests" : n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher || n.recipient_kind === "Admin" ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : learning()) + "</section>";
           bindPeriod();
           form("extension-account-form", (r) => api("accounts", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), active: Number(r.active) }));
           form("extension-plan-form", (r) => api("plan", { request_key: token(), reason: r.reason, record: { id: r.id ? Number(r.id) : undefined, contract_id: Number(r.contract_id), due_on: r.due_on, amount: Math.round(Number(r.amount) * 1000), note: r.reason } }));
@@ -43259,7 +43630,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
               render();
             };
           bindReschedule();
-          form("extension-reschedule-form", (r) => api("reschedule", { ...r, acknowledge_group: r.acknowledge_group === "on", request_key: token() }));
+          bindTimezone();
           form("extension-share-form", (r) => api("share", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), source_id: Number(r.source_id), released: Number(r.released) }));
           form("extension-feedback-form", (r) => api("feedback", { ...r, submission_id: Number(r.submission_id), published: Number(r.published) }));
           document.querySelectorAll("[data-submit]").forEach((el) => el.onsubmit = (e) => {
@@ -43303,6 +43674,18 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         }
       }
       document.addEventListener("click", (e) => {
+        const a = e.target.closest("[data-route]");
+        if (a) {
+          extensionActive = false;
+          document.querySelectorAll("#nv [data-extension]").forEach((x) => {
+            x.classList.remove("on");
+            x.removeAttribute("aria-current");
+          });
+          if (location.hash.startsWith("#preview-"))
+            history.replaceState(null, "", location.pathname + location.search);
+        }
+      }, true);
+      document.addEventListener("click", (e) => {
         const a = e.target.closest("[data-extension]");
         if (a) {
           e.preventDefault();
@@ -43320,9 +43703,17 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           render();
         }
       });
+      const sharedStyle = document.createElement("style");
+      sharedStyle.textContent = require_fs().readFileSync("/app/preview/presentation.css", "utf8");
+      document.head.append(sharedStyle);
       const css = document.createElement("style");
       css.textContent = "#extension-view{color:var(--ink);letter-spacing:0}#extension-view .fg{margin:16px 0}#extension-view form{margin:20px 0}#extension-view label{display:flex;flex-direction:column;gap:6px}#extension-view .tw{width:100%}#extension-view table{width:100%}#extension-view td{overflow-wrap:anywhere}#extension-view .bar{flex-wrap:wrap}#extension-view input{max-width:100%}#extension-view h2{letter-spacing:0}@media print{body.extension-printing #nv,body.extension-printing #topbar,body.extension-printing #aplus-preview-badge,body.extension-printing .extension-controls,body.extension-printing #extension-error{display:none!important}body.extension-printing #extension-view{background:var(--card);color:var(--ink)}body.extension-printing #workspace{margin:0}body.extension-printing #extension-statement details{display:block}body.extension-printing #extension-statement details>*{display:block}body.extension-printing #extension-statement th{position:static}body.extension-printing #extension-statement tr{break-inside:avoid}}";
-      document.head.append(css);
+      document.head.insertBefore(css, sharedStyle);
+      const initialPage = location.hash.replace("#preview-", "");
+      if (pages.some((p) => p[0] === initialPage)) {
+        page = initialPage;
+        extensionActive = true;
+      }
       if (student) {
         const lang = localStorage.getItem("aplus-ui-language") === "ar" ? "ar" : "en";
         document.documentElement.lang = lang;
@@ -43330,7 +43721,10 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         document.documentElement.dataset.theme = localStorage.getItem("aplus-ui-theme") === "dark" ? "dark" : "light";
         render();
       } else {
-        nav();
+        if (extensionActive)
+          render();
+        else
+          nav();
         new MutationObserver(() => nav()).observe(document.getElementById("nv"), { childList: true, subtree: true });
       }
       window.__APLUS_EXTENSION__ = { open: (k) => {

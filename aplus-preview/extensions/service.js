@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('../runtime/shims/crypto');
 const {assemble}=require('../original/src/state'),TEAM=require('../original/src/team'),AUDIT=require('../original/src/audit'),MAN=require('../original/src/management'),{tx}=require('../original/src/db');
-const F=require('./finance'),rules=require('../original/src/rules');
+const F=require('./finance'),TZ=require('./timezones'),rules=require('../original/src/rules');
 const hash=t=>crypto.createHash('sha256').update(t).digest('hex');
 const fail=(code,msg)=>{throw Object.assign(new Error(msg),{code})};
 const plain=(v,max=3000)=>{if(typeof v!=='string'||!rules.plain(v,max))fail(422,'Enter valid plain text.');return v.trim()};
@@ -33,7 +33,7 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
   const label=(a,id)=>a.find(x=>x.id===id)?.name||'',regs=db().prepare('SELECT * FROM service_registrations WHERE student_id=?').all(s),shares=db().prepare('SELECT id,kind,source_id,title,body,url,due_on FROM preview_shares WHERE student_id=? AND released=1').all(s),bookings=db().prepare('SELECT * FROM managed_sessions WHERE student_id=?').all(s);
   const teacherIds=new Set([...regs.map(r=>r.teacher_id),...st.l.filter(l=>l.s===s).map(l=>l.t),...st.tt.filter(t=>(t.s||[]).includes(s)).map(t=>t.t)]),safeSt={...st,l:st.l.filter(l=>l.s===s),tt:st.tt.filter(t=>(t.s||[]).includes(s)).map(t=>({...t,s:[s]})),s:st.s.filter(x=>x.id===s)};
   const start=require('../original/src/cairo').today(clock()),end=require('../original/src/cairo').addDays(start,13),schedule=[...teacherIds].filter(Boolean).flatMap(t=>require('../original/src/teacher-portal').schedule(safeSt,t,bookings,{from:start,to:end}).map(r=>{const {students,...safe}=r;return {...safe,teacher:label(st.t,t),meetingLink:shares.find(x=>x.kind==='Meeting'&&x.source_id===r.id)?.url||'',duration:r.startsAt&&r.endsAt?Math.round((Date.parse('2000-01-01T'+r.endsAt)-Date.parse('2000-01-01T'+r.startsAt))/60000):null}}));
-  return {student:{id:s,name:label(st.s,s)},timezone:'Africa/Cairo',schedule,rescheduleChoices:RESCHEDULE.choices(s),subjects:st.sub.filter(x=>(x.studs||[]).includes(s)||regs.some(r=>r.subject_id===x.id)||st.l.some(l=>l.s===s&&l.sub===x.id)).map(x=>({id:x.id,name:x.name,type:x.type,teacher:label(st.t,x.inst)})),
+  const timezone=TZ.preference(db(),s);return {student:{id:s,name:label(st.s,s)},timezone,academyTimezone:TZ.ACADEMY,timezoneOptions:TZ.ZONES,schedule:schedule.map(row=>TZ.display(row,timezone)),rescheduleChoices:RESCHEDULE.choices(s).map(row=>TZ.display(row,timezone)),subjects:st.sub.filter(x=>(x.studs||[]).includes(s)||regs.some(r=>r.subject_id===x.id)||st.l.some(l=>l.s===s&&l.sub===x.id)).map(x=>({id:x.id,name:x.name,type:x.type,teacher:label(st.t,x.inst)})),
    lessons:st.l.filter(l=>l.s===s&&l.st==='Completed').map(l=>({id:l.id,date:l.date,subject:label(st.sub,l.sub),teacher:label(st.t,l.t),hours:l.d,status:l.st,attendance:db().prepare('SELECT status FROM lesson_attendance WHERE lesson_id=?').get(l.id)?.status||'',summary:shares.filter(x=>x.kind==='Lesson'&&x.source_id===l.id)})),
    projects:st.pr.filter(p=>p.s===s).map(p=>({id:p.id,name:p.name,teacher:label(st.t,p.t),status:p.status,due:p.due,stages:db().prepare('SELECT id,title,due_on,status FROM project_stages WHERE project_id=?').all(p.id)})),
    courses:st.re.filter(e=>e.s===s).map(e=>({id:e.id,name:label(st.rc,e.rc),materials:db().prepare("SELECT id,title,url,delivered_on,status FROM course_deliveries WHERE enrollment_id=? AND status IN('Sent','Confirmed')").all(e.id)})),shares,
@@ -86,6 +86,10 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    }
    if(method!=='POST')fail(405,'Method not allowed.');const r=parse();
    if(p==='/api/preview/accounts')return response({ok:true,account:createAccount(r,u)});
+   if(p==='/api/preview/timezone'){
+    if(u.role!=='Student')fail(403,'Only students can set their own timezone.');if(!TZ.valid(r.timezone))fail(422,'Choose Egypt, Kuwait or the United Kingdom.');
+    const old=TZ.preference(db(),u.student_id);db().prepare('INSERT INTO preview_student_preferences(student_id,timezone,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET timezone=excluded.timezone,updated_at=excluded.updated_at').run(u.student_id,r.timezone,now());if(old!==r.timezone)audit(u,'update','student-timezone',u.student_id,{timezone:old},{timezone:r.timezone});return response({ok:true,timezone:r.timezone});
+   }
    if(p==='/api/preview/password')fail(403,'Student passwords are managed by the administrator.');
    if(p==='/api/preview/read'){
     if(typeof r.id==='string'&&r.id.startsWith('staff:')){if(u.role!=='Admin')fail(403,'Administrator access required.');const id=Number(r.id.slice(6)),row=db().prepare('SELECT * FROM preview_staff_notifications WHERE id=? AND recipient_id=?').get(id,u.id);if(!row)fail(403,'Only your own notifications are available.');db().prepare('UPDATE preview_staff_notifications SET read_at=coalesce(read_at,?) WHERE id=?').run(now(),id);return response({ok:true});}

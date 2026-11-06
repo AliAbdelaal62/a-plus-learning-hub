@@ -1,0 +1,42 @@
+/* Shared presentation for every portal/staff extension; no business-state changes. */
+#extension-view{color:var(--ink);letter-spacing:0;min-width:0;max-width:1400px;margin-inline:auto}
+#extension-view .extension-heading{margin-block-end:24px}
+#extension-view .extension-eyebrow{color:var(--mut);font-size:12px;margin:0 0 6px}
+#extension-view .extension-heading h2{margin:0;font-size:26px;letter-spacing:-.025em;line-height:1.3}
+#extension-view .extension-description{color:var(--mut);margin:8px 0 0;max-width:850px;line-height:1.7}
+#extension-view>h3,#extension-statement>h3{margin-block:24px 12px}
+#extension-view .tw{width:100%;max-width:100%;overflow:auto;border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-block:14px 24px}
+#extension-view table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+#extension-view th{background:var(--soft);color:var(--mut);font-size:12px;font-weight:600;text-align:start;padding:12px 16px;white-space:nowrap}
+#extension-view td{padding:13px 16px;border-bottom:1px solid var(--bd);overflow-wrap:anywhere;vertical-align:middle;line-height:1.6}
+#extension-view tbody tr:last-child td{border-bottom:0}
+#extension-view tbody tr:hover td{background:var(--soft)}
+#extension-view .extension-empty{text-align:center;color:var(--mut);padding:36px 16px}
+#extension-view form{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px;margin:18px 0 26px;min-width:0}
+#extension-view td form{min-width:230px;padding:14px;margin:12px 0 0}
+#extension-view label{display:flex;flex-direction:column;gap:8px;font-weight:500;color:var(--ink);font-size:13px;min-width:0}
+#extension-view .fg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:0 0 20px}
+#extension-view input,#extension-view select,#extension-view textarea{width:100%;max-width:100%;min-height:42px;background:var(--card);color:var(--ink);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;box-sizing:border-box}
+#extension-view input[type=checkbox]{width:17px;height:17px;min-height:17px;padding:0;flex:0 0 auto;accent-color:var(--acc)}
+#extension-view #extension-reschedule-group{flex-direction:row;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:8px;background:var(--soft);font-weight:400;line-height:1.6;margin-block:4px 18px}
+#extension-view .extension-controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-block-end:20px}
+#extension-view .extension-controls label{flex:1 1 160px}
+#extension-view .extension-controls>select{flex:1 1 220px;width:auto;min-height:42px}
+#extension-view button{min-height:38px;border-radius:8px}
+#extension-view button:disabled{opacity:.55;cursor:default}
+#extension-view input:focus-visible,#extension-view select:focus-visible,#extension-view textarea:focus-visible,#extension-view button:focus-visible{outline:3px solid var(--baby);outline-offset:2px;border-color:var(--acc)}
+#extension-view [aria-invalid=true]{border-color:var(--bad)}
+.extension-feedback{padding:12px 14px;border-radius:8px;line-height:1.7;margin:12px 0;border:1px solid var(--bd);background:var(--soft);color:var(--ink);scroll-margin-block-end:140px}
+.extension-feedback[data-kind=error]{border-color:var(--bad);color:var(--bad)}
+.extension-feedback[data-kind=success]{border-color:var(--good);color:var(--good)}
+.extension-feedback:empty{display:none}
+#extension-view bdi{font-variant-numeric:tabular-nums}
+#extension-view .extension-timezone-settings{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px 20px;background:var(--card);border:1px solid var(--bd);border-radius:12px;margin-block:16px}
+#extension-view .extension-timezone-settings label{flex:1 1 230px}
+#extension-view .extension-timezone-settings p{flex:2 1 300px;margin:0;color:var(--mut);line-height:1.7}
+#extension-view td .b2{margin:2px}
+#extension-view .extension-form-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#nv [data-extension]{display:flex;align-items:center;gap:10px}
+#nv [data-extension] svg{width:18px;height:18px;flex:0 0 18px}
+@media(max-width:640px){#extension-view .fg{grid-template-columns:1fr}#extension-view form{padding:16px}#extension-view .extension-heading h2{font-size:23px}#extension-view th,#extension-view td{padding:11px 12px}#extension-view .extension-controls>*{width:100%}#extension-view .extension-controls button{flex:1 1 140px}}
+@media print{#extension-view .extension-heading{margin-bottom:16px}#extension-view .tw{overflow:visible;break-inside:auto}#extension-view tbody tr:hover td{background:transparent}.extension-feedback{display:none!important}}
