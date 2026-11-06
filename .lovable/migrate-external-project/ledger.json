@@ -1,0 +1,12 @@
+[
+  {"capability":"Core screens: students, teachers, subjects, lessons, schedule, dashboard","source":"src/client/*, public/index.html","outcome":"migrate","status":"done","next_action":"none"},
+  {"capability":"Arabic/English with right-to-left layout","source":"src/client/ui-translations.json","outcome":"migrate","status":"done","next_action":"Dark mode not yet rebuilt"},
+  {"capability":"Team login with roles Admin/Coordinator/Accountant/Teacher","source":"src/team.js, src/access.js","outcome":"migrate to Lovable Cloud email sign-in; first account becomes admin","status":"done","next_action":"Existing team members create accounts; admin assigns roles"},
+  {"capability":"Schema for core records","source":"db/migrations/001_init.sql","outcome":"migrate","status":"done","next_action":"none"},
+  {"capability":"Existing academy records","source":"local SQLite (not in repository)","outcome":"migrate","status":"pending","next_action":"User exports students/teachers/subjects/lessons/timetable tables as CSV"},
+  {"capability":"Payments, ledger, exchange rates, treasury, teacher batch payments","source":"src/finance.js, ledger.js, treasury.js, teacher-batches.js","outcome":"migrate","status":"pending","next_action":"Next phase"},
+  {"capability":"Projects, recorded courses, enrollments, reminders","source":"001_init.sql, reminders.js","outcome":"migrate","status":"pending","next_action":"Next phase"},
+  {"capability":"Operations: attendance, follow-up tasks, registrations, teacher portal","source":"operations.js, teacher-portal.js, 006/007 migrations","outcome":"migrate","status":"pending","next_action":"Next phase"},
+  {"capability":"Recurring occurrence overrides (move/cancel single occurrence)","source":"timetable_occurrences","outcome":"migrate","status":"pending","next_action":"Next phase"},
+  {"capability":"Audit log, backups, Excel export","source":"audit.js, backup.js, vendor/xlsx","outcome":"replace with Cloud backups; audit/export later","status":"pending","next_action":"Next phase"}
+]
