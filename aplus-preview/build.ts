@@ -10,7 +10,8 @@ const HERE = import.meta.dir;
 const ORIG = join(HERE, "original");
 const SHIMS = join(HERE, "runtime", "shims");
 const ROOT = join(HERE, "..");
-const NODE = process.argv.includes("--node");
+const TEST = process.argv.includes("--test") ? process.argv[process.argv.indexOf("--test") + 1] : null;
+const NODE = process.argv.includes("--node") || !!TEST;
 
 function walk(dir: string, out: string[] = []) {
   for (const n of readdirSync(dir)) {
@@ -24,6 +25,7 @@ function walk(dir: string, out: string[] = []) {
 function embedded() {
   const files: Record<string, string> = {};
   const add = (p: string) => { files["/app/" + relative(ORIG, p).split("\\").join("/")] = readFileSync(p, "utf8"); };
+  if (TEST) { for (const p of walk(ORIG)) if (!/[\\/]vendor[\\/]/.test(p)) add(p); return files; }
   for (const p of walk(join(ORIG, "src"))) add(p);
   for (const p of walk(join(ORIG, "db"))) add(p);
   for (const n of ["index.html", "team-login.html", "team-login.js"]) add(join(ORIG, "public", n));
@@ -79,14 +81,21 @@ const plugin: BunPlugin = {
   },
 };
 
-const entry = NODE ? join(HERE, "runtime", "core.js") : join(HERE, "runtime", "browser.js");
+let entry: string;
+if (TEST) {
+  entry = "/tmp/aplus-test-entry-" + TEST + ".js";
+  await Bun.write(entry, `require(${JSON.stringify(join(HERE, "runtime", "test-harness.js"))}).boot(${JSON.stringify(join(ROOT, "node_modules/sql.js/dist/"))}).then(() => { process.chdir && 0; require(${JSON.stringify(join(ORIG, "tests", TEST + ".test.js"))}); });`);
+} else entry = NODE ? join(HERE, "runtime", "core.js") : join(HERE, "runtime", "browser.js");
 const result = await Bun.build({
   entrypoints: [entry], target: NODE ? "node" : "browser", format: NODE ? "cjs" : "iife", plugins: [plugin], minify: false,
   define: NODE ? {} : { "process.env.NODE_ENV": '"production"' },
 });
 if (!result.success) { for (const l of result.logs) console.error(l); process.exit(1); }
 const code = await result.outputs[0].text();
-if (NODE) {
+if (TEST) {
+  await Bun.write("/tmp/aplus-test-" + TEST + ".cjs", code);
+  console.log("test bundle -> /tmp/aplus-test-" + TEST + ".cjs");
+} else if (NODE) {
   await Bun.write("/tmp/aplus-node-core.cjs", code);
   console.log("node core -> /tmp/aplus-node-core.cjs");
 } else {
