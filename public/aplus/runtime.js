@@ -32647,7 +32647,42 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
   },
   "devDependencies": {}
 }
-` };
+`, "/app/preview/schema.sql": `-- Additive browser-preview schema; original academy schema/version remains unchanged.
+CREATE TABLE IF NOT EXISTS preview_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS preview_student_accounts(
+ id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
+ display_name TEXT NOT NULL, student_id INTEGER NOT NULL REFERENCES students(id),
+ password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS preview_student_sessions(token_hash TEXT PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES preview_student_accounts(id),expires_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS preview_requests(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,request_key TEXT NOT NULL UNIQUE,kind TEXT NOT NULL,
+ actor TEXT NOT NULL,student_id INTEGER REFERENCES students(id),record TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN('Pending','Approved','Rejected')),
+ reason TEXT NOT NULL,created_at TEXT NOT NULL,decided_at TEXT,decided_by TEXT,result TEXT
+);
+CREATE TABLE IF NOT EXISTS preview_shares(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,student_id INTEGER NOT NULL REFERENCES students(id),
+ teacher_id INTEGER REFERENCES teachers(id),kind TEXT NOT NULL,source_id INTEGER NOT NULL,
+ title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',url TEXT NOT NULL DEFAULT '',due_on TEXT,
+ released INTEGER NOT NULL DEFAULT 0 CHECK(released IN(0,1)),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+ UNIQUE(student_id,kind,source_id,title)
+);
+CREATE TABLE IF NOT EXISTS preview_submissions(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,share_id INTEGER NOT NULL REFERENCES preview_shares(id),
+ student_id INTEGER NOT NULL REFERENCES students(id),body TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL,updated_at TEXT NOT NULL, UNIQUE(share_id,student_id)
+);
+CREATE TABLE IF NOT EXISTS preview_feedback(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,submission_id INTEGER NOT NULL UNIQUE REFERENCES preview_submissions(id),
+ body TEXT NOT NULL,published INTEGER NOT NULL DEFAULT 0 CHECK(published IN(0,1)),updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS preview_notifications(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL,recipient_kind TEXT NOT NULL CHECK(recipient_kind IN('Student','Teacher')),
+ recipient_id INTEGER NOT NULL,kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,
+ UNIQUE(event_key,recipient_kind,recipient_id)
+);
+CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);` };
   });
 
   // node_modules/base64-js/index.js
@@ -41799,6 +41834,938 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
     if (false) {}
   });
 
+  // aplus-preview/extensions/finance.js
+  var require_finance2 = __commonJS(function(exports, module) {
+    var F = require_finance();
+    var { forState } = require_ledger_server();
+    var T = require_teacher_portal();
+    var B = require_teacher_batches();
+    var rules = require_rules();
+    function range(from = "", to = "") {
+      if (from && !rules.isDate(from) || to && !rules.isDate(to) || from && to && from > to)
+        throw Object.assign(new Error("Choose a valid date range."), { code: 422 });
+      return { from, to };
+    }
+    function kwd(row, original, currency, baseValue, rate) {
+      if (currency === "KWD" && Number.isSafeInteger(original))
+        return { value: original, basis: "original KWD" };
+      if (row.bc === "KWD" && row.fxs !== "missing" && Number.isSafeInteger(baseValue) && Number.isFinite(rate) && rate > 0 && Number.isSafeInteger(original) && Math.abs(Math.round(original * rate) - baseValue) <= 1)
+        return { value: baseValue, basis: "saved transaction rate", rate };
+      return { value: null, basis: "missing historical KWD conversion" };
+    }
+    function student(st, sid, opt = {}) {
+      const { from, to } = range(opt.from, opt.to), name = (a, id) => a.find((x) => x.id === id)?.name || "", events = [], services = new Map;
+      const service = (key, title, kind, extra = {}) => {
+        if (!services.has(key))
+          services.set(key, { key, title, kind, charge: 0, paid: 0, hours: 0, history: [], ...extra });
+        return services.get(key);
+      };
+      const add = (kind, row, date, amount, cur, base, rx, key, description) => {
+        const v = kwd(row, amount, cur, base, rx), e = { id: row.id, kind, date: date || "", description, amount: v.value, converted: cur !== "KWD", basis: v.basis, rate: v.rate, service: key || null };
+        events.push(e);
+        if (key) {
+          const s = services.get(key);
+          if (s) {
+            if (kind === "Charge")
+              s.charge = s.charge === null || e.amount === null ? null : s.charge + e.amount;
+            else if (kind === "Payment")
+              s.paid = s.paid === null || e.amount === null ? null : s.paid + e.amount;
+            s.history.push(e);
+          }
+        }
+        return e;
+      };
+      const ownedLessons = st.l.filter((l) => l.s === sid), projects = st.pr.filter((p) => p.s === sid), enrollments = st.re.filter((e) => e.s === sid);
+      for (const l of ownedLessons)
+        if (l.st === "Completed") {
+          const key = "live:" + l.sub, s = service(key, name(st.sub, l.sub) || "Live lessons", "Live");
+          s.hours += l.d;
+          add("Charge", l, l.date, F.O(l).chg, l.sc, l.bchg, l.srx, key, "Lesson #" + l.id + " · " + s.title);
+        }
+      for (const p of projects) {
+        const key = "project:" + p.id;
+        service(key, p.name, "Project", { status: p.status });
+        if (p.status !== "Cancelled")
+          add("Charge", p, p.start, p.rev, p.cur, Math.round(p.rev * p.rx), p.rx, key, p.name);
+        if (p.paid0)
+          add("Payment", p, "", p.paid0, p.cur, Math.round(p.paid0 * p.rx), p.rx, key, "Opening payment · " + p.name);
+        for (const r of st.pp.filter((r) => r.pr === p.id))
+          add("Payment", r, r.date, r.amt, r.cur || p.cur, r.bamt, r.rx, key, "Project payment #" + r.id);
+      }
+      for (const e of enrollments) {
+        const c = st.rc.find((c) => c.id === e.rc);
+        if (!c)
+          continue;
+        const key = "enrollment:" + e.id;
+        service(key, c.name, "Recorded");
+        add("Charge", c, e.date || c.date, e.price, c.cur, Math.round(e.price * c.rx), c.rx, key, c.name);
+        const receipts = st.cp.filter((p) => p.re === e.id), opening = (e.paid || 0) - receipts.reduce((s, p) => s + p.amt, 0);
+        if (opening)
+          add("Payment", c, "", opening, c.cur, Math.round(opening * c.rx), c.rx, key, "Opening payment · " + c.name);
+        for (const p of receipts)
+          add("Payment", p, p.date, p.amt, p.cur || c.cur, p.bamt, p.rx, key, "Course payment #" + p.id);
+      }
+      const unallocated = [];
+      for (const p of st.sp.filter((p) => p.p === sid)) {
+        const e = add("Payment", p, p.date, p.amt, p.cur, p.bamt, p.rx, null, "Student payment #" + p.id), allocs = st.al.filter((a) => a.sp === p.id), parts = [];
+        for (const a of allocs) {
+          let key = null;
+          if (a.tk === "lesson") {
+            const l = ownedLessons.find((l) => l.id === a.tid);
+            if (l)
+              key = "live:" + l.sub;
+          } else if (a.tk === "project" && projects.some((x) => x.id === a.tid))
+            key = "project:" + a.tid;
+          else if (a.tk === "enrollment" && enrollments.some((x) => x.id === a.tid))
+            key = "enrollment:" + a.tid;
+          else if (!a.tk)
+            key = "attributed:" + a.wt;
+          if (key) {
+            if (!services.has(key))
+              service(key, a.wt + " · explicitly attributed", a.wt);
+            parts.push({ key, amount: a.amt, date: a.date });
+          }
+        }
+        const contract = (opt.contracts || []).find((c) => (opt.receipts || []).some((r) => r.contract_id === c.id && r.payment_kind === "sp" && r.payment_id === p.id));
+        if (contract && parts.length === 0) {
+          const lessons = ownedLessons.filter((l) => (opt.usage || []).some((u) => u.lesson_id === l.id && u.contract_id === contract.id));
+          const key = lessons.length ? "live:" + lessons[0].sub : "agreement:" + contract.id;
+          if (!services.has(key))
+            service(key, contract.title || "Live agreement #" + contract.id, "Live");
+          parts.push({ key, amount: p.amt, date: p.date });
+        }
+        let assigned = 0;
+        for (const part of parts) {
+          const s = services.get(part.key), v = e.amount === null ? null : Math.round(e.amount * part.amount / p.amt);
+          assigned += part.amount;
+          s.paid = s.paid === null || v === null ? null : s.paid + v;
+          s.history.push({ ...e, amount: v, date: part.date || e.date, attribution: true });
+        }
+        const left = p.amt - assigned;
+        if (left) {
+          unallocated.push({ ...e, amount: e.amount === null ? null : Math.round(e.amount * left / p.amt) });
+        }
+      }
+      for (const a of st.ad.filter((a) => a.s === sid)) {
+        if (a.kind === "credit")
+          continue;
+        const paid = a.kind === "credit-used" ? a.amt : -a.amt;
+        const e = add("Adjustment", a, a.date, paid, a.cur, a.bamt == null ? null : a.kind === "credit-used" ? a.bamt : -a.bamt, a.rx, null, a.kind + " #" + a.id);
+        if (a.kind === "refund") {
+          let key = a.pr ? "project:" + a.pr : null;
+          const cp = a.ok === "cp" && st.cp.find((p) => p.id === a.oid);
+          if (cp)
+            key = "enrollment:" + cp.re;
+          if (key && services.has(key)) {
+            const s = services.get(key);
+            s.paid = s.paid === null || e.amount === null ? null : s.paid + e.amount;
+            s.history.push(e);
+          }
+        }
+      }
+      events.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      const before = (e) => from && (!e.date || e.date < from), included = (e) => !to || !e.date || e.date <= to, selected = events.filter((e) => included(e) && !before(e));
+      const total = (arr, fn) => arr.some((e) => e.amount === null) ? null : arr.reduce((s, e) => s + fn(e), 0), delta = (e) => e.kind === "Charge" ? e.amount : -e.amount;
+      const earlier = events.filter((e) => included(e) && before(e)), opening = total(earlier, delta), charges = total(selected.filter((e) => e.kind === "Charge"), (e) => e.amount), payments = total(selected.filter((e) => e.kind === "Payment"), (e) => e.amount), adjustments = total(selected.filter((e) => e.kind === "Adjustment"), (e) => e.amount);
+      const closing = total(events.filter(included), delta), native = forState(st).studentRows(st, { only: sid, ...to ? { upTo: to } : {} }), kwdNative = native.find((r) => r.cur === "KWD");
+      const account = F.SS(st, sid), complete = closing !== null;
+      const parity = st.set.base !== "KWD" || from || to || !complete ? null : closing === account.rem;
+      const rows = [...services.values()].map((s) => ({ ...s, remaining: s.charge === null || s.paid === null ? null : s.charge - s.paid, paymentStatus: s.charge === null || s.paid === null ? "Incomplete" : s.paid === 0 ? "Unpaid" : s.paid < s.charge ? "Partially paid" : s.paid === s.charge ? "Paid" : "Credit" }));
+      const allServiceRemaining = rows.some((s) => s.remaining === null) ? null : rows.reduce((q, s) => q + s.remaining, 0), allClosing = total(events, delta), unalloc = total(unallocated, (e) => e.amount);
+      return {
+        studentId: sid,
+        student: name(st.s, sid),
+        currency: "KWD",
+        from,
+        to,
+        generatedAt: new Date().toISOString(),
+        opening,
+        charges,
+        payments,
+        adjustments,
+        closing,
+        complete: complete && parity !== false,
+        parity,
+        entries: selected,
+        services: rows,
+        unallocated,
+        confirmedCredit: kwdNative && kwdNative.net < 0 ? -kwdNative.net : 0,
+        outstanding: closing !== null && closing > 0 ? closing : 0,
+        credit: closing !== null && closing < 0 ? -closing : 0,
+        reconciliation: { serviceRemaining: allServiceRemaining, unallocated: unalloc, otherAdjustments: allClosing === null || allServiceRemaining === null || unalloc === null ? null : allClosing - (allServiceRemaining - unalloc), accountClosing: allClosing },
+        basis: "Original KWD amounts or each transaction’s saved KWD conversion. No current exchange rate. Service balances are all-time; statement entries follow the selected period.",
+        missing: events.filter((e) => included(e) && e.amount === null).map((e) => ({ id: e.id, kind: e.kind, description: e.description })),
+        currencyCreditCaution: native.some((r) => r.cur !== "KWD")
+      };
+    }
+    function teacher(db, st, tid, opt = {}) {
+      range(opt.from, opt.to);
+      const scoped = { ...st, teacherBatches: B.details(db, tid) }, a = T.account(scoped, tid, opt);
+      const entries = a.entries.map((e) => {
+        const out = { ...e };
+        if (e.kind === "Live") {
+          const l = st.l.find((l) => l.id === e.id);
+          out.hourlyRateEGP = l?.tc === "EGP" ? l.tr : null;
+          out.recordedEarnedEGP = e.recordedCostEGP;
+        }
+        if (e.kind === "Project") {
+          const p = st.pr.find((p) => p.id === e.id);
+          out.agreedPercent = p?.share;
+          out.recordedEarnedEGP = p?.cur === "EGP" ? F.pj(st, p).share : null;
+        }
+        if (e.kind === "Recorded") {
+          const c = st.rc.find((c) => c.id === e.id);
+          out.agreedPercent = c?.share;
+          out.recordedEarnedEGP = c?.cur === "EGP" ? F.rcc(c).share : null;
+        }
+        if (out.allocations)
+          out.allocations = out.allocations.map((x) => ({ student: x.student, hours: x.hours, startsOn: x.startsOn, endsOn: x.endsOn }));
+        return out;
+      });
+      return { ...a, entries, teacher: st.t.find((t) => t.id === tid)?.name || "", generatedAt: new Date().toISOString(), displayOnly: true, settingsRate: st.set.base === "EGP" ? 1 : st.rates.EGP?.r || null };
+    }
+    module.exports = { student, teacher, kwd, range };
+  });
+
+  // aplus-preview/extensions/service.js
+  var require_service = __commonJS(function(exports, module) {
+    var crypto2 = require_crypto2();
+    var { assemble } = require_state();
+    var TEAM = require_team();
+    var AUDIT = require_audit();
+    var MAN = require_management();
+    var { tx } = require_db();
+    var F = require_finance2();
+    var rules = require_rules();
+    var hash = (t) => crypto2.createHash("sha256").update(t).digest("hex");
+    var fail = (code, msg) => {
+      throw Object.assign(new Error(msg), { code });
+    };
+    var plain = (v, max = 3000) => {
+      if (typeof v !== "string" || !rules.plain(v, max))
+        fail(422, "Enter valid plain text.");
+      return v.trim();
+    };
+    var password = (p) => {
+      if (typeof p !== "string" || p.length < 12 || p.length > 200)
+        fail(422, "Use a password of 12 to 200 characters.");
+      const salt = crypto2.randomBytes(16).toString("hex");
+      return salt + ":" + crypto2.scryptSync(p, salt, 64).toString("hex");
+    };
+    var matches = (p, h) => {
+      if (typeof p !== "string" || p.length > 200)
+        return false;
+      const [s, k] = h.split(":");
+      return crypto2.timingSafeEqual(crypto2.scryptSync(p, s, 64), Buffer.from(k, "hex"));
+    };
+    var publicStudent = (a) => ({ id: a.id, username: a.username, display_name: a.display_name, student_id: a.student_id, role: "Student", active: a.active });
+    function response(data, status = 200, headers = {}) {
+      const bytes = Buffer.from(JSON.stringify(data));
+      return { status, headers: { "content-type": "application/json", ...headers }, body: bytes, text: () => bytes.toString() };
+    }
+    function install(getDb, schema, { clock = () => new Date, cookieName = "aplus_session_3001", token } = {}) {
+      const db = () => getDb(), now = () => clock().toISOString();
+      db().exec(schema);
+      const auth = TEAM.service({ prepare: (...a) => db().prepare(...a), exec: (...a) => db().exec(...a) }, { cookieName, clock });
+      const actor = (headers) => {
+        const cookie = String(headers.cookie || "").split(";").map((x) => x.trim()).find((x) => x.startsWith(cookieName + "="));
+        if (cookie) {
+          const a = db().prepare("SELECT a.* FROM preview_student_sessions s JOIN preview_student_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1").get(hash(cookie.slice(cookieName.length + 1)), now());
+          if (a)
+            return publicStudent(a);
+        }
+        return auth.current({ headers });
+      };
+      const audit = (u, action, entity, id, before, after) => AUDIT.log(db(), { actor: u.username, action, entity: "preview-" + entity, id, before, after });
+      const notify = (key, kind, id, event, reference) => db().prepare("INSERT OR IGNORE INTO preview_notifications(event_key,recipient_kind,recipient_id,kind,reference,created_at) VALUES(?,?,?,?,?,?)").run(key, kind, id, event, String(reference), now());
+      function createAccount(r, u) {
+        if (u.role !== "Admin")
+          fail(403, "Administrator access required.");
+        const username = plain(r.username, 50).toLowerCase();
+        if (!/^[a-z0-9._-]{3,50}$/.test(username) || !r.display_name)
+          fail(422, "Choose a username and display name.");
+        if (!Number.isInteger(r.student_id) || !db().prepare("SELECT id FROM students WHERE id=?").get(r.student_id))
+          fail(422, "Link exactly one existing student.");
+        if (![0, 1].includes(r.active ?? 1))
+          fail(422, "Invalid account status.");
+        if (db().prepare("SELECT id FROM team_users WHERE username=?").get(username))
+          fail(409, "Username already used by staff.");
+        const old = r.id ? db().prepare("SELECT * FROM preview_student_accounts WHERE id=?").get(r.id) : null;
+        if (r.id && !old)
+          fail(404, "Account not found.");
+        const ph = r.password ? password(r.password) : old?.password_hash;
+        if (!ph)
+          fail(422, "Password required.");
+        return tx(db(), () => {
+          let id = old?.id;
+          if (old)
+            db().prepare("UPDATE preview_student_accounts SET username=?,display_name=?,student_id=?,password_hash=?,active=? WHERE id=?").run(username, plain(r.display_name, 100), r.student_id, ph, r.active ?? 1, id);
+          else
+            id = Number(db().prepare("INSERT INTO preview_student_accounts(username,display_name,student_id,password_hash,active,created_at) VALUES(?,?,?,?,?,?)").run(username, plain(r.display_name, 100), r.student_id, ph, r.active ?? 1, now()).lastInsertRowid);
+          db().prepare("DELETE FROM preview_student_sessions WHERE account_id=?").run(id);
+          const after = publicStudent(db().prepare("SELECT * FROM preview_student_accounts WHERE id=?").get(id));
+          audit(u, old ? "update" : "create", "student-account", id, old ? publicStudent(old) : null, after);
+          return after;
+        });
+      }
+      if (!db().prepare("SELECT value FROM preview_meta WHERE key='student-demo-v1'").get()) {
+        const s = db().prepare("SELECT id FROM students ORDER BY id LIMIT 1").get();
+        if (s && !db().prepare("SELECT id FROM preview_student_accounts WHERE username='dev.student'").get())
+          createAccount({ username: "dev.student", display_name: "DEV Student (synthetic)", student_id: s.id, password: "DevPreview-2026!", active: 1 }, { role: "Admin", username: "preview-setup" });
+        db().prepare("INSERT OR REPLACE INTO preview_meta VALUES('student-demo-v1','1')").run();
+      }
+      const finance = (u) => {
+        if (!["Admin", "Accountant"].includes(u.role))
+          fail(403, "Financial permission required.");
+      };
+      const sid = (u, url) => {
+        const id = u.role === "Student" ? u.student_id : Number(url.searchParams.get("student"));
+        if (u.role === "Student" && url.searchParams.has("student") && Number(url.searchParams.get("student")) !== id)
+          fail(403, "Only your own records are available.");
+        if (u.role !== "Student")
+          finance(u);
+        if (!db().prepare("SELECT id FROM students WHERE id=?").get(id))
+          fail(404, "Student not found.");
+        return id;
+      };
+      const tid = (u, url) => {
+        if (u.role !== "Teacher")
+          finance(u);
+        const id = u.role === "Teacher" ? u.teacher_id : Number(url.searchParams.get("teacher"));
+        if (u.role === "Teacher" && url.searchParams.has("teacher") && Number(url.searchParams.get("teacher")) !== id)
+          fail(403, "Only your own statement is available.");
+        if (!db().prepare("SELECT id FROM teachers WHERE id=?").get(id))
+          fail(404, "Teacher not found.");
+        return id;
+      };
+      function educational(st, s) {
+        const label = (a, id) => a.find((x) => x.id === id)?.name || "", regs = db().prepare("SELECT * FROM service_registrations WHERE student_id=?").all(s), shares = db().prepare("SELECT id,kind,source_id,title,body,url,due_on FROM preview_shares WHERE student_id=? AND released=1").all(s), bookings = db().prepare("SELECT * FROM managed_sessions WHERE student_id=?").all(s);
+        const teacherIds = new Set([...regs.map((r) => r.teacher_id), ...st.l.filter((l) => l.s === s).map((l) => l.t), ...st.tt.filter((t) => (t.s || []).includes(s)).map((t) => t.t)]), safeSt = { ...st, l: st.l.filter((l) => l.s === s), tt: st.tt.filter((t) => (t.s || []).includes(s)).map((t) => ({ ...t, s: [s] })), s: st.s.filter((x) => x.id === s) };
+        const start = require_cairo().today(clock()), end = require_cairo().addDays(start, 13), schedule = [...teacherIds].filter(Boolean).flatMap((t) => require_teacher_portal().schedule(safeSt, t, bookings, { from: start, to: end }).map((r) => {
+          const { students, ...safe } = r;
+          return { ...safe, teacher: label(st.t, t), meetingLink: shares.find((x) => x.kind === "Meeting" && x.source_id === r.id)?.url || "", duration: r.startsAt && r.endsAt ? Math.round((Date.parse("2000-01-01T" + r.endsAt) - Date.parse("2000-01-01T" + r.startsAt)) / 60000) : null };
+        }));
+        return {
+          student: { id: s, name: label(st.s, s) },
+          timezone: "Africa/Cairo",
+          schedule,
+          subjects: st.sub.filter((x) => (x.studs || []).includes(s) || regs.some((r) => r.subject_id === x.id) || st.l.some((l) => l.s === s && l.sub === x.id)).map((x) => ({ id: x.id, name: x.name, type: x.type, teacher: label(st.t, x.inst) })),
+          lessons: st.l.filter((l) => l.s === s && l.st === "Completed").map((l) => ({ id: l.id, date: l.date, subject: label(st.sub, l.sub), teacher: label(st.t, l.t), hours: l.d, status: l.st, attendance: db().prepare("SELECT status FROM lesson_attendance WHERE lesson_id=?").get(l.id)?.status || "", summary: shares.filter((x) => x.kind === "Lesson" && x.source_id === l.id) })),
+          projects: st.pr.filter((p) => p.s === s).map((p) => ({ id: p.id, name: p.name, teacher: label(st.t, p.t), status: p.status, due: p.due, stages: db().prepare("SELECT id,title,due_on,status FROM project_stages WHERE project_id=?").all(p.id) })),
+          courses: st.re.filter((e) => e.s === s).map((e) => ({ id: e.id, name: label(st.rc, e.rc), materials: db().prepare("SELECT id,title,url,delivered_on,status FROM course_deliveries WHERE enrollment_id=? AND status IN('Sent','Confirmed')").all(e.id) })),
+          shares,
+          submissions: db().prepare("SELECT s.id,s.share_id,s.body,s.url,s.updated_at,f.body feedback FROM preview_submissions s LEFT JOIN preview_feedback f ON f.submission_id=s.id AND f.published=1 WHERE s.student_id=?").all(s)
+        };
+      }
+      const contracts = (s) => MAN.read(db(), { role: "Admin" }, clock()).contracts.filter((c) => c.student_id === s).map((c) => ({ ...c, installments: c.installments.map((i) => ({ id: i.id, due_on: i.due_on, amount: i.amount, paid: i.paid, remaining: i.remaining, reason: i.note, status: c.status === "Cancelled" ? "Cancelled" : i.remaining === 0 ? "Paid" : i.overdue ? "Overdue" : i.paid > 0 ? "Partially paid" : i.due_on === require_cairo().today(clock()) ? "Due" : "Upcoming" })) }));
+      function studentStatement(st, s, opt) {
+        return { ...F.student(st, s, { ...opt, contracts: contracts(s), receipts: db().prepare("SELECT * FROM billing_receipts").all(), usage: db().prepare("SELECT * FROM package_usage").all() }), installments: contracts(s).map(({ id, title, total, currency, received, remaining, installments, unplanned, status }) => ({ id, title, total, currency, received, remaining, installments, unplanned, status })) };
+      }
+      const opts = (url) => ({ from: url.searchParams.get("from") || "", to: url.searchParams.get("to") || "" });
+      function request(u, kind, record, key, reason, student) {
+        if (!key || typeof key !== "string" || key.length > 100)
+          fail(422, "Request identifier required.");
+        const old = db().prepare("SELECT * FROM preview_requests WHERE request_key=?").get(key);
+        if (old) {
+          if (old.actor !== u.username)
+            fail(409, "Request identifier already used.");
+          return old;
+        }
+        const id = Number(db().prepare("INSERT INTO preview_requests(request_key,kind,actor,student_id,record,reason,created_at) VALUES(?,?,?,?,?,?,?)").run(key, kind, u.username, student || null, JSON.stringify(record), plain(reason, 500), now()).lastInsertRowid);
+        audit(u, "create", "approval", id, null, { kind, status: "Pending" });
+        return db().prepare("SELECT * FROM preview_requests WHERE id=?").get(id);
+      }
+      function handler(method, path, headers, body) {
+        const url = new URL(path, "http://localhost"), p = url.pathname, u = actor(headers), write2 = !["GET", "HEAD"].includes(method);
+        let b;
+        const parse = () => {
+          if (b)
+            return b;
+          try {
+            b = typeof body === "string" ? JSON.parse(body) : body ? JSON.parse(new TextDecoder().decode(body)) : {};
+          } catch (_) {
+            fail(400, "Invalid JSON.");
+          }
+          return b;
+        };
+        try {
+          if (write2 && p.startsWith("/api/") && (headers["x-aplus-token"] !== token || !/^application\/json/.test(headers["content-type"] || "")))
+            fail(403, "Reload the page before saving.");
+          if (p === "/api/auth/login" && method === "POST") {
+            const r = parse(), a = db().prepare("SELECT * FROM preview_student_accounts WHERE username=?").get(String(r.username || "").trim().toLowerCase());
+            if (!a)
+              return null;
+            const attempt = db().prepare("SELECT value FROM preview_meta WHERE key=?").get("login:" + a.id), v = attempt ? JSON.parse(attempt.value) : { n: 0, until: 0 };
+            if (v.until > Date.now() && v.n >= 10)
+              fail(429, "Too many attempts. Try again in 15 minutes.");
+            if (!a.active || !matches(r.password, a.password_hash)) {
+              db().prepare("INSERT OR REPLACE INTO preview_meta VALUES(?,?)").run("login:" + a.id, JSON.stringify({ n: v.until > Date.now() ? v.n + 1 : 1, until: v.until > Date.now() ? v.until : Date.now() + 900000 }));
+              fail(401, "Username or password is incorrect.");
+            }
+            db().prepare("DELETE FROM preview_meta WHERE key=?").run("login:" + a.id);
+            const t = crypto2.randomBytes(32).toString("hex");
+            db().prepare("INSERT INTO preview_student_sessions VALUES(?,?,?)").run(hash(t), a.id, new Date(clock().getTime() + 8 * 3600000).toISOString());
+            audit(publicStudent(a), "login", "student-account", a.id, null, null);
+            return response({ ok: true, user: publicStudent(a) }, 200, { "set-cookie": cookieName + "=" + t + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800" });
+          }
+          if (u?.role === "Student" && p === "/api/auth/status")
+            return response({ ok: true, user: u, needsSetup: false });
+          if (u?.role === "Student" && p === "/api/auth/logout") {
+            const t = String(headers.cookie || "").split("=")[1];
+            db().prepare("DELETE FROM preview_student_sessions WHERE token_hash=?").run(hash(t || ""));
+            return response({ ok: true }, 200, { "set-cookie": cookieName + "=; Max-Age=0; Path=/" });
+          }
+          if (!p.startsWith("/api/preview/")) {
+            if (u?.role === "Student" && p.startsWith("/api/"))
+              fail(403, "Student access is limited to your own portal.");
+            if (p === "/api/team/users" && method === "POST" && db().prepare("SELECT id FROM preview_student_accounts WHERE username=?").get(String(parse().username || "").toLowerCase()))
+              fail(409, "Username already used by a student.");
+            if (p === "/api/management" && method === "POST" && u?.role === "Accountant") {
+              const input = parse(), r = input.record || {};
+              if (input.kind === "installment" && r.id) {
+                const old = db().prepare("SELECT * FROM billing_installments WHERE id=?").get(r.id);
+                if (!old)
+                  fail(404, "Installment not found.");
+                const c = contractsForId(old.contract_id);
+                return response({ ok: true, pending: true, request: request(u, "installment", r, input.request_key || "installment:" + r.id + ":" + input.baseRev, "Accountant requested installment change", c.student_id) });
+              }
+              if (input.kind === "contract" && r.id)
+                return response({ ok: true, pending: true, request: request(u, "contract", r, input.request_key || "contract:" + r.id + ":" + input.baseRev, "Accountant requested agreement change", contractsForId(r.id).student_id) });
+            }
+            return null;
+          }
+          if (!u)
+            fail(401, "Sign in to access your account.");
+          if (method === "GET") {
+            if (p === "/api/preview/student")
+              return response({ ok: true, ...educational(assemble(db()), sid(u, url)) });
+            if (p === "/api/preview/student-statement")
+              return response({ ok: true, ...studentStatement(assemble(db()), sid(u, url), opts(url)) });
+            if (p === "/api/preview/teacher-statement")
+              return response({ ok: true, ...F.teacher(db(), assemble(db()), tid(u, url), opts(url)) });
+            if (p === "/api/preview/accounts") {
+              if (u.role !== "Admin")
+                fail(403, "Administrator access required.");
+              return response({ ok: true, accounts: db().prepare("SELECT * FROM preview_student_accounts").all().map(publicStudent), students: assemble(db()).s.map((s) => ({ id: s.id, name: s.name })) });
+            }
+            if (p === "/api/preview/directory") {
+              finance(u);
+              const st = assemble(db());
+              return response({ ok: true, students: st.s.map((s) => ({ id: s.id, name: s.name })), teachers: st.t.map((t) => ({ id: t.id, name: t.name })) });
+            }
+            if (p === "/api/preview/notifications") {
+              const cond = u.role === "Student" ? ["Student", u.student_id] : u.role === "Teacher" ? ["Teacher", u.teacher_id] : null;
+              if (!cond) {
+                finance(u);
+                return response({ ok: true, rows: db().prepare("SELECT * FROM preview_notifications ORDER BY id DESC LIMIT 200").all() });
+              }
+              return response({ ok: true, rows: db().prepare("SELECT * FROM preview_notifications WHERE recipient_kind=? AND recipient_id=? ORDER BY id DESC").all(...cond) });
+            }
+            if (p === "/api/preview/requests") {
+              if (["Admin", "Accountant", "Coordinator"].includes(u.role)) {
+                const all = db().prepare("SELECT * FROM preview_requests ORDER BY id DESC").all();
+                return response({ ok: true, rows: all.filter((r) => u.role === "Admin" || (u.role === "Coordinator" ? r.kind === "reschedule" : r.kind !== "reschedule")) });
+              }
+              return response({ ok: true, rows: db().prepare("SELECT * FROM preview_requests WHERE actor=? ORDER BY id DESC").all(u.username) });
+            }
+            if (p === "/api/preview/education") {
+              if (!["Admin", "Coordinator", "Teacher"].includes(u.role))
+                fail(403, "Educational permission required.");
+              const st = assemble(db()), own = (s) => u.role !== "Teacher" || s.teacher_id === u.teacher_id;
+              return response({ ok: true, shares: db().prepare("SELECT * FROM preview_shares").all().filter(own), submissions: db().prepare("SELECT s.*,p.teacher_id,p.title,f.body feedback,f.published FROM preview_submissions s JOIN preview_shares p ON p.id=s.share_id LEFT JOIN preview_feedback f ON f.submission_id=s.id").all().filter(own) });
+            }
+            if (p === "/api/preview/audit") {
+              finance(u);
+              return response({ ok: true, rows: db().prepare("SELECT at,actor,action,entity,entity_id FROM audit_log WHERE entity LIKE 'preview-%' ORDER BY rowid DESC LIMIT 200").all() });
+            }
+          }
+          if (method !== "POST")
+            fail(405, "Method not allowed.");
+          const r = parse();
+          if (p === "/api/preview/accounts")
+            return response({ ok: true, account: createAccount(r, u) });
+          if (p === "/api/preview/password") {
+            if (u.role !== "Student")
+              fail(403, "Student account required.");
+            const a = db().prepare("SELECT * FROM preview_student_accounts WHERE id=?").get(u.id);
+            if (!matches(r.current, a.password_hash))
+              fail(401, "Current password is incorrect.");
+            db().prepare("UPDATE preview_student_accounts SET password_hash=? WHERE id=?").run(password(r.password), u.id);
+            db().prepare("DELETE FROM preview_student_sessions WHERE account_id=?").run(u.id);
+            audit(u, "update", "password", u.id, null, null);
+            return response({ ok: true }, 200, { "set-cookie": cookieName + "=; Max-Age=0; Path=/" });
+          }
+          if (p === "/api/preview/read") {
+            const n = db().prepare("SELECT * FROM preview_notifications WHERE id=?").get(r.id);
+            if (!n)
+              fail(404, "Notification not found.");
+            if (u.role === "Student" ? n.recipient_kind !== "Student" || n.recipient_id !== u.student_id : u.role === "Teacher" ? n.recipient_kind !== "Teacher" || n.recipient_id !== u.teacher_id : true)
+              fail(403, "Only recipients mark notifications read.");
+            db().prepare("UPDATE preview_notifications SET read_at=coalesce(read_at,?) WHERE id=?").run(now(), r.id);
+            return response({ ok: true });
+          }
+          if (p === "/api/preview/reschedule") {
+            if (!["Student", "Teacher"].includes(u.role))
+              fail(403, "Student or teacher request required.");
+            const s = db().prepare("SELECT * FROM managed_sessions WHERE id=?").get(r.session_id);
+            if (!s || (u.role === "Student" ? s.student_id !== u.student_id : s.teacher_id !== u.teacher_id))
+              fail(403, "This booking is not assigned to you.");
+            if (!rules.isDate(r.date) || !/^\d{2}:\d{2}$/.test(r.starts_at || "") || !/^\d{2}:\d{2}$/.test(r.ends_at || ""))
+              fail(422, "Choose a date and times.");
+            return response({ ok: true, request: request(u, "reschedule", { ...s, date: r.date, starts_at: r.starts_at, ends_at: r.ends_at, status: "Proposed" }, r.request_key, r.reason, s.student_id) });
+          }
+          if (p === "/api/preview/plan") {
+            finance(u);
+            const c = contractsForId(r.record?.contract_id), existing = db().prepare("SELECT id FROM billing_installments WHERE contract_id=?").get(c.id);
+            if (u.role === "Accountant" && existing)
+              return response({ ok: true, pending: true, request: request(u, "installment", r.record, r.request_key, r.reason, c.student_id) });
+            const key = plain(r.request_key, 100), old = db().prepare("SELECT * FROM preview_operation_keys WHERE request_key=?").get(key);
+            if (old) {
+              if (old.actor !== u.username)
+                fail(409, "Identifier already used.");
+              return response(JSON.parse(old.result));
+            }
+            const out = MAN.write(db(), { kind: "installment", record: r.record, baseRev: require_save().getRev(db()) }, u, clock()), result = { ok: true, ...out };
+            db().prepare("INSERT INTO preview_operation_keys VALUES(?,?,?)").run(key, u.username, JSON.stringify(result));
+            notify("plan:" + key, "Student", c.student_id, "PlanChanged", c.id);
+            return response(result);
+          }
+          if (p === "/api/preview/decision") {
+            const q = db().prepare("SELECT * FROM preview_requests WHERE id=?").get(r.id);
+            if (!q)
+              fail(404, "Request not found.");
+            if (q.kind === "reschedule" ? !["Admin", "Coordinator"].includes(u.role) : u.role !== "Admin")
+              fail(403, "Approval permission required.");
+            if (q.status !== "Pending")
+              return response({ ok: true, request: q });
+            if (!["Approved", "Rejected"].includes(r.status))
+              fail(422, "Choose approved or rejected.");
+            const reason = plain(r.reason, 500);
+            if (!reason)
+              fail(422, "Decision reason required.");
+            let out = null;
+            if (r.status === "Approved") {
+              const record = JSON.parse(q.record);
+              out = MAN.write(db(), { kind: q.kind === "reschedule" ? "session" : q.kind, record, baseRev: require_save().getRev(db()) }, u, clock());
+            }
+            db().prepare("UPDATE preview_requests SET status=?,decided_at=?,decided_by=?,result=? WHERE id=? AND status='Pending'").run(r.status, now(), u.username, JSON.stringify({ reason, record: out?.record || null }), q.id);
+            audit(u, "update", "approval", q.id, { status: "Pending" }, { status: r.status, reason });
+            if (r.status === "Approved" && q.student_id)
+              notify("decision:" + q.id, "Student", q.student_id, q.kind === "reschedule" ? "ScheduleChanged" : "PlanChanged", q.id);
+            return response({ ok: true, request: db().prepare("SELECT * FROM preview_requests WHERE id=?").get(q.id) });
+          }
+          if (p === "/api/preview/share") {
+            if (!["Admin", "Coordinator", "Teacher"].includes(u.role))
+              fail(403, "Educational permission required.");
+            const st = assemble(db()), source = sourceFor(st, r.kind, r.source_id, r.student_id);
+            if (!source)
+              fail(422, "Choose an existing assigned lesson, project, enrollment, booking or stage.");
+            if (u.role === "Teacher" && source.teacher !== u.teacher_id)
+              fail(403, "This service belongs to another teacher.");
+            if (![0, 1].includes(r.released))
+              fail(422, "Choose draft or released.");
+            const link = validUrl(r.url), stamp = now(), old = r.id ? db().prepare("SELECT * FROM preview_shares WHERE id=?").get(r.id) : null;
+            if (r.id && (!old || old.student_id !== r.student_id || old.source_id !== r.source_id || old.kind !== r.kind))
+              fail(422, "A released item cannot change its owner or source.");
+            let id = old?.id;
+            const args = [plain(r.title, 200), plain(r.body || ""), link, r.due_on || null, r.released, stamp];
+            if (r.due_on && !rules.isDate(r.due_on))
+              fail(422, "Invalid deadline.");
+            if (old)
+              db().prepare("UPDATE preview_shares SET title=?,body=?,url=?,due_on=?,released=?,updated_at=? WHERE id=?").run(...args, id);
+            else
+              id = Number(db().prepare("INSERT INTO preview_shares(title,body,url,due_on,released,updated_at,student_id,teacher_id,kind,source_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(...args, r.student_id, source.teacher || null, r.kind, r.source_id, stamp).lastInsertRowid);
+            audit(u, old ? "update" : "create", "share", id, null, { released: r.released });
+            if (r.released && !old?.released)
+              notify("share:" + id, "Student", r.student_id, "MaterialReleased", id);
+            return response({ ok: true, id });
+          }
+          if (p === "/api/preview/submit") {
+            if (u.role !== "Student")
+              fail(403, "Student submission required.");
+            const share = db().prepare("SELECT * FROM preview_shares WHERE id=? AND student_id=? AND released=1 AND kind IN('Assignment','Project','Stage')").get(r.share_id, u.student_id);
+            if (!share)
+              fail(403, "This assignment is not released to you.");
+            const body = plain(r.body), link = validUrl(r.url);
+            if (!body && !link)
+              fail(422, "Submission content required.");
+            db().prepare("INSERT INTO preview_submissions(share_id,student_id,body,url,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(share_id,student_id) DO UPDATE SET body=excluded.body,url=excluded.url,updated_at=excluded.updated_at").run(share.id, u.student_id, body, link, now(), now());
+            audit(u, "update", "submission", share.id, null, null);
+            return response({ ok: true });
+          }
+          if (p === "/api/preview/feedback") {
+            if (!["Admin", "Coordinator", "Teacher"].includes(u.role))
+              fail(403, "Educational permission required.");
+            const s = db().prepare("SELECT s.*,p.teacher_id FROM preview_submissions s JOIN preview_shares p ON p.id=s.share_id WHERE s.id=?").get(r.submission_id);
+            if (!s || u.role === "Teacher" && s.teacher_id !== u.teacher_id)
+              fail(403, "Submission not assigned to you.");
+            if (![0, 1].includes(r.published))
+              fail(422, "Choose private or published.");
+            const old = db().prepare("SELECT * FROM preview_feedback WHERE submission_id=?").get(s.id);
+            db().prepare("INSERT INTO preview_feedback(submission_id,body,published,updated_at) VALUES(?,?,?,?) ON CONFLICT(submission_id) DO UPDATE SET body=excluded.body,published=excluded.published,updated_at=excluded.updated_at").run(s.id, plain(r.body), r.published, now());
+            audit(u, "update", "feedback", s.id, null, { published: r.published });
+            if (r.published && !old?.published)
+              notify("feedback:" + s.id, "Student", s.student_id, "FeedbackPublished", s.id);
+            return response({ ok: true });
+          }
+          fail(404, "Unknown preview operation.");
+        } catch (e) {
+          return response({ ok: false, error: e.message }, Number.isInteger(e.code) ? e.code : 422);
+        }
+      }
+      function contractsForId(id) {
+        const c = MAN.read(db(), { role: "Admin" }, clock()).contracts.find((c) => c.id === id);
+        if (!c)
+          fail(422, "Existing agreement required.");
+        return c;
+      }
+      function validUrl(v) {
+        const s = plain(v || "", 2000);
+        if (s) {
+          try {
+            if (new URL(s).protocol !== "https:")
+              fail(422, "Use an HTTPS link.");
+          } catch (_) {
+            fail(422, "Use an HTTPS link.");
+          }
+        }
+        return s;
+      }
+      function sourceFor(st, kind, id, s) {
+        if (!Number.isInteger(s) || !st.s.some((x) => x.id === s))
+          return null;
+        let row;
+        if (["Lesson", "Assignment"].includes(kind)) {
+          row = st.l.find((l) => l.id === id && l.s === s);
+          return row ? { teacher: row.t } : null;
+        }
+        if (kind === "Project") {
+          row = st.pr.find((p) => p.id === id && p.s === s);
+          return row ? { teacher: row.t } : null;
+        }
+        if (kind === "Stage") {
+          row = db().prepare("SELECT p.t FROM project_stages s JOIN projects p ON p.id=s.project_id WHERE s.id=? AND p.s=?").get(id, s);
+          return row ? { teacher: row.t } : null;
+        }
+        if (kind === "Course") {
+          row = st.re.find((e) => e.id === id && e.s === s);
+          return row ? { teacher: st.rc.find((c) => c.id === row.rc)?.inst } : null;
+        }
+        if (kind === "Meeting") {
+          row = db().prepare("SELECT teacher_id FROM managed_sessions WHERE id=? AND student_id=?").get(id, s);
+          return row ? { teacher: row.teacher_id } : null;
+        }
+        return null;
+      }
+      function observe(before, after) {
+        for (const key of ["sp", "pp", "cp", "tp", "ad"])
+          for (const p of after[key]) {
+            const old = before[key].find((x) => x.id === p.id);
+            if (old && JSON.stringify(old) === JSON.stringify(p))
+              continue;
+            let student = p.p;
+            if (key === "pp")
+              student = after.pr.find((x) => x.id === p.pr)?.s;
+            if (key === "cp")
+              student = after.re.find((x) => x.id === p.re)?.s;
+            if (key === "ad")
+              student = p.s;
+            const ev = key + ":" + p.id + ":" + hash(JSON.stringify(p));
+            if (key === "tp")
+              notify(ev, "Teacher", p.p, old ? "FinancialCorrection" : "TeacherPayment", p.id);
+            else if (student)
+              notify(ev, "Student", student, key === "ad" ? p.kind === "refund" ? "RefundRecorded" : "CreditChanged" : "PaymentRecorded", p.id);
+          }
+      }
+      return { handler, actor, observe, createAccount, studentStatement };
+    }
+    module.exports = { install, response };
+  });
+
+  // aplus-preview/extensions/ui.js
+  var require_ui = __commonJS(function(exports, module) {
+    function studentPage(original, token, user) {
+      const styles = [...original.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)].map((m) => m[0]).join(`
+`);
+      return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="aplus-token" content="' + token + '"><title>A+ Hub Academy — Student portal</title>' + styles + '</head><body><div id="app"><nav id="nv"></nav><div id="workspace"><header id="topbar"></header><main id="v" tabindex="-1"></main></div></div><script>window.APLUS_STUDENT=' + JSON.stringify(user).replace(/</g, "\\u003c") + ";</script></body></html>";
+    }
+    function mount() {
+      const user = window.APLUS_STUDENT || window.__APLUS_PREVIEW__?.dispatch("GET", "/api/auth/status").text() && JSON.parse(window.__APLUS_PREVIEW__.dispatch("GET", "/api/auth/status").text()).user;
+      if (!user)
+        return;
+      const student = user.role === "Student", financial = ["Admin", "Accountant"].includes(user.role), teacher = user.role === "Teacher";
+      const tr = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
+      const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      const money = (v, c = "KWD") => v === null || v === undefined ? tr("Incomplete", "غير مكتمل") : (v / 1000).toFixed(3) + " " + c;
+      const api = (path, body) => {
+        const rt = window.__APLUS_PREVIEW__, headers = body ? { "content-type": "application/json", "x-aplus-token": document.querySelector('meta[name="aplus-token"]')?.content } : {};
+        const r = rt.dispatch(body ? "POST" : "GET", "/api/preview/" + path, headers, body ? JSON.stringify(body) : undefined), data = JSON.parse(r.text());
+        if (!data.ok)
+          throw new Error(data.error);
+        if (body)
+          window.__APLUS_SAVE__?.();
+        return data;
+      };
+      const token = () => crypto.randomUUID();
+      const button = (id, en, ar, icon = "") => '<button class="b2" type="button" id="' + id + '">' + icon + esc(tr(en, ar)) + "</button>";
+      const table = (headers, rows) => '<div class="tw"><table><thead><tr>' + headers.map((x) => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + (rows.length ? rows.map((r) => "<tr>" + r.map((x) => "<td>" + x + "</td>").join("") + "</tr>").join("") : '<tr><td colspan="' + headers.length + '">' + tr("No records", "لا توجد سجلات") + "</td></tr>") + "</tbody></table></div>";
+      const text = (v) => "<span data-ui-user-content>" + esc(v) + "</span>";
+      const link = (u) => u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + tr("Open link", "فتح الرابط") + "</a>" : "";
+      const field = (name, en, ar, type = "text", value = "") => "<label>" + esc(tr(en, ar)) + '<input name="' + name + '" type="' + type + '" value="' + esc(value) + '" ' + (type === "password" ? 'autocomplete="new-password"' : "") + "></label>";
+      let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null;
+      const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"], ["account", "Account details", "تفاصيل الحساب"]] : [
+        ...financial ? [["student-statement", "Student Statements", "كشوف الطلاب"], ["teacher-statement", "Teacher Statements", "كشوف المعلمين"], ["plans", "Installment Plans", "خطط الأقساط"]] : teacher ? [["teacher-statement", "Teacher Statement", "كشف المعلم"]] : [],
+        ...user.role === "Admin" ? [["accounts", "Student Accounts", "حسابات الطلاب"]] : [],
+        ...["Admin", "Accountant", "Coordinator", "Student", "Teacher"].includes(user.role) ? [["requests", "Pending Approvals", "طلبات الموافقة"]] : [],
+        ...["Admin", "Coordinator", "Teacher"].includes(user.role) ? [["education", "Shared Learning", "التعلم المشترك"]] : [],
+        ...financial || teacher ? [["notifications", "Notifications", "الإشعارات"]] : [],
+        ...financial ? [["audit", "Extension Audit", "سجل الإضافات"]] : []
+      ];
+      const status = (s) => ({ Upcoming: tr("Upcoming", "قادم"), Due: tr("Due", "مستحق"), Overdue: tr("Overdue", "متأخر"), Paid: tr("Paid", "مدفوع"), "Partially paid": tr("Partially paid", "مدفوع جزئياً"), Cancelled: tr("Cancelled", "ملغى"), Pending: tr("Pending", "قيد الانتظار"), Approved: tr("Approved", "مقبول"), Rejected: tr("Rejected", "مرفوض") })[s] || s;
+      function error(e) {
+        const v = document.getElementById("extension-error");
+        if (v)
+          v.textContent = e.message;
+        else
+          alert(e.message);
+      }
+      function action(id, fn) {
+        const el = document.getElementById(id);
+        if (el)
+          el.onclick = () => {
+            try {
+              fn();
+            } catch (e) {
+              error(e);
+            }
+          };
+      }
+      function form(id, fn) {
+        const el = document.getElementById(id);
+        if (el)
+          el.onsubmit = (e) => {
+            e.preventDefault();
+            try {
+              const r = Object.fromEntries(new FormData(el));
+              fn(r);
+              render();
+            } catch (e) {
+              error(e);
+            }
+          };
+      }
+      function nav() {
+        if (student) {
+          const nv = document.getElementById("nv");
+          nv.innerHTML = '<div class="ui-brand"><div class="ui-logo">A+</div><div><h1>A+ Hub Academy</h1><small>' + esc(user.display_name) + '</small></div></div><div class="ui-nav-scroll">' + pages.map(([k, en, ar]) => '<a href="#preview-' + k + '" data-extension="' + k + '" class="' + (page === k ? "on" : "") + '">' + esc(tr(en, ar)) + "</a>").join("") + "</div>";
+          document.getElementById("topbar").innerHTML = '<div class="ui-header-left">' + button("extension-menu", "☰", "☰") + "<strong>" + esc(tr(pages.find((p) => p[0] === page)?.[1] || "", pages.find((p) => p[0] === page)?.[2] || "")) + '</strong></div><div class="ui-header-right">' + button("extension-language", "العربية", "English") + button("extension-theme", "◐", "◐") + button("extension-logout", "Sign out", "تسجيل الخروج") + "</div>";
+          action("extension-menu", () => document.body.classList.toggle("ui-drawer-open"));
+          action("extension-language", () => {
+            const lang = document.documentElement.lang === "ar" ? "en" : "ar";
+            localStorage.setItem("aplus-ui-language", lang);
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+            render();
+          });
+          action("extension-theme", () => {
+            const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+            document.documentElement.dataset.theme = theme;
+            localStorage.setItem("aplus-ui-theme", theme);
+          });
+          action("extension-logout", () => {
+            window.__APLUS_PREVIEW__.dispatch("POST", "/api/auth/logout", { "content-type": "application/json", "x-aplus-token": document.querySelector('meta[name="aplus-token"]').content }, "{}");
+            window.__APLUS_SAVE__?.();
+            location.href = "/";
+          });
+        } else {
+          const nv = document.querySelector("#nv .ui-nav-scroll");
+          if (nv && !document.getElementById("extension-nav")) {
+            const group = document.createElement("div");
+            group.id = "extension-nav";
+            group.className = "ui-nav-group";
+            group.innerHTML = '<div class="ui-nav-label">' + tr("Added sections", "الأقسام المضافة") + "</div>" + pages.map(([k, en, ar]) => '<a href="#preview-' + k + '" data-extension="' + k + '">' + esc(tr(en, ar)) + "</a>").join("");
+            nv.append(group);
+          }
+        }
+      }
+      function picker(kind) {
+        if (!directory)
+          directory = api("directory");
+        const rows = kind === "teacher" ? directory.teachers : directory.students;
+        if (!rows.some((r) => String(r.id) === selection))
+          selection = String(rows[0]?.id || "");
+        return '<select id="extension-person" aria-label="' + tr("Selected account", "الحساب المحدد") + '">' + rows.map((r) => '<option value="' + r.id + '" ' + (String(r.id) === selection ? "selected" : "") + ">" + esc(r.name) + "</option>").join("") + "</select>";
+      }
+      function period(kind) {
+        return '<div class="bar extension-controls">' + (financial ? picker(kind) : "") + field("from", "From", "من", "date", from) + field("to", "To", "إلى", "date", to) + button("extension-period", "Apply", "تطبيق") + button("extension-print", "Print / Save as PDF", "طباعة / حفظ كملف PDF", "↧ ") + "</div>";
+      }
+      function bindPeriod() {
+        const p = document.getElementById("extension-person");
+        if (p)
+          p.onchange = () => {
+            selection = p.value;
+            render();
+          };
+        action("extension-period", () => {
+          from = document.querySelector("[name=from]").value;
+          to = document.querySelector("[name=to]").value;
+          render();
+        });
+        action("extension-print", () => {
+          document.body.classList.add("extension-printing");
+          window.print();
+        });
+        window.onafterprint = () => document.body.classList.remove("extension-printing");
+      }
+      function installments(s) {
+        return "<h3>" + tr("Installment schedule", "جدول الأقساط") + "</h3>" + s.installments.map((c) => "<h4>" + text(c.title) + " · #" + c.id + "</h4><p>" + tr("Unscheduled remainder", "المتبقي غير المجدول") + ": " + money(c.unplanned, c.currency) + "</p>" + table([tr("Due date", "تاريخ الاستحقاق"), tr("Amount", "المبلغ"), tr("Paid", "المدفوع"), tr("Remaining", "المتبقي"), tr("Status", "الحالة"), tr("Approved reason", "السبب المعتمد")], c.installments.map((i) => [text(i.due_on), money(i.amount, c.currency), money(i.paid, c.currency), money(i.remaining, c.currency), text(status(i.status)), text(i.reason)]))).join("");
+      }
+      function studentFinancial() {
+        const query = new URLSearchParams({ from, to, ...financial ? { student: selection } : {} });
+        const s = api("student-statement?" + query);
+        statement = s;
+        return period("student") + '<article id="extension-statement"><h3>A+ Hub Academy · ' + text(s.student) + "</h3><p>" + text(from || "—") + " → " + text(to || "—") + " · " + text(s.generatedAt) + "</p>" + (!s.complete ? '<p class="neg">' + tr("Incomplete: historical KWD conversions are unavailable or reconciliation needs review.", "غير مكتمل: تحويلات تاريخية إلى الدينار غير متاحة أو تحتاج المطابقة للمراجعة.") + "</p>" : "") + table([tr("Opening", "الرصيد الافتتاحي"), tr("Charges", "الرسوم"), tr("Payments", "المدفوعات"), tr("Adjustments", "التسويات"), tr("Closing", "الرصيد الختامي")], [[money(s.opening), money(s.charges), money(s.payments), money(s.adjustments), money(s.closing)]]) + "<p><strong>" + tr(s.credit ? "Credit in your favor" : "Amount outstanding", s.credit ? "رصيد لصالحك" : "المبلغ المستحق") + ": " + money(s.complete ? s.credit || s.outstanding : null) + "</strong></p><p>" + tr("Unallocated payments are separate from confirmed credit. Different currencies are not automatically offset.", "المدفوعات غير المخصصة منفصلة عن الرصيد المؤكد. لا تتم مقاصة العملات تلقائياً.") + "</p>" + table([tr("Date", "التاريخ"), tr("Entry", "القيد"), tr("Charge", "الرسوم"), tr("Payment / adjustment", "دفعة / تسوية"), tr("Conversion basis", "أساس التحويل")], s.entries.map((e) => [text(e.date || tr("Undated opening", "افتتاحي دون تاريخ")), text(e.description), e.kind === "Charge" ? money(e.amount) : "", e.kind !== "Charge" ? money(e.amount) : "", text(e.converted ? e.amount === null ? tr("Missing historical conversion", "تحويل تاريخي غير متوفر") : tr("Saved rate", "سعر محفوظ") + " " + e.rate : tr("Original KWD", "دينار أصلي"))])) + "<h3>" + tr("Service breakdown — all-time", "تفصيل الخدمات — كل الفترات") + "</h3>" + table([tr("Service", "الخدمة"), tr("Hours", "الساعات"), tr("Charge", "الرسوم"), tr("Attributed payments", "المدفوعات المخصصة"), tr("Remaining", "المتبقي"), tr("Status", "الحالة")], s.services.map((r) => [text(r.title), text(r.hours || ""), money(r.charge), money(r.paid), money(r.remaining), text(status(r.paymentStatus))])) + s.services.filter((x) => x.history.some((e) => e.kind !== "Charge")).map((r) => "<details><summary>" + text(r.title) + " · " + tr("Payment history", "سجل المدفوعات") + "</summary>" + table([tr("Date", "التاريخ"), tr("Reference", "المرجع"), tr("Amount", "المبلغ")], r.history.filter((e) => e.kind !== "Charge").map((e) => [text(e.date), text(e.description), money(e.amount)])) + "</details>").join("") + "<h3>" + tr("Unallocated payments", "مدفوعات غير مخصصة") + "</h3>" + table([tr("Date", "التاريخ"), tr("Reference", "المرجع"), tr("Amount", "المبلغ")], s.unallocated.map((e) => [text(e.date), text(e.description), money(e.amount)])) + "<p>" + tr("Reconciliation: service remaining − unallocated + other adjustments = account closing", "المطابقة: متبقي الخدمات − غير المخصص + التسويات الأخرى = رصيد الحساب") + "</p>" + table([tr("Service remaining", "متبقي الخدمات"), tr("Unallocated", "غير مخصص"), tr("Other adjustments", "تسويات أخرى"), tr("Account closing", "رصيد الحساب")], [[money(s.reconciliation.serviceRemaining), money(s.reconciliation.unallocated), money(s.reconciliation.otherAdjustments), money(s.reconciliation.accountClosing)]]) + installments(s) + "<p>" + tr("Original KWD or each record’s historical saved conversion only; no current rate. Missing conversions make this statement incomplete. Installments are agreements, not additional charges or cash.", "دينار أصلي أو تحويل محفوظ تاريخياً لكل قيد فقط؛ لا يستخدم سعر اليوم. التحويلات المفقودة تجعل الكشف غير مكتمل. الأقساط اتفاقات وليست رسوماً أو أموالاً إضافية.") + "</p></article>";
+      }
+      function teacherFinancial() {
+        if (financial && !directory)
+          directory = api("directory");
+        const s = api("teacher-statement?" + new URLSearchParams({ from, to, ...financial ? { teacher: selection } : {} }));
+        statement = s;
+        return period("teacher") + '<article id="extension-statement"><h3>A+ Hub Academy · ' + text(s.teacher) + "</h3><p>" + text(s.generatedAt) + "</p>" + (!s.complete ? '<p class="neg">' + tr("Incomplete conversion", "تحويل غير مكتمل") + "</p>" : "") + table([tr("Opening", "افتتاحي"), tr("Earnings", "المستحقات"), tr("Payments", "المدفوعات"), tr("Closing", "ختامي")], [[money(s.opening, "EGP"), money(s.periodEarned, "EGP"), money(s.periodPaid, "EGP"), money(s.periodClosing, "EGP")]]) + table([tr("Date", "التاريخ"), tr("Service", "الخدمة"), tr("Student", "الطالب"), tr("Hours", "الساعات"), tr("Recorded hourly rate", "سعر الساعة المسجل"), tr("Agreed percentage", "النسبة المتفق عليها"), tr("Recorded EGP", "الجنيه المسجل"), tr("Admin-equivalent earned", "المستحق المكافئ للإدارة"), tr("Payment", "الدفعة"), tr("Method / source", "الطريقة / المصدر")], s.entries.map((e) => [text(e.date), text(e.description), text(e.student), text(e.hours), money(e.hourlyRateEGP, "EGP"), e.agreedPercent == null ? "" : text(e.agreedPercent + "%"), money(e.recordedEarnedEGP ?? e.recordedPaymentEGP, "EGP"), money(e.earned, "EGP"), money(e.paid, "EGP"), text([e.method, e.workType].filter(Boolean).join(" · "))])) + "<h3>" + tr("Batch payment coverage", "تغطية الدفعات المجمعة") + "</h3>" + table([tr("Payment", "الدفعة"), tr("Student", "الطالب"), tr("Hours", "الساعات"), tr("Period", "الفترة")], s.entries.flatMap((e) => (e.allocations || []).map((x) => [text("#" + e.id), text(x.student), text(x.hours), text(x.startsOn + " → " + x.endsOn)]))) + "<p>" + tr("Foreign equivalents are display-only using the latest saved Settings EGP rate. Recorded EGP values are preserved above. Settlement calculations are unchanged.", "المكافئ الأجنبي للعرض فقط باستخدام آخر سعر جنيه محفوظ في الإعدادات. قيم الجنيه الأصلية محفوظة أعلاه. حسابات التسوية لم تتغير.") + " " + text(s.settingsRate) + " · " + text(s.valuedAt || tr("Rate date unavailable", "تاريخ السعر غير متاح")) + "</p><p>" + tr("Negative closing balances indicate excess payment or an advance; unassigned older payments appear separately in the original Financial Summary.", "الرصيد الختامي السالب يعني دفعة زائدة أو مقدماً؛ تظهر المدفوعات القديمة غير المخصصة منفصلة في الملخص المالي الأصلي.") + "</p></article>";
+      }
+      function accounts() {
+        const a = api("accounts");
+        return '<form id="extension-account-form"><div class="fg">' + field("id", "Account ID (blank for new)", "رقم الحساب (فارغ للجديد)", "number") + field("username", "Username", "اسم المستخدم") + field("display_name", "Display name", "الاسم الظاهر") + "<label>" + tr("Linked student", "الطالب المرتبط") + '<select name="student_id">' + a.students.map((s) => '<option value="' + s.id + '">' + esc(s.name) + "</option>").join("") + "</select></label>" + field("password", "Password (12+ characters)", "كلمة المرور (١٢ حرفاً أو أكثر)", "password") + "<label>" + tr("Status", "الحالة") + '<select name="active"><option value="1">' + tr("Active", "نشط") + '</option><option value="0">' + tr("Disabled", "معطل") + '</option></select></label></div><button class="b" type="submit">' + tr("Save account", "حفظ الحساب") + "</button></form>" + table([tr("ID", "الرقم"), tr("Username", "اسم المستخدم"), tr("Student", "الطالب"), tr("Status", "الحالة")], a.accounts.map((x) => [text(x.id), text(x.username), text(a.students.find((s) => s.id === x.student_id)?.name), text(x.active ? tr("Active", "نشط") : tr("Disabled", "معطل"))]));
+      }
+      function plans() {
+        const prefix = picker("student"), s = api("student-statement?student=" + selection);
+        return '<div class="bar">' + prefix + "</div>" + installments(s) + '<form id="extension-plan-form"><div class="fg">' + field("id", "Installment ID (blank for new)", "رقم القسط (فارغ للجديد)", "number") + "<label>" + tr("Existing obligation", "الالتزام القائم") + '<select name="contract_id">' + s.installments.map((c) => '<option value="' + c.id + '">' + esc(c.title) + " #" + c.id + "</option>").join("") + "</select></label>" + field("due_on", "Due date", "تاريخ الاستحقاق", "date") + field("amount", "Amount (original currency)", "المبلغ (العملة الأصلية)", "number") + field("reason", "Student-facing reason", "السبب الظاهر للطالب") + '</div><button class="b" type="submit">' + tr("Submit plan", "إرسال الخطة") + "</button></form>";
+      }
+      const notificationsText = (k) => ({ PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
+      function requests() {
+        const rows = api("requests").rows;
+        return table([tr("Reference", "المرجع"), tr("Kind", "النوع"), tr("Status", "الحالة"), tr("Reason", "السبب"), tr("Decision", "القرار")], rows.map((q) => [text("#" + q.id), text(q.kind), text(status(q.status)), text(q.reason), q.status === "Pending" && (user.role === "Admin" || user.role === "Coordinator" && q.kind === "reschedule") ? '<button class="b2" data-decide="' + q.id + '" data-status="Approved">' + tr("Approve", "موافقة") + '</button> <button class="b2" data-decide="' + q.id + '" data-status="Rejected">' + tr("Reject", "رفض") + "</button>" : text(q.result ? JSON.parse(q.result).reason : "")]));
+      }
+      function education() {
+        const r = api("education");
+        return '<form id="extension-share-form"><div class="fg">' + field("id", "Share ID (blank for new)", "رقم المشاركة (فارغ للجديد)", "number") + field("student_id", "Existing student ID", "رقم الطالب الحالي", "number") + "<label>" + tr("Source kind", "نوع المصدر") + '<select name="kind">' + ["Lesson", "Assignment", "Project", "Stage", "Course", "Meeting"].map((k) => "<option>" + k + "</option>").join("") + "</select></label>" + field("source_id", "Existing source ID", "رقم السجل الأصلي", "number") + field("title", "Title", "العنوان") + field("body", "Shared text", "النص المشترك") + field("url", "HTTPS link", "رابط HTTPS", "url") + field("due_on", "Deadline", "الموعد النهائي", "date") + "<label>" + tr("Visibility", "الظهور") + '<select name="released"><option value="0">' + tr("Private draft", "مسودة خاصة") + '</option><option value="1">' + tr("Released to student", "منشور للطالب") + '</option></select></label></div><button class="b" type="submit">' + tr("Save learning item", "حفظ المادة") + "</button></form>" + table([tr("ID", "الرقم"), tr("Title", "العنوان"), tr("Student", "الطالب"), tr("Released", "منشور")], r.shares.map((s) => [text(s.id), text(s.title), text(s.student_id), text(s.released)])) + "<h3>" + tr("Submissions and feedback", "التسليمات والملاحظات") + "</h3>" + table([tr("ID", "الرقم"), tr("Assignment", "التكليف"), tr("Submission", "التسليم"), tr("Feedback", "الملاحظات")], r.submissions.map((s) => [text(s.id), text(s.title), text(s.body) + " " + link(s.url), text(s.feedback || "")])) + '<form id="extension-feedback-form"><div class="fg">' + field("submission_id", "Submission ID", "رقم التسليم", "number") + field("body", "Feedback", "الملاحظات") + "<label>" + tr("Visibility", "الظهور") + '<select name="published"><option value="0">' + tr("Private", "خاص") + '</option><option value="1">' + tr("Published", "منشور") + '</option></select></label></div><button class="b" type="submit">' + tr("Save feedback", "حفظ الملاحظات") + "</button></form>";
+      }
+      function learning() {
+        data = api("student");
+        const s = data;
+        const lessonRows = (rows) => table([tr("Date", "التاريخ"), tr("Time", "الوقت"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Duration", "المدة"), tr("Status", "الحالة"), tr("Meeting", "الاجتماع")], rows.map((l) => [text(l.date), text(l.startsAt + " → " + l.endsAt), text(l.subject), text(l.teacher), text(l.duration), text(status(l.status)), link(l.meetingLink)]));
+        if (page === "overview") {
+          const fin = api("student-statement"), next = s.schedule.find((l) => !["Cancelled", "Completed"].includes(l.status)), installment = fin.installments.flatMap((c) => c.installments).filter((i) => i.remaining > 0 && i.status !== "Cancelled").sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
+          return "<h3>" + text(s.student.name) + "</h3><h3>" + tr("Next lesson", "الدرس القادم") + "</h3>" + lessonRows(next ? [next] : []) + "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p><h3>" + tr("Enrolled subjects", "المواد المسجلة") + "</h3>" + s.subjects.map((x) => text(x.name)).join(" · ") + "<h3>" + tr("Active projects and deadlines", "المشاريع النشطة والمواعيد") + "</h3>" + table([tr("Project", "المشروع"), tr("Deadline", "الموعد")], s.projects.filter((p) => !["Completed", "Cancelled"].includes(p.status)).map((p) => [text(p.name), text(p.due)])) + "<h3>" + tr("Next installment", "القسط القادم") + "</h3><p>" + (installment ? money(installment.remaining, fin.installments.find((c) => c.installments.some((i) => i.id === installment.id))?.currency) + " · " + text(installment.due_on) : tr("No scheduled installment", "لا يوجد قسط مجدول")) + "</p>";
+        }
+        if (page === "subjects")
+          return table([tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Service", "الخدمة")], s.subjects.map((x) => [text(x.name), text(x.teacher), text(x.type)]));
+        if (page === "schedule")
+          return "<p>" + tr("Academy timezone", "التوقيت المعتمد") + ": " + text(s.timezone) + "</p>" + lessonRows(s.schedule) + "<h3>" + tr("Request rescheduling — staff approval required", "طلب إعادة جدولة — يتطلب موافقة الموظفين") + '</h3><form id="extension-reschedule-form"><div class="fg">' + field("session_id", "Booking ID", "رقم الحجز", "number") + field("date", "Requested date", "التاريخ المطلوب", "date") + field("starts_at", "Start", "البداية", "time") + field("ends_at", "End", "النهاية", "time") + field("reason", "Reason", "السبب") + '</div><button class="b" type="submit">' + tr("Send request", "إرسال الطلب") + "</button></form>";
+        if (page === "lessons")
+          return table([tr("Date", "التاريخ"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Hours", "الساعات"), tr("Attendance", "الحضور"), tr("Shared summary", "الملخص المشترك")], s.lessons.map((l) => [text(l.date), text(l.subject), text(l.teacher), text(l.hours), text(l.attendance), l.summary.map((x) => text(x.body)).join("<br>")]));
+        if (page === "courses")
+          return s.courses.map((c) => "<h3>" + text(c.name) + "</h3>" + table([tr("Released material", "المادة المنشورة"), tr("Link", "الرابط")], c.materials.map((m) => [text(m.title), link(m.url)])) + s.shares.filter((x) => x.kind === "Course" && x.source_id === c.id).map((x) => "<p>" + text(x.title) + " · " + text(x.body) + " " + link(x.url) + "</p>").join("")).join("") || tr("No enrollments", "لا توجد تسجيلات");
+        return s.projects.map((p) => "<h3>" + text(p.name) + " · " + text(p.teacher) + "</h3>" + table([tr("Stage", "المرحلة"), tr("Deadline", "الموعد"), tr("Status", "الحالة")], p.stages.map((x) => [text(x.title), text(x.due_on), text(status(x.status))]))).join("") + "<h3>" + tr("Released assignments", "التكليفات المنشورة") + "</h3>" + s.shares.filter((x) => ["Assignment", "Project", "Stage"].includes(x.kind)).map((x) => {
+          const sub = s.submissions.find((a) => a.share_id === x.id);
+          return "<h4>" + text(x.title) + "</h4><p>" + text(x.body) + " " + link(x.url) + " · " + text(x.due_on) + '</p><form data-submit="' + x.id + '"><div class="fg">' + field("body", "Submission", "التسليم", "text", sub?.body || "") + field("url", "HTTPS link", "رابط HTTPS", "url", sub?.url || "") + '</div><button class="b" type="submit">' + tr("Submit", "تسليم") + "</button></form><p>" + tr("Published feedback", "الملاحظات المنشورة") + ": " + text(sub?.feedback || "") + "</p>";
+        }).join("");
+      }
+      function render() {
+        try {
+          nav();
+          const v = document.getElementById("v");
+          if (!v)
+            return;
+          const name = pages.find((x) => x[0] === page);
+          v.innerHTML = '<section id="extension-view" data-ui-user-content><h2>' + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p id="extension-error" class="neg" role="alert"></p>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : page === "account" ? "<h3>" + text(user.display_name) + "</h3><p>" + text(user.username) + '</p><form id="extension-password-form"><div class="fg">' + field("current", "Current password", "كلمة المرور الحالية", "password") + field("password", "New password (12+ characters)", "كلمة المرور الجديدة (١٢ حرفاً أو أكثر)", "password") + '</div><button class="b" type="submit">' + tr("Change password", "تغيير كلمة المرور") + "</button></form>" : learning()) + "</section>";
+          bindPeriod();
+          form("extension-account-form", (r) => api("accounts", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), active: Number(r.active) }));
+          form("extension-plan-form", (r) => api("plan", { request_key: token(), reason: r.reason, record: { id: r.id ? Number(r.id) : undefined, contract_id: Number(r.contract_id), due_on: r.due_on, amount: Math.round(Number(r.amount) * 1000), note: r.reason } }));
+          const person = document.getElementById("extension-person");
+          if (page === "plans" && person)
+            person.onchange = () => {
+              selection = person.value;
+              render();
+            };
+          form("extension-password-form", (r) => {
+            api("password", r);
+            location.href = "/";
+          });
+          form("extension-reschedule-form", (r) => api("reschedule", { ...r, session_id: Number(r.session_id), request_key: token() }));
+          form("extension-share-form", (r) => api("share", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), source_id: Number(r.source_id), released: Number(r.released) }));
+          form("extension-feedback-form", (r) => api("feedback", { ...r, submission_id: Number(r.submission_id), published: Number(r.published) }));
+          document.querySelectorAll("[data-submit]").forEach((el) => el.onsubmit = (e) => {
+            e.preventDefault();
+            try {
+              api("submit", { share_id: Number(el.dataset.submit), ...Object.fromEntries(new FormData(el)) });
+              render();
+            } catch (err) {
+              error(err);
+            }
+          });
+          document.querySelectorAll("[data-read]").forEach((el) => el.onclick = () => {
+            try {
+              api("read", { id: Number(el.dataset.read) });
+              render();
+            } catch (e) {
+              error(e);
+            }
+          });
+          document.querySelectorAll("[data-decide]").forEach((el) => el.onclick = () => {
+            const reason = prompt(tr("Student-facing decision reason", "سبب القرار الظاهر للطالب"));
+            if (reason)
+              try {
+                api("decision", { id: Number(el.dataset.decide), status: el.dataset.status, reason });
+                render();
+              } catch (e) {
+                error(e);
+              }
+          });
+        } catch (e) {
+          error(e);
+        }
+      }
+      document.addEventListener("click", (e) => {
+        const a = e.target.closest("[data-extension]");
+        if (a) {
+          e.preventDefault();
+          page = a.dataset.extension;
+          selection = "";
+          document.body.classList.remove("ui-drawer-open");
+          location.hash = "preview-" + page;
+          render();
+        }
+      });
+      window.addEventListener("hashchange", () => {
+        const key = location.hash.replace("#preview-", "");
+        if (pages.some((p) => p[0] === key)) {
+          page = key;
+          render();
+        }
+      });
+      const css = document.createElement("style");
+      css.textContent = "#extension-view{color:var(--ink);letter-spacing:0}#extension-view .fg{margin:16px 0}#extension-view form{margin:20px 0}#extension-view label{display:flex;flex-direction:column;gap:6px}#extension-view .tw{width:100%}#extension-view table{width:100%}#extension-view td{overflow-wrap:anywhere}#extension-view .bar{flex-wrap:wrap}#extension-view input{max-width:100%}#extension-view h2{letter-spacing:0}@media print{body.extension-printing #nv,body.extension-printing #topbar,body.extension-printing #aplus-preview-badge,body.extension-printing .extension-controls,body.extension-printing #extension-error{display:none!important}body.extension-printing #extension-view{background:var(--card);color:var(--ink)}body.extension-printing #workspace{margin:0}body.extension-printing #extension-statement details{display:block}body.extension-printing #extension-statement details>*{display:block}body.extension-printing #extension-statement th{position:static}body.extension-printing #extension-statement tr{break-inside:avoid}}";
+      document.head.append(css);
+      if (student) {
+        const lang = localStorage.getItem("aplus-ui-language") === "ar" ? "ar" : "en";
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+        document.documentElement.dataset.theme = localStorage.getItem("aplus-ui-theme") === "dark" ? "dark" : "light";
+        render();
+      } else {
+        nav();
+        new MutationObserver(() => nav()).observe(document.getElementById("nv"), { childList: true, subtree: true });
+      }
+      window.__APLUS_EXTENSION__ = { open: (k) => {
+        page = k;
+        selection = "";
+        render();
+      }, statement: () => statement };
+    }
+    module.exports = { studentPage, mount };
+  });
+
   // aplus-preview/runtime/core.js
   var require_core = __commonJS(function(exports, module) {
     var initSqlJs = require_sql_wasm_debug();
@@ -41813,7 +42780,8 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
       { username: "dev.admin", display_name: "DEV Admin (synthetic)", role: "Admin" },
       { username: "dev.coordinator", display_name: "DEV Coordinator (synthetic)", role: "Coordinator" },
       { username: "dev.accountant", display_name: "DEV Accountant (synthetic)", role: "Accountant" },
-      { username: "dev.teacher", display_name: "DEV Teacher (synthetic)", role: "Teacher" }
+      { username: "dev.teacher", display_name: "DEV Teacher (synthetic)", role: "Teacher" },
+      { username: "dev.student", display_name: "DEV Student (synthetic)", role: "Student" }
     ];
     async function createRuntime({ locateFile, snapshot, cookie = "", onCookie = () => {}, log = (...a) => console.info("[A+ Hub preview]", ...a), clock } = {}) {
       const S = await initSqlJs({ locateFile });
@@ -41859,6 +42827,8 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
         db().exec("BEGIN");
         try {
           for (const a of PREVIEW_ACCOUNTS) {
+            if (a.role === "Student")
+              continue;
             if (a.role === "Teacher" && !teacher)
               continue;
             TEAM.createUser(db(), { ...a, password: PREVIEW_PASSWORD, active: 1, teacher_id: a.role === "Teacher" ? teacher.id : undefined }, "preview-setup");
@@ -41869,6 +42839,7 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
           throw e;
         }
       }
+      const extension = require_service().install(db, fs.readFileSync("/app/preview/schema.sql", "utf8"), { token: server.token, clock, cookieName: COOKIE });
       let jar = cookie;
       function applySetCookie(v) {
         if (!v)
@@ -41889,7 +42860,22 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
         const h = { host: "localhost:" + PORT, "sec-fetch-site": "same-origin", ...headers };
         if (jar)
           h.cookie = jar;
-        const r = callHandler(handler, method, url, h, body);
+        const normalized = {};
+        for (const [k, v] of Object.entries(h))
+          normalized[k.toLowerCase()] = v;
+        const write = !["GET", "HEAD"].includes(String(method).toUpperCase());
+        const before = write ? require_state().assemble(db()) : null;
+        let r = extension.handler(String(method).toUpperCase(), url, normalized, body);
+        if (!r)
+          r = callHandler(handler, method, url, h, body);
+        if (write && r.status >= 200 && r.status < 300 && before)
+          extension.observe(before, require_state().assemble(db()));
+        if (String(method).toUpperCase() === "GET" && ["/", "/index.html"].includes(url) && extension.actor(normalized)?.role === "Student") {
+          const original = fs.readFileSync("/app/public/index.html", "utf8");
+          const html = require_ui().studentPage(original, server.token, extension.actor(normalized));
+          const bytes = Buffer.from(html);
+          r = { status: 200, headers: { "content-type": "text/html" }, body: bytes, text: () => html };
+        }
         if (r.headers["set-cookie"])
           applySetCookie(r.headers["set-cookie"]);
         return r;
@@ -44309,6 +45295,8 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
       clearTimeout(saveTimer);
       saveTimer = setTimeout(save, 300);
     };
+    window.__APLUS_SAVE__ = save;
+    await save();
     if (rt.created || !snapshot)
       await save();
     setInterval(save, 60000);
@@ -44510,6 +45498,7 @@ field('login').onsubmit=async event=>{event.preventDefault();field('submit').dis
           save();
       });
       previewBadge();
+      require_ui().mount();
     };
     if (document.readyState === "loading")
       document.addEventListener("DOMContentLoaded", after);
