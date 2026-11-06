@@ -38,3 +38,6 @@ use the editor.
 - `/` forwards to `/aplus/index.html`, which runs the original app's server code in the browser (`aplus-preview/`, built by `bun aplus-preview/build.ts` into `public/aplus/`); original sources in `aplus-preview/original/` are never edited — adaptations happen at build time or in shims, so parity with the original is preserved.
 - Preview data is saved compressed to localStorage synchronously on every write (plus IndexedDB), because the original pages navigate immediately after writes and async saves were lost.
 - The earlier simplified rebuild (`src/routes/_authenticated/*`) is kept but no longer linked from `/`.
+- Preview enhancements live in `aplus-preview/extensions/`; additive SQLite tables are installed by runtime initialization without changing the original schema version, preserving snapshots and reference sources.
+- Every Student API request is intercepted before the original handler and derives ownership from its session; original broad APIs are denied to Student because staff projections are not safe for students.
+- Financial extensions are read-only projections over original records; receipt links and installments never introduce new cash, and pending Accountant plan edits are applied through original management validation only after approval.

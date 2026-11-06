@@ -9,6 +9,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Experimental in-browser preview of the original A+ Hub Academy system, using synthetic test data only." },
       { property: "og:title", content: "A+ Hub Academy — Experimental preview" },
       { property: "og:description", content: "Experimental in-browser preview of the original A+ Hub Academy system, using synthetic test data only." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
