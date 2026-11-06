@@ -41,12 +41,24 @@ async function main() {
   window.__APLUS_PREVIEW__ = rt;
 
   let saveTimer = null, saving = Promise.resolve();
+  let lastStamp = Date.now();
+  const capture = () => ({ at: lastStamp = Math.max(Date.now(),lastStamp+1), zip: pack(rt.snapshot()) });
   const save = () => {
-    const rec = { at: Date.now(), zip: pack(rt.snapshot()) };
+    if(rt.transferring()) return saving;
+    const rec = capture();
     try { localStorage.setItem(LS_KEY, JSON.stringify({ at: rec.at, zip: b64.enc(rec.zip) })); } catch (_) { try { localStorage.removeItem(LS_KEY); } catch (__) {} }
     saving = saving.then(() => idbPut(rec)).catch((e) => console.error('[A+ Hub preview] could not save', e));
     return saving;
   };
+  const saveStrict = async () => {
+    clearTimeout(saveTimer);
+    await saving;
+    const rec=capture(), old=localStorage.getItem(LS_KEY);
+    localStorage.setItem(LS_KEY,JSON.stringify({at:rec.at,zip:b64.enc(rec.zip)}));
+    try { await idbPut(rec); }
+    catch(error) { if(old===null)localStorage.removeItem(LS_KEY);else localStorage.setItem(LS_KEY,old);throw error; }
+  };
+  window.__APLUS_RESTORE__ = parameters => rt.restoreBackup(parameters, {'x-aplus-token':document.querySelector('meta[name="aplus-token"]')?.content}, saveStrict);
   const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); };
   window.__APLUS_SAVE__ = save;
   // Additive extension upgrades also need persistence on existing snapshots.
@@ -121,6 +133,10 @@ async function main() {
     const box = document.createElement('div'); box.id = 'aplus-preview-badge';
     box.setAttribute('style', 'position:fixed;z-index:2147483647;bottom:8px;left:8px;max-width:min(420px,92vw);font:12px/1.4 system-ui,sans-serif;background:#fff7d6;color:#3b2f00;border:1px solid #c9a227;border-radius:8px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25);direction:ltr;text-align:left');
     const login = !!document.getElementById('login');
+    if(rt.imported()) {
+      box.innerHTML='<b>LOCAL BROWSER PREVIEW · معاينة محلية داخل المتصفح</b><div>Imported data is stored only in this browser, without server-side access protection or device synchronization. Keep a private backup. · البيانات المستوردة محفوظة في هذا المتصفح فقط دون حماية سيرفر أو مزامنة أجهزة. احتفظ بنسخة خاصة.</div>';
+      document.body.appendChild(box);return;
+    }
     box.innerHTML = '<b>EXPERIMENTAL PREVIEW · SYNTHETIC TEST DATA ONLY</b> · بيانات تجريبية وهمية' +
       ' <button type="button" id="aplus-preview-more" style="all:revert;font:inherit;cursor:pointer;margin-left:4px">' + (login ? 'hide' : 'details') + '</button>' +
       '<div id="aplus-preview-details" style="display:' + (login ? 'block' : 'none') + ';margin-top:4px">Runs entirely in this browser tab; not shared and not a deployment. Test accounts (password <code>' + rt.password + '</code>): ' +
@@ -135,7 +151,7 @@ async function main() {
   const page = rt.dispatch('GET', '/', {});
   if (status) status.textContent = '';
   document.open(); document.write(page.text()); document.close();
-  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { if (!window.__aplusResetting) save(); }); previewBadge(); require('../extensions/ui').mount(); };
+  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { if (!window.__aplusResetting) save(); }); previewBadge(); require('../extensions/ui').mount(); require('../extensions/backups-ui').mount(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', after); else after();
 }
 

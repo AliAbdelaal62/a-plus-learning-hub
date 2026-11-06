@@ -40,7 +40,11 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    submissions:db().prepare('SELECT s.id,s.share_id,s.body,s.url,s.updated_at,f.body feedback FROM preview_submissions s LEFT JOIN preview_feedback f ON f.submission_id=s.id AND f.published=1 WHERE s.student_id=?').all(s)};
  }
  const contracts=(s)=>MAN.read(db(),{role:'Admin'},clock()).contracts.filter(c=>c.student_id===s).map(c=>({...c,installments:c.installments.map(i=>({id:i.id,due_on:i.due_on,amount:i.amount,paid:i.paid,remaining:i.remaining,reason:i.note,status:c.status==='Cancelled'?'Cancelled':i.remaining===0?'Paid':i.overdue?'Overdue':i.paid>0?'Partially paid':i.due_on===require('../original/src/cairo').today(clock())?'Due':'Upcoming'}))}));
- function studentStatement(st,s,opt){return {...F.student(st,s,{...opt,contracts:contracts(s),receipts:db().prepare('SELECT * FROM billing_receipts').all(),usage:db().prepare('SELECT * FROM package_usage').all()}),installments:contracts(s).map(({id,title,total,currency,received,remaining,installments,unplanned,status})=>({id,title,total,currency,received,remaining,installments,unplanned,status}))};}
+ function studentStatement(st,s,opt){return {...F.student(st,s,{...opt,contracts:contracts(s),receipts:db().prepare('SELECT * FROM billing_receipts').all(),usage:db().prepare('SELECT * FROM package_usage').all()}),installments:contracts(s).map(c=>{
+  const source=c.source_kind==='Project'?st.pr.find(p=>p.id===c.target_id):c.source_kind==='Recorded'?st.rc.find(course=>st.re.some(e=>e.id===c.target_id&&e.rc===course.id)):null;
+  const value=n=>c.currency==='KWD'?n:source?F.kwd(source,n,c.currency,Math.round(n*source.rx),source.rx).value:null;
+  return {id:c.id,title:c.title,total:value(c.total),currency:'KWD',received:value(c.received),remaining:value(c.remaining),unplanned:value(c.unplanned),status:c.status,conversionComplete:c.currency==='KWD'||value(c.total)!==null,
+   installments:c.installments.map(i=>({...i,amount:value(i.amount),paid:value(i.paid),remaining:value(i.remaining)}))};})};}
  const opts=url=>({from:url.searchParams.get('from')||'',to:url.searchParams.get('to')||''});
  function request(u,kind,record,key,reason,student){if(!key||typeof key!=='string'||key.length>100)fail(422,'Request identifier required.');const old=db().prepare('SELECT * FROM preview_requests WHERE request_key=?').get(key);if(old){if(old.actor!==u.username)fail(409,'Request identifier already used.');return old}const id=Number(db().prepare('INSERT INTO preview_requests(request_key,kind,actor,student_id,record,reason,created_at) VALUES(?,?,?,?,?,?,?)').run(key,kind,u.username,student||null,JSON.stringify(record),plain(reason,500),now()).lastInsertRowid);audit(u,'create','approval',id,null,{kind,status:'Pending'});return db().prepare('SELECT * FROM preview_requests WHERE id=?').get(id)}
  function handler(method,path,headers,body){const url=new URL(path,'http://localhost'),p=url.pathname,u=actor(headers),write=!['GET','HEAD'].includes(method);let b;
@@ -58,7 +62,7 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    if(!p.startsWith('/api/preview/')){if(u?.role==='Student'&&p.startsWith('/api/'))fail(403,'Student access is limited to your own portal.');
     if(p==='/api/team/users'&&method==='POST'&&db().prepare('SELECT id FROM preview_student_accounts WHERE username=?').get(String(parse().username||'').toLowerCase()))fail(409,'Username already used by a student.');
     if(p==='/api/management'&&method==='POST'&&u?.role==='Accountant'){
-     const input=parse(),r=input.record||{};if(input.kind==='installment'&&r.id){const old=db().prepare('SELECT * FROM billing_installments WHERE id=?').get(r.id);if(!old)fail(404,'Installment not found.');const c=contractsForId(old.contract_id);return response({ok:true,pending:true,request:request(u,'installment',r,input.request_key||'installment:'+r.id+':'+input.baseRev,'Accountant requested installment change',c.student_id)});}
+     const input=parse(),r=input.record||{};if(input.kind==='installment'&&(r.id||db().prepare('SELECT id FROM billing_installments WHERE contract_id=?').get(r.contract_id||0))){const old=r.id?db().prepare('SELECT * FROM billing_installments WHERE id=?').get(r.id):null;if(r.id&&!old)fail(404,'Installment not found.');const c=contractsForId(old?.contract_id||r.contract_id);return response({ok:true,pending:true,request:request(u,'installment',r,input.request_key||'installment:'+(r.id||r.contract_id)+':'+input.baseRev,'Accountant requested installment change',c.student_id)});}
      if(input.kind==='contract'&&r.id)return response({ok:true,pending:true,request:request(u,'contract',r,input.request_key||'contract:'+r.id+':'+input.baseRev,'Accountant requested agreement change',contractsForId(r.id).student_id)});
     }
     return null;
@@ -67,6 +71,7 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    if(method==='GET'){
     if(p==='/api/preview/student')return response({ok:true,...educational(assemble(db()),sid(u,url))});
     if(p==='/api/preview/student-statement')return response({ok:true,...studentStatement(assemble(db()),sid(u,url),opts(url))});
+    if(p==='/api/preview/plans'){finance(u);return response({ok:true,installments:contracts(sid(u,url))});}
     if(p==='/api/preview/teacher-statement')return response({ok:true,...F.teacher(db(),assemble(db()),tid(u,url),opts(url))});
     if(p==='/api/preview/accounts'){if(u.role!=='Admin')fail(403,'Administrator access required.');return response({ok:true,accounts:db().prepare('SELECT * FROM preview_student_accounts').all().map(publicStudent),students:assemble(db()).s.map(s=>({id:s.id,name:s.name}))});}
     if(p==='/api/preview/directory'){finance(u);const st=assemble(db());return response({ok:true,students:st.s.map(s=>({id:s.id,name:s.name})),teachers:st.t.map(t=>({id:t.id,name:t.name}))});}

@@ -60,6 +60,8 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
   }
 
   const extension = require('../extensions/service').install(db, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { token: server.token, clock, cookieName: COOKIE });
+  const backups = require('../extensions/backups').install(() => server.ctx, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { actor: extension.actor, token: server.token, clock });
+  let transferring = false;
   let jar = cookie;
   function applySetCookie(v) {
     if (!v) return;
@@ -78,8 +80,11 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     if (jar) h.cookie = jar;
     const normalized = {}; for (const [k,v] of Object.entries(h)) normalized[k.toLowerCase()] = v;
     const write = !['GET','HEAD'].includes(String(method).toUpperCase());
+    if (transferring && write) return require('../extensions/service').response({ok:false,error:'Database transfer in progress. Please wait.'},409);
+    if (url === '/api/restore' && write) return require('../extensions/service').response({ok:false,error:'Use Settings → Data & Backups to validate and restore a full backup.'},409);
     const before = write ? require('../original/src/state').assemble(db()) : null;
-    let r = extension.handler(String(method).toUpperCase(), url, normalized, body);
+    let r = backups.handler(String(method).toUpperCase(), url, normalized, body);
+    if (!r) r = extension.handler(String(method).toUpperCase(), url, normalized, body);
     if (!r) r = callHandler(handler, method, url, h, body);
     if (write && r.status >= 200 && r.status < 300 && before) extension.observe(before, require('../original/src/state').assemble(db()));
     if (String(method).toUpperCase() === 'GET' && ['/', '/index.html'].includes(url) && extension.actor(normalized)?.role === 'Student') {
@@ -89,6 +94,31 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     }
     if (r.headers['set-cookie']) applySetCookie(r.headers['set-cookie']);
     return r;
+  }
+
+  async function restoreBackup(parameters, headers, persist) {
+    if (transferring) throw new Error('A database transfer is already running.');
+    if (headers?.['x-aplus-token'] !== server.token || typeof persist !== 'function') throw new Error('Reload before importing.');
+    const normalized = {cookie:jar};
+    const user = extension.actor(normalized);
+    const prepared = backups.prepare(user,parameters);
+    transferring = true;
+    server.sched.stop();
+    let transaction, oldJar = jar;
+    try {
+      // The safety copy must be durable BEFORE the destination is replaced.
+      await persist();
+      transaction = backups.replace(prepared);
+      jar = ''; onCookie('');
+      await persist();
+      transaction.commit();
+      return {...transaction.result,safetyPackage:prepared.safetyPackage};
+    } catch (error) {
+      if(transaction) transaction.rollback();
+      jar = oldJar; onCookie(jar);
+      try { await persist(); } catch (storageError) { error.message += ' Browser storage could not be verified; download the safety backup before closing this tab. '+storageError.message; }
+      throw error;
+    } finally { transferring = false; server.sched.start(); }
   }
 
   function snapshotFiles() {
@@ -102,6 +132,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     return out;
   }
 
-  return { dispatch, snapshot: snapshotFiles, server, created, cookie: () => jar, accounts: PREVIEW_ACCOUNTS, password: PREVIEW_PASSWORD, stop: () => server.close() };
+  return { dispatch, restoreBackup, snapshot: snapshotFiles, server, created, cookie: () => jar, accounts: PREVIEW_ACCOUNTS, password: PREVIEW_PASSWORD, stop: () => server.close(), transferring: () => transferring,
+    imported: () => !!db().prepare("SELECT value FROM preview_meta WHERE key='imported-database'").get() };
 }
 module.exports = { createRuntime, PREVIEW_ACCOUNTS, PREVIEW_PASSWORD, DB_FILE };

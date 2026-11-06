@@ -18479,7 +18479,7 @@ https://github.com/browserify/crypto-browserify`);
 
   // node_modules/sql.js/dist/sql-wasm-debug.js
   var require_sql_wasm_debug = __commonJS(function(exports, module) {
-    var __dirname = "/dev-server/node_modules/sql.js/dist";
+    var __dirname = "C:\\Users\\hp\\Documents\\ChatGPT\\A+ BMS\\lovable-work\\node_modules\\sql.js\\dist";
     var initSqlJsPromise = undefined;
     var initSqlJs = function(moduleConfig) {
       if (initSqlJsPromise) {
@@ -23706,156 +23706,156 @@ function operationWrite(input,db,u){if(!input||!input.record||typeof input.recor
 }\r
 function saveState(input,db,u){if(u.role==='Admin')return input;if(u.role!=='Accountant')deny();const current=require('./save').getState(db).state,visible=state(current,u),stable=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort()):x);for(const key of Object.keys(current)){if(key!=='id'&&!financialKeys.includes(key)&&stable(input[key])!==stable(visible[key]))deny();}return {...current,id:input.id,...Object.fromEntries(financialKeys.map(k=>[k,input[k]]))};}\r
 module.exports={state,operations,operationWrite,saveState,deny};\r
-`, "/app/src/audit.js": `'use strict';
-// One way to write audit rows. Append-only (triggers in migration 002 forbid UPDATE/DELETE). Never put secrets or whole personal records in \`before\`/\`after\`:
-// callers pass only the fields that matter; \`scrub\` removes anything that looks like a credential.
-const SECRET = /pass(word)?|token|secret|hash|salt|cookie|session/i;
-function scrub(v) { if (v == null) return v; if (Array.isArray(v)) return v.map(scrub); if (typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) if (!SECRET.test(k)) o[k] = scrub(x); return o; } return v; }
-const js = v => (v === undefined || v === null ? null : JSON.stringify(scrub(v)));
-function log(db, { at = new Date().toISOString(), action, entity = null, id = null, before, after, detail = '', actor = 'local', reason = null, related }) {
-  db.prepare('INSERT INTO audit_log(at,action,entity,entity_id,before_json,after_json,detail,actor,reason,related_json) VALUES(?,?,?,?,?,?,?,?,?,?)').run(at, action, entity, id, js(before), js(after), String(detail).slice(0, 500), actor, reason == null ? null : String(reason).slice(0, 300), js(related));
-}
-module.exports = { log, scrub };
-`, "/app/src/backup.js": `'use strict';
-const log = require('./log');
-// SQLite backups (VACUUM INTO = a consistent single-file copy even while the server runs) and verified restore.
-// Every backup carries a per-table fingerprint of the WHOLE database (settings, currencies, rates, rate history, audit log, every business table);
-// validation and restore compare it table by table, so "complete" is proven rather than assumed.
-const fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
-const { open, migrate, pending, SCHEMA_VERSION } = require('./db'); const { assemble } = require('./state'); const fin = require('./finance'); const audit = require('./audit');
-const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
-const stamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\\..*/, '').replace('T', '-');
-const NAME = /^aplus-\\d{8}-\\d{6}(-[a-z0-9_]{1,30})?\\.sqlite$/;
-const getRev = db => { const r = db.prepare("SELECT value FROM schema_meta WHERE key='rev'").get(); return r ? +r.value : 0; };
-const BUSINESS = ['teachers', 'students', 'subjects', 'lessons', 'student_payments', 'teacher_payments', 'timetable_entries', 'projects', 'project_payments', 'recorded_courses', 'course_enrollments', 'course_reminders'];
-const counts = db => Object.fromEntries(BUSINESS.map(t => [t, db.prepare(\`SELECT count(*) c FROM \${t}\`).get().c]));
-
-// table-by-table fingerprint of every user table (rows sorted by all columns so VACUUM's rowid renumbering cannot matter)
-function fingerprint(db) {
-  const out = {}; const names = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite\\\\_%' ESCAPE '\\\\' ORDER BY name").all().map(r => r.name);
-  for (const t of names) {
-    const n = db.prepare(\`SELECT count(*) c FROM pragma_table_info('\${t}')\`).get().c, order = Array.from({ length: n }, (_, i) => i + 1).join(',');
-    const h = crypto.createHash('sha256'); let rows = 0;
-    for (const r of db.prepare(\`SELECT * FROM \${t} ORDER BY \${order}\`).iterate()) { h.update(JSON.stringify(r) + '\\n'); rows++; }
-    out[t] = { rows, sha: h.digest('hex').slice(0, 24) };
-  }
-  return out;
-}
-const diffFp = (a, b) => { const d = []; for (const t of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) { const x = a && a[t], y = b && b[t]; if (!x || !y) d.push(t + ': table ' + (x ? 'missing in the copy' : 'not in the original')); else if (x.rows !== y.rows || x.sha !== y.sha) d.push(\`\${t}: \${x.rows} rows vs \${y.rows} rows, contents differ\`); } return d; };
-
-// Opens a file the way a restore would, without trusting it. Never modifies the file (works on a temp copy, including its -wal).
-function validate(file, opt = {}) {
-  const problems = []; let counts_ = null, totals = null, ver = null, tables = null, needsMigration = false;
-  if (!fs.existsSync(file)) return { ok: false, problems: ['file does not exist'] };
-  const head = fs.readFileSync(file).subarray(0, 16).toString('latin1'); if (!head.startsWith('SQLite format 3')) return { ok: false, problems: ['not an SQLite database file'] };
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aplus-val-')), cp = path.join(tmp, 'check.sqlite');
-  try {
-    fs.copyFileSync(file, cp); if (fs.existsSync(file + '-wal')) fs.copyFileSync(file + '-wal', cp + '-wal');
-    const { DatabaseSync } = require('node:sqlite'); const d = new DatabaseSync(cp); d.exec('PRAGMA foreign_keys=ON');
-    try {
-      const ic = d.prepare('PRAGMA integrity_check').all().map(r => r.integrity_check); if (ic.join() !== 'ok') problems.push('integrity_check: ' + ic.slice(0, 3).join('; '));
-      const fk = d.prepare('PRAGMA foreign_key_check').all(); if (fk.length) problems.push(\`foreign_key_check: \${fk.length} violation(s)\`);
-      let ok = true; try { ver = d.prepare('SELECT MAX(version) v FROM schema_migrations').get().v; } catch (e) { ok = false; problems.push('schema_migrations table missing'); }
-      if (ok && ver > SCHEMA_VERSION) problems.push(\`database schema version \${ver} is newer than this program supports (\${SCHEMA_VERSION})\`);
-      if (ok && !problems.length) {
-        tables = fingerprint(d); // fingerprint BEFORE any upgrade: this is what the backup really holds
-        if (opt.expectTables) { const df = diffFp(opt.expectTables, tables); if (df.length) problems.push('table-by-table comparison failed: ' + df.slice(0, 5).join('; ')); }
-        if (ver < SCHEMA_VERSION) { needsMigration = true; try { migrate(d); } catch (e) { problems.push('upgrade check failed: ' + e.message); } } // on the temp copy only
-      }
-      if (!problems.length) { counts_ = counts(d); const st = assemble(d); totals = fin.fin(st); if (!Number.isInteger(st.id)) problems.push('next id counter missing'); }
-    } finally { d.close(); }
-  } catch (e) { problems.push('cannot be opened: ' + e.message); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
-  return { ok: problems.length === 0, problems, schemaVersion: ver, needsMigration, counts: counts_, totals, tables };
-}
-function uniqueName(dir, label) {
-  const lab = (label ? label.replace(/[^a-z0-9_]/gi, '').toLowerCase().slice(0, 26) : '') || 'b', base = 'aplus-' + stamp(new Date()); let name = base + (label ? '-' + lab : '') + '.sqlite', i = 1;
-  while (fs.existsSync(path.join(dir, name))) name = base + '-' + lab + (++i) + '.sqlite'; // keeps the label (e.g. auto2) so retention still recognises it
-  return name;
-}
-function create(ctx, label = '', opt = {}) {
-  fs.mkdirSync(ctx.backupDir, { recursive: true });
-  const name = uniqueName(ctx.backupDir, label), out = path.join(ctx.backupDir, name);
-  ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); const fpSrc = fingerprint(ctx.db); const rev = getRev(ctx.db);
-  ctx.db.exec(\`VACUUM INTO '\${out.replace(/'/g, "''")}'\`);
-  const v = validate(out, { expectTables: fpSrc }); const manifest = { name, kind: label || 'manual', createdAt: new Date().toISOString(), rev, sha256: sha(out), bytes: fs.statSync(out).size, schemaVersion: v.schemaVersion, counts: v.counts, totals: v.totals, tables: fpSrc, verified: v.ok, problems: v.problems };
-  fs.writeFileSync(out + '.json', JSON.stringify(manifest, null, 1));
-  if (!v.ok) throw new Error('backup was written but failed verification: ' + v.problems.join('; '));
-  if (!opt.noAudit) { try { audit.log(ctx.db, { action: 'backup', entity: 'db', detail: name + (label ? ' (' + label + ')' : ''), after: { rev, bytes: manifest.bytes } }); } catch (e_) { require('./log').warn('audit entry could not be written (backup)', e_); } }
-  return manifest;
-}
-function list(ctx) {
-  if (!fs.existsSync(ctx.backupDir)) return [];
-  return fs.readdirSync(ctx.backupDir).filter(f => NAME.test(f)).sort().reverse().map(f => { let m = {}; try { m = JSON.parse(fs.readFileSync(path.join(ctx.backupDir, f + '.json'), 'utf8')); } catch (e) { log.warn('backup manifest unreadable: ' + f, e); } return { name: f, bytes: fs.statSync(path.join(ctx.backupDir, f)).size, createdAt: m.createdAt, kind: m.kind, counts: m.counts, verified: m.verified }; });
-}
-// copy a finished backup (and its manifest) to a second location and prove the copy is identical
-function copyTo(ctx, name, dir) {
-  fs.mkdirSync(dir, { recursive: true }); const a = path.join(ctx.backupDir, name), b = path.join(dir, name);
-  fs.copyFileSync(a, b); fs.copyFileSync(a + '.json', b + '.json');
-  if (sha(a) !== sha(b)) { fs.rmSync(b, { force: true }); fs.rmSync(b + '.json', { force: true }); throw new Error('the copy in ' + dir + ' does not match the original (removed)'); }
-  return b;
-}
-// keep every manual / pre-restore / pre-import / pre-migration backup; thin out only the automatic ones
-function prune(dir, keepAuto) {
-  if (!fs.existsSync(dir)) return [];
-  const when = f => { try { return Date.parse(JSON.parse(fs.readFileSync(path.join(dir, f + '.json'), 'utf8')).createdAt) || 0; } catch (_) { return fs.statSync(path.join(dir, f)).mtimeMs; } };
-  const autos = fs.readdirSync(dir).filter(f => NAME.test(f) && /-auto\\d*\\.sqlite$/.test(f)).map(f => [f, when(f)]).sort((x, y) => y[1] - x[1] || y[0].localeCompare(x[0])), gone = [];
-  autos.slice(Math.max(1, keepAuto | 0)).forEach(([f]) => { for (const x of ['', '.json']) fs.rmSync(path.join(dir, f + x), { force: true }); gone.push(f); });
-  return gone;
-}
-// restore: validate -> safety backup of the current data -> swap -> compare table by table -> upgrade -> verify -> (rollback on any failure). ctx.db is replaced on success.
-function restore(ctx, name) {
-  if (!NAME.test(name)) throw new Error('invalid backup name'); const src = path.join(ctx.backupDir, name);
-  const m = fs.existsSync(src + '.json') ? JSON.parse(fs.readFileSync(src + '.json', 'utf8')) : null;
-  const v = validate(src, { expectTables: m && m.tables }); if (!v.ok) { const e = new Error('the backup failed validation; nothing was changed: ' + v.problems.join('; ')); e.problems = v.problems; throw e; }
-  if (m && m.sha256 !== sha(src)) throw new Error('the backup file does not match its recorded checksum; nothing was changed');
-  const safety = create(ctx, 'prerestore'); // safety copy of what is live right now
-  const live = ctx.file, hold = live + '.replaced-' + Date.now(); ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); ctx.db.close();
-  const swap = () => { fs.renameSync(live, hold); for (const x of ['-wal', '-shm']) if (fs.existsSync(live + x)) fs.renameSync(live + x, hold + x); fs.copyFileSync(src, live); };
-  const undo = () => { try { ctx.db && ctx.db.close(); } catch (_) {} for (const x of ['', '-wal', '-shm']) { try { fs.rmSync(live + x, { force: true }); } catch (_) {} } for (const x of ['', '-wal', '-shm']) if (fs.existsSync(hold + x)) fs.renameSync(hold + x, live + x); ctx.db = open(live); };
-  try {
-    swap(); ctx.db = open(live);
-    if (m && m.tables) { const df = diffFp(m.tables, fingerprint(ctx.db)); if (df.length) throw new Error('restored data differs from the backup: ' + df.slice(0, 5).join('; ')); }
-    migrate(ctx.db); const chk = validate(live); if (!chk.ok) throw new Error('restored database failed verification: ' + chk.problems.join('; '));
-  } catch (e) { undo(); const err = new Error('restore failed and was rolled back; the previous data is unchanged: ' + e.message); err.rolledBack = true; throw err; }
-  for (const x of ['', '-wal', '-shm']) fs.rmSync(hold + x, { force: true });
-  try { audit.log(ctx.db, { action: 'restore', entity: 'db', detail: name, after: { safetyBackup: safety.name } }); } catch (e_) { require('./log').warn('audit entry could not be written (backup)', e_); }
-  return { restored: name, counts: v.counts, safetyBackup: safety.name };
-}
-// OFFLINE restore for a live file that cannot be opened (zero-byte, truncated, malformed, bad WAL). The damaged files are MOVED ASIDE, never deleted.
-function restoreOffline({ file, backupDir, name }) {
-  if (!NAME.test(name)) throw new Error('invalid backup name'); const src = path.join(backupDir, name);
-  const m = fs.existsSync(src + '.json') ? JSON.parse(fs.readFileSync(src + '.json', 'utf8')) : null;
-  const v = validate(src, { expectTables: m && m.tables }); if (!v.ok) throw new Error('the backup failed validation; nothing was changed: ' + v.problems.join('; '));
-  if (m && m.sha256 !== sha(src)) throw new Error('the backup file does not match its recorded checksum; nothing was changed');
-  const aside = file + '.damaged-' + stamp(new Date()), moved = [];
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  for (const x of ['', '-wal', '-shm']) if (fs.existsSync(file + x)) { fs.renameSync(file + x, aside + x); moved.push(aside + x); }
-  try {
-    fs.copyFileSync(src, file); const db = open(file);
-    try { if (m && m.tables) { const df = diffFp(m.tables, fingerprint(db)); if (df.length) throw new Error('restored data differs from the backup: ' + df.slice(0, 5).join('; ')); } migrate(db); audit.log(db, { action: 'restore', entity: 'db', detail: name + ' (offline recovery)', after: { damagedFilesKeptAs: path.basename(aside) } }); } finally { db.close(); }
-    const chk = validate(file); if (!chk.ok) throw new Error('restored database failed verification: ' + chk.problems.join('; '));
-  } catch (e) { for (const x of ['', '-wal', '-shm']) fs.rmSync(file + x, { force: true }); for (const x of ['', '-wal', '-shm']) if (fs.existsSync(aside + x)) fs.renameSync(aside + x, file + x); throw new Error('recovery failed; the original files were put back: ' + e.message); }
-  return { restored: name, damagedFilesKeptAs: moved };
-}
-module.exports = { create, list, restore, restoreOffline, validate, fingerprint, diffFp, copyTo, prune, counts, NAME, getRev };
-`, "/app/src/boot.js": `'use strict';
-// The ONE way the app (server and scripts) opens the real database: guard -> open -> (backup if an upgrade is pending) -> migrate.
-const fs = require('fs'), path = require('path');
-const guard = require('./guard'); const { open, migrate, pending, hasData } = require('./db'); const B = require('./backup'); const audit = require('./audit');
-function openApp(file, backupDir, { log = () => {} } = {}) {
-  const g = guard.inspect(file, backupDir); // throws StartupRefused for anything damaged or suspicious
-  const db = open(file); const ctx = { db, file, backupDir }; let premigrate = null;
-  try {
-    const todo = pending(db);
-    if (g.state === 'ok' && todo.length && hasData(db)) { premigrate = B.create(ctx, 'premigrate', { noAudit: true }); log('backup before upgrade: ' + premigrate.name); }
-    const applied = migrate(db);
-    if (applied.length && premigrate) { try { audit.log(db, { action: 'schema-upgrade', entity: 'db', detail: applied.join(', '), after: { backup: premigrate.name } }); } catch (e_) { require('./log').warn('audit entry could not be written (boot)', e_); } }
-    guard.markInstalled(file);
-    return { db, state: g.state, premigrate, applied };
-  } catch (e) { try { db.close(); } catch (_) {} throw e; }
-}
-module.exports = { openApp };
-`, "/app/src/cairo.js": "'use strict';\n// M4: the business calendar is Africa/Cairo. These helpers turn an instant into the Cairo calendar date / time (DST-aware) and never use the machine's zone or UTC.\nconst TZ = 'Africa/Cairo';\nconst fmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });\nfunction parts(d = new Date()) { const o = {}; for (const p of fmt.formatToParts(d)) o[p.type] = p.value; return o; }\nconst today = (d = new Date()) => { const p = parts(d); return `${p.year}-${p.month}-${p.day}`; };\nconst nowTime = (d = new Date()) => { const p = parts(d); return `${p.hour}:${p.minute}`; };\nconst addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, d + n)); return t.toISOString().slice(0, 10); }; // pure calendar arithmetic: no zone involved\nmodule.exports = { TZ, today, nowTime, addDays, parts };\n", "/app/src/client/ledger-ui.js": `/* ===== Phase 2: financial ledger UI. All figures come from makeLedger() (src/ledger.js), the same source the server tests run. ===== */\r
+`, "/app/src/audit.js": `'use strict';\r
+// One way to write audit rows. Append-only (triggers in migration 002 forbid UPDATE/DELETE). Never put secrets or whole personal records in \`before\`/\`after\`:\r
+// callers pass only the fields that matter; \`scrub\` removes anything that looks like a credential.\r
+const SECRET = /pass(word)?|token|secret|hash|salt|cookie|session/i;\r
+function scrub(v) { if (v == null) return v; if (Array.isArray(v)) return v.map(scrub); if (typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) if (!SECRET.test(k)) o[k] = scrub(x); return o; } return v; }\r
+const js = v => (v === undefined || v === null ? null : JSON.stringify(scrub(v)));\r
+function log(db, { at = new Date().toISOString(), action, entity = null, id = null, before, after, detail = '', actor = 'local', reason = null, related }) {\r
+  db.prepare('INSERT INTO audit_log(at,action,entity,entity_id,before_json,after_json,detail,actor,reason,related_json) VALUES(?,?,?,?,?,?,?,?,?,?)').run(at, action, entity, id, js(before), js(after), String(detail).slice(0, 500), actor, reason == null ? null : String(reason).slice(0, 300), js(related));\r
+}\r
+module.exports = { log, scrub };\r
+`, "/app/src/backup.js": `'use strict';\r
+const log = require('./log');\r
+// SQLite backups (VACUUM INTO = a consistent single-file copy even while the server runs) and verified restore.\r
+// Every backup carries a per-table fingerprint of the WHOLE database (settings, currencies, rates, rate history, audit log, every business table);\r
+// validation and restore compare it table by table, so "complete" is proven rather than assumed.\r
+const fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');\r
+const { open, migrate, pending, SCHEMA_VERSION } = require('./db'); const { assemble } = require('./state'); const fin = require('./finance'); const audit = require('./audit');\r
+const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');\r
+const stamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\\..*/, '').replace('T', '-');\r
+const NAME = /^aplus-\\d{8}-\\d{6}(-[a-z0-9_]{1,30})?\\.sqlite$/;\r
+const getRev = db => { const r = db.prepare("SELECT value FROM schema_meta WHERE key='rev'").get(); return r ? +r.value : 0; };\r
+const BUSINESS = ['teachers', 'students', 'subjects', 'lessons', 'student_payments', 'teacher_payments', 'timetable_entries', 'projects', 'project_payments', 'recorded_courses', 'course_enrollments', 'course_reminders'];\r
+const counts = db => Object.fromEntries(BUSINESS.map(t => [t, db.prepare(\`SELECT count(*) c FROM \${t}\`).get().c]));\r
+\r
+// table-by-table fingerprint of every user table (rows sorted by all columns so VACUUM's rowid renumbering cannot matter)\r
+function fingerprint(db) {\r
+  const out = {}; const names = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite\\\\_%' ESCAPE '\\\\' ORDER BY name").all().map(r => r.name);\r
+  for (const t of names) {\r
+    const n = db.prepare(\`SELECT count(*) c FROM pragma_table_info('\${t}')\`).get().c, order = Array.from({ length: n }, (_, i) => i + 1).join(',');\r
+    const h = crypto.createHash('sha256'); let rows = 0;\r
+    for (const r of db.prepare(\`SELECT * FROM \${t} ORDER BY \${order}\`).iterate()) { h.update(JSON.stringify(r) + '\\n'); rows++; }\r
+    out[t] = { rows, sha: h.digest('hex').slice(0, 24) };\r
+  }\r
+  return out;\r
+}\r
+const diffFp = (a, b) => { const d = []; for (const t of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) { const x = a && a[t], y = b && b[t]; if (!x || !y) d.push(t + ': table ' + (x ? 'missing in the copy' : 'not in the original')); else if (x.rows !== y.rows || x.sha !== y.sha) d.push(\`\${t}: \${x.rows} rows vs \${y.rows} rows, contents differ\`); } return d; };\r
+\r
+// Opens a file the way a restore would, without trusting it. Never modifies the file (works on a temp copy, including its -wal).\r
+function validate(file, opt = {}) {\r
+  const problems = []; let counts_ = null, totals = null, ver = null, tables = null, needsMigration = false;\r
+  if (!fs.existsSync(file)) return { ok: false, problems: ['file does not exist'] };\r
+  const head = fs.readFileSync(file).subarray(0, 16).toString('latin1'); if (!head.startsWith('SQLite format 3')) return { ok: false, problems: ['not an SQLite database file'] };\r
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aplus-val-')), cp = path.join(tmp, 'check.sqlite');\r
+  try {\r
+    fs.copyFileSync(file, cp); if (fs.existsSync(file + '-wal')) fs.copyFileSync(file + '-wal', cp + '-wal');\r
+    const { DatabaseSync } = require('node:sqlite'); const d = new DatabaseSync(cp); d.exec('PRAGMA foreign_keys=ON');\r
+    try {\r
+      const ic = d.prepare('PRAGMA integrity_check').all().map(r => r.integrity_check); if (ic.join() !== 'ok') problems.push('integrity_check: ' + ic.slice(0, 3).join('; '));\r
+      const fk = d.prepare('PRAGMA foreign_key_check').all(); if (fk.length) problems.push(\`foreign_key_check: \${fk.length} violation(s)\`);\r
+      let ok = true; try { ver = d.prepare('SELECT MAX(version) v FROM schema_migrations').get().v; } catch (e) { ok = false; problems.push('schema_migrations table missing'); }\r
+      if (ok && ver > SCHEMA_VERSION) problems.push(\`database schema version \${ver} is newer than this program supports (\${SCHEMA_VERSION})\`);\r
+      if (ok && !problems.length) {\r
+        tables = fingerprint(d); // fingerprint BEFORE any upgrade: this is what the backup really holds\r
+        if (opt.expectTables) { const df = diffFp(opt.expectTables, tables); if (df.length) problems.push('table-by-table comparison failed: ' + df.slice(0, 5).join('; ')); }\r
+        if (ver < SCHEMA_VERSION) { needsMigration = true; try { migrate(d); } catch (e) { problems.push('upgrade check failed: ' + e.message); } } // on the temp copy only\r
+      }\r
+      if (!problems.length) { counts_ = counts(d); const st = assemble(d); totals = fin.fin(st); if (!Number.isInteger(st.id)) problems.push('next id counter missing'); }\r
+    } finally { d.close(); }\r
+  } catch (e) { problems.push('cannot be opened: ' + e.message); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }\r
+  return { ok: problems.length === 0, problems, schemaVersion: ver, needsMigration, counts: counts_, totals, tables };\r
+}\r
+function uniqueName(dir, label) {\r
+  const lab = (label ? label.replace(/[^a-z0-9_]/gi, '').toLowerCase().slice(0, 26) : '') || 'b', base = 'aplus-' + stamp(new Date()); let name = base + (label ? '-' + lab : '') + '.sqlite', i = 1;\r
+  while (fs.existsSync(path.join(dir, name))) name = base + '-' + lab + (++i) + '.sqlite'; // keeps the label (e.g. auto2) so retention still recognises it\r
+  return name;\r
+}\r
+function create(ctx, label = '', opt = {}) {\r
+  fs.mkdirSync(ctx.backupDir, { recursive: true });\r
+  const name = uniqueName(ctx.backupDir, label), out = path.join(ctx.backupDir, name);\r
+  ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); const fpSrc = fingerprint(ctx.db); const rev = getRev(ctx.db);\r
+  ctx.db.exec(\`VACUUM INTO '\${out.replace(/'/g, "''")}'\`);\r
+  const v = validate(out, { expectTables: fpSrc }); const manifest = { name, kind: label || 'manual', createdAt: new Date().toISOString(), rev, sha256: sha(out), bytes: fs.statSync(out).size, schemaVersion: v.schemaVersion, counts: v.counts, totals: v.totals, tables: fpSrc, verified: v.ok, problems: v.problems };\r
+  fs.writeFileSync(out + '.json', JSON.stringify(manifest, null, 1));\r
+  if (!v.ok) throw new Error('backup was written but failed verification: ' + v.problems.join('; '));\r
+  if (!opt.noAudit) { try { audit.log(ctx.db, { action: 'backup', entity: 'db', detail: name + (label ? ' (' + label + ')' : ''), after: { rev, bytes: manifest.bytes } }); } catch (e_) { require('./log').warn('audit entry could not be written (backup)', e_); } }\r
+  return manifest;\r
+}\r
+function list(ctx) {\r
+  if (!fs.existsSync(ctx.backupDir)) return [];\r
+  return fs.readdirSync(ctx.backupDir).filter(f => NAME.test(f)).sort().reverse().map(f => { let m = {}; try { m = JSON.parse(fs.readFileSync(path.join(ctx.backupDir, f + '.json'), 'utf8')); } catch (e) { log.warn('backup manifest unreadable: ' + f, e); } return { name: f, bytes: fs.statSync(path.join(ctx.backupDir, f)).size, createdAt: m.createdAt, kind: m.kind, counts: m.counts, verified: m.verified }; });\r
+}\r
+// copy a finished backup (and its manifest) to a second location and prove the copy is identical\r
+function copyTo(ctx, name, dir) {\r
+  fs.mkdirSync(dir, { recursive: true }); const a = path.join(ctx.backupDir, name), b = path.join(dir, name);\r
+  fs.copyFileSync(a, b); fs.copyFileSync(a + '.json', b + '.json');\r
+  if (sha(a) !== sha(b)) { fs.rmSync(b, { force: true }); fs.rmSync(b + '.json', { force: true }); throw new Error('the copy in ' + dir + ' does not match the original (removed)'); }\r
+  return b;\r
+}\r
+// keep every manual / pre-restore / pre-import / pre-migration backup; thin out only the automatic ones\r
+function prune(dir, keepAuto) {\r
+  if (!fs.existsSync(dir)) return [];\r
+  const when = f => { try { return Date.parse(JSON.parse(fs.readFileSync(path.join(dir, f + '.json'), 'utf8')).createdAt) || 0; } catch (_) { return fs.statSync(path.join(dir, f)).mtimeMs; } };\r
+  const autos = fs.readdirSync(dir).filter(f => NAME.test(f) && /-auto\\d*\\.sqlite$/.test(f)).map(f => [f, when(f)]).sort((x, y) => y[1] - x[1] || y[0].localeCompare(x[0])), gone = [];\r
+  autos.slice(Math.max(1, keepAuto | 0)).forEach(([f]) => { for (const x of ['', '.json']) fs.rmSync(path.join(dir, f + x), { force: true }); gone.push(f); });\r
+  return gone;\r
+}\r
+// restore: validate -> safety backup of the current data -> swap -> compare table by table -> upgrade -> verify -> (rollback on any failure). ctx.db is replaced on success.\r
+function restore(ctx, name) {\r
+  if (!NAME.test(name)) throw new Error('invalid backup name'); const src = path.join(ctx.backupDir, name);\r
+  const m = fs.existsSync(src + '.json') ? JSON.parse(fs.readFileSync(src + '.json', 'utf8')) : null;\r
+  const v = validate(src, { expectTables: m && m.tables }); if (!v.ok) { const e = new Error('the backup failed validation; nothing was changed: ' + v.problems.join('; ')); e.problems = v.problems; throw e; }\r
+  if (m && m.sha256 !== sha(src)) throw new Error('the backup file does not match its recorded checksum; nothing was changed');\r
+  const safety = create(ctx, 'prerestore'); // safety copy of what is live right now\r
+  const live = ctx.file, hold = live + '.replaced-' + Date.now(); ctx.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); ctx.db.close();\r
+  const swap = () => { fs.renameSync(live, hold); for (const x of ['-wal', '-shm']) if (fs.existsSync(live + x)) fs.renameSync(live + x, hold + x); fs.copyFileSync(src, live); };\r
+  const undo = () => { try { ctx.db && ctx.db.close(); } catch (_) {} for (const x of ['', '-wal', '-shm']) { try { fs.rmSync(live + x, { force: true }); } catch (_) {} } for (const x of ['', '-wal', '-shm']) if (fs.existsSync(hold + x)) fs.renameSync(hold + x, live + x); ctx.db = open(live); };\r
+  try {\r
+    swap(); ctx.db = open(live);\r
+    if (m && m.tables) { const df = diffFp(m.tables, fingerprint(ctx.db)); if (df.length) throw new Error('restored data differs from the backup: ' + df.slice(0, 5).join('; ')); }\r
+    migrate(ctx.db); const chk = validate(live); if (!chk.ok) throw new Error('restored database failed verification: ' + chk.problems.join('; '));\r
+  } catch (e) { undo(); const err = new Error('restore failed and was rolled back; the previous data is unchanged: ' + e.message); err.rolledBack = true; throw err; }\r
+  for (const x of ['', '-wal', '-shm']) fs.rmSync(hold + x, { force: true });\r
+  try { audit.log(ctx.db, { action: 'restore', entity: 'db', detail: name, after: { safetyBackup: safety.name } }); } catch (e_) { require('./log').warn('audit entry could not be written (backup)', e_); }\r
+  return { restored: name, counts: v.counts, safetyBackup: safety.name };\r
+}\r
+// OFFLINE restore for a live file that cannot be opened (zero-byte, truncated, malformed, bad WAL). The damaged files are MOVED ASIDE, never deleted.\r
+function restoreOffline({ file, backupDir, name }) {\r
+  if (!NAME.test(name)) throw new Error('invalid backup name'); const src = path.join(backupDir, name);\r
+  const m = fs.existsSync(src + '.json') ? JSON.parse(fs.readFileSync(src + '.json', 'utf8')) : null;\r
+  const v = validate(src, { expectTables: m && m.tables }); if (!v.ok) throw new Error('the backup failed validation; nothing was changed: ' + v.problems.join('; '));\r
+  if (m && m.sha256 !== sha(src)) throw new Error('the backup file does not match its recorded checksum; nothing was changed');\r
+  const aside = file + '.damaged-' + stamp(new Date()), moved = [];\r
+  fs.mkdirSync(path.dirname(file), { recursive: true });\r
+  for (const x of ['', '-wal', '-shm']) if (fs.existsSync(file + x)) { fs.renameSync(file + x, aside + x); moved.push(aside + x); }\r
+  try {\r
+    fs.copyFileSync(src, file); const db = open(file);\r
+    try { if (m && m.tables) { const df = diffFp(m.tables, fingerprint(db)); if (df.length) throw new Error('restored data differs from the backup: ' + df.slice(0, 5).join('; ')); } migrate(db); audit.log(db, { action: 'restore', entity: 'db', detail: name + ' (offline recovery)', after: { damagedFilesKeptAs: path.basename(aside) } }); } finally { db.close(); }\r
+    const chk = validate(file); if (!chk.ok) throw new Error('restored database failed verification: ' + chk.problems.join('; '));\r
+  } catch (e) { for (const x of ['', '-wal', '-shm']) fs.rmSync(file + x, { force: true }); for (const x of ['', '-wal', '-shm']) if (fs.existsSync(aside + x)) fs.renameSync(aside + x, file + x); throw new Error('recovery failed; the original files were put back: ' + e.message); }\r
+  return { restored: name, damagedFilesKeptAs: moved };\r
+}\r
+module.exports = { create, list, restore, restoreOffline, validate, fingerprint, diffFp, copyTo, prune, counts, NAME, getRev };\r
+`, "/app/src/boot.js": `'use strict';\r
+// The ONE way the app (server and scripts) opens the real database: guard -> open -> (backup if an upgrade is pending) -> migrate.\r
+const fs = require('fs'), path = require('path');\r
+const guard = require('./guard'); const { open, migrate, pending, hasData } = require('./db'); const B = require('./backup'); const audit = require('./audit');\r
+function openApp(file, backupDir, { log = () => {} } = {}) {\r
+  const g = guard.inspect(file, backupDir); // throws StartupRefused for anything damaged or suspicious\r
+  const db = open(file); const ctx = { db, file, backupDir }; let premigrate = null;\r
+  try {\r
+    const todo = pending(db);\r
+    if (g.state === 'ok' && todo.length && hasData(db)) { premigrate = B.create(ctx, 'premigrate', { noAudit: true }); log('backup before upgrade: ' + premigrate.name); }\r
+    const applied = migrate(db);\r
+    if (applied.length && premigrate) { try { audit.log(db, { action: 'schema-upgrade', entity: 'db', detail: applied.join(', '), after: { backup: premigrate.name } }); } catch (e_) { require('./log').warn('audit entry could not be written (boot)', e_); } }\r
+    guard.markInstalled(file);\r
+    return { db, state: g.state, premigrate, applied };\r
+  } catch (e) { try { db.close(); } catch (_) {} throw e; }\r
+}\r
+module.exports = { openApp };\r
+`, "/app/src/cairo.js": "'use strict';\r\n// M4: the business calendar is Africa/Cairo. These helpers turn an instant into the Cairo calendar date / time (DST-aware) and never use the machine's zone or UTC.\r\nconst TZ = 'Africa/Cairo';\r\nconst fmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });\r\nfunction parts(d = new Date()) { const o = {}; for (const p of fmt.formatToParts(d)) o[p.type] = p.value; return o; }\r\nconst today = (d = new Date()) => { const p = parts(d); return `${p.year}-${p.month}-${p.day}`; };\r\nconst nowTime = (d = new Date()) => { const p = parts(d); return `${p.hour}:${p.minute}`; };\r\nconst addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, d + n)); return t.toISOString().slice(0, 10); }; // pure calendar arithmetic: no zone involved\r\nmodule.exports = { TZ, today, nowTime, addDays, parts };\r\n", "/app/src/client/ledger-ui.js": `/* ===== Phase 2: financial ledger UI. All figures come from makeLedger() (src/ledger.js), the same source the server tests run. ===== */\r
 const LEDGER=makeLedger({O,pj:p=>pj(p),rcc:c=>rcc(c),k_});\r
 const LCATS=[['Live','Live Sessions'],['Recorded','Recorded Courses'],['Project','Projects'],['Other','Other']],LOK=['Live','Recorded','Project','Other'];\r
 /* H1: ONE teacher balance. TSum (teacher details, Payments page, reports) and cfLiab (cash flow) both read the shared ledger. */\r
@@ -24092,40 +24092,40 @@ function vDash(){const x=FL(V.F),W=ORIG.work(x).byCurrency,cs=curOrder(Object.ke
 const tInact=id=>{const t=db.t.find(x=>x.id==id);return !!t&&t.status==='Inactive'};\r
 const tOL=()=>db.t.map(t=>[t.id,t.name+(t.status==='Inactive'?' (inactive)':'')]);\r
 function fo(x,v){if(!x.tch)return x.o;const cur=v&&v[x.k];return x.o.filter(o=>o[0]===''||!tInact(o[0])||o[0]==cur).map(o=>o[0]!==''&&tInact(o[0])?[o[0],o[1]+' (inactive)']:o)}\r
-`, "/app/src/client/phase3-ui.js": `/* ===== Phase 3 page logic (injected by tools/make-public.js). Everything here is additive; functions are declarations so the page can call them before this block runs. ===== */
-const P3={rem:[],remErr:'',inst:0};
-/* M11: errors are reported, never swallowed. Only a short code + message leave the page (no record contents, no tokens). */
-function LOGE(where,e){const m=String(e&&e.message||e||'').slice(0,300);try{console.error('[aplus] '+where+': '+m)}catch(_){}try{const x=new XMLHttpRequest();x.open('POST','/api/client-log',true);x.setRequestHeader('X-APlus-Token',(document.querySelector('meta[name=aplus-token]')||{}).content||'');x.setRequestHeader('Content-Type','application/json');x.send(JSON.stringify({where,message:m}))}catch(_){}}
-/* M5: a saved 'Live' rate older than 36 hours (or with no timestamp) is shown as Stale, never as Live. */
-const RSTALE_H=()=>{const v=Number(db.set&&db.set.rfh);return Number.isFinite(v)&&v>=1&&v<=720?v:36};
-function rst_(c){if(c==B())return 'Same';const r=(db.rates||{})[c];if(!r||!(r.r>0))return 'None';if(r.type=='Manual'||r.type=='Legacy')return r.type;const t=r.t?Date.parse(r.t):NaN;if(!Number.isFinite(t)||Date.now()-t>RSTALE_H()*36e5)return 'Stale';return r.type||'Saved'}
-function rAt_(c){const r=(db.rates||{})[c];return r&&r.t?String(r.t).slice(0,10):'unknown date'}
-function rateBanner(){const st=db.cur.filter(c=>c.c!=B()&&rst_(c.c)=='Stale').map(c=>c.c+' (last refreshed '+rAt_(c.c)+')'),ms=db.cur.filter(c=>c.c!=B()&&rst_(c.c)=='None').map(c=>c.c);let h='';
- if(st.length)h+=\`<p class=pill style="background:#fdecea;color:var(--bad)"><b>Exchange rates are out of date, not live:</b> \${E(st.join(', '))}. New entries would be marked <b>Stale</b>. Records you already saved keep their own rates. <a class=lk onclick="V.nav='Settings';render()">Refresh in Settings</a></p>\`;
- if(ms.length)h+=\`<p class=pill style="background:#fdecea;color:var(--bad)"><b>No exchange rate:</b> \${E(ms.join(', '))}. Converted values for these currencies are unavailable (never guessed).</p>\`;return h}
-/* L4: records without a date are never dropped silently from a date-filtered view. */
-function undatedItems(F){const f={...F,a:'',b:''};const x=FL(f);return{pr:x.pr.filter(p=>!p.start),rc:x.rc.filter(c=>!c.date)}}
-function undatedNote(F){F=F||{};if(!F.a&&!F.b)return '';const u=undatedItems(F),n=u.pr.length+u.rc.length;if(!n)return '';const inc=F.ud=='1';
- return \`<p class=pill style="background:var(--baby)"><b>\${n} undated record\${n>1?'s':''}</b> (\${u.pr.length} project\${u.pr.length==1?'':'s'}, \${u.rc.length} course\${u.rc.length==1?'':'s'}, no start date) \${inc?'are <b>included</b> in these totals.':'are <b>not included</b> in this date range.'} <label><input type=checkbox \${inc?'checked':''} onchange="P3ud(this.checked)"> Include undated</label></p>\`}
-function P3ud(on){const t=V.nav=='Reports'?V.RP.f:V.F;if(on)t.ud='1';else delete t.ud;render()}
-/* L6: reminders due now (server decides in Africa/Cairo time; each occurrence is surfaced once) */
-function remBanner(){if(P3.remErr)return \`<p class=pill style="background:#fdecea;color:var(--bad)">Reminders could not be checked: \${E(P3.remErr)}</p>\`;if(!P3.rem.length)return '';
- return \`<div class=cd style="max-width:900px;border-left:4px solid var(--acc)"><b>Reminders due</b> <span class=mut>(shown while A+ Hub is open; nothing is delivered while it is closed)</span>\${P3.rem.map(r=>\`<div>\${E(r.date)} \${E(r.time)} — \${E(r.name||'Reminder')} <button class=lk onclick="P3ack(\${r.id},'\${E(r.date)}')">Got it</button></div>\`).join('')}</div>\`}
-function P3post(u,b,cb){const x=new XMLHttpRequest();x.open('POST',u,true);x.setRequestHeader('X-APlus-Token',(document.querySelector('meta[name=aplus-token]')||{}).content||'');x.setRequestHeader('Content-Type','application/json');x.onload=()=>cb(x.status>=200&&x.status<300?null:new Error('HTTP '+x.status));x.onerror=()=>cb(new Error('network error'));x.send(JSON.stringify(b))}
-function P3ack(id,date){P3post('/api/reminders/ack',{id,date},e=>{if(e){LOGE('reminder ack',e);toast('Could not mark the reminder: '+e.message,1);return}P3.rem=P3.rem.filter(r=>!(r.id==id&&r.date==date));render()})}
-function P3poll(){if(LOCK)return;const x=new XMLHttpRequest();x.open('GET','/api/reminders',true);x.onload=()=>{try{if(x.status!=200)throw new Error('HTTP '+x.status);const j=JSON.parse(x.responseText);const was=JSON.stringify(P3.rem);P3.rem=(j.due||[]).filter(r=>!(db.rd||{})[r.id+'|'+r.date]);P3.remErr='';if(JSON.stringify(P3.rem)!=was&&!$('#m').innerHTML&&V.nav=='Dashboard')render()}catch(e){P3.remErr=String(e.message||e);LOGE('reminders',e)}};x.onerror=()=>{P3.remErr='server not reachable'};x.send()}
-/* G: views get their notices without touching the original view code */
-function P3wrap(name,pre){const prev=VW[name];VW[name]=function(){return pre()+prev()}}
-function P3_INSTALL(){if(P3.inst)return;P3.inst=1;
- P3wrap('Dashboard',()=>rateBanner()+remBanner()+undatedNote(V.F));P3wrap('Reports',()=>rateBanner()+undatedNote(V.RP.f));P3wrap('Cash Flow',()=>rateBanner());P3wrap('Settings',()=>rateBanner());P3wrap('Projects',()=>rateBanner());}
-function P3_BOOT(){try{P3poll();setInterval(P3poll,60000)}catch(e){LOGE('boot',e)}}
-/* L1: one list of university names already in use; the form suggests them and a near-identical spelling is mapped to the existing one by the server (new / edited records only) */
-function uniList(){const m=new Map();[...db.s,...db.sub,...db.pr,...db.rc].forEach(r=>{const v=String(r.uni||'').trim();if(!v)return;const k=v.toLowerCase().replace(/[.,'"()\\-_/]+/g,' ').replace(/\\s+/g,' ').trim(),z=m.get(k)||{n:0,c:{}};z.n++;z.c[v]=(z.c[v]||0)+1;m.set(k,z)});return [...m.values()].map(z=>Object.entries(z.c).sort((a,b)=>b[1]-a[1])[0][0]).sort()}
-function uniDL(){return \`<datalist id=unis>\${uniList().map(u=>\`<option value="\${E(u)}">\`).join('')}</datalist>\`}
-
-/* M9 helpers */
-function P3rq(){try{if(crypto&&crypto.randomUUID)return crypto.randomUUID().replace(/-/g,'')}catch(_){}return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,12)}
-function P3save(b){try{return apiX('POST','/api/save',b)}catch(e){if(e&&e.status===undefined&&!e.detail){LOGE('save transport, retrying once with the same request id',e);return apiX('POST','/api/save',b)}throw e}}
+`, "/app/src/client/phase3-ui.js": `/* ===== Phase 3 page logic (injected by tools/make-public.js). Everything here is additive; functions are declarations so the page can call them before this block runs. ===== */\r
+const P3={rem:[],remErr:'',inst:0};\r
+/* M11: errors are reported, never swallowed. Only a short code + message leave the page (no record contents, no tokens). */\r
+function LOGE(where,e){const m=String(e&&e.message||e||'').slice(0,300);try{console.error('[aplus] '+where+': '+m)}catch(_){}try{const x=new XMLHttpRequest();x.open('POST','/api/client-log',true);x.setRequestHeader('X-APlus-Token',(document.querySelector('meta[name=aplus-token]')||{}).content||'');x.setRequestHeader('Content-Type','application/json');x.send(JSON.stringify({where,message:m}))}catch(_){}}\r
+/* M5: a saved 'Live' rate older than 36 hours (or with no timestamp) is shown as Stale, never as Live. */\r
+const RSTALE_H=()=>{const v=Number(db.set&&db.set.rfh);return Number.isFinite(v)&&v>=1&&v<=720?v:36};\r
+function rst_(c){if(c==B())return 'Same';const r=(db.rates||{})[c];if(!r||!(r.r>0))return 'None';if(r.type=='Manual'||r.type=='Legacy')return r.type;const t=r.t?Date.parse(r.t):NaN;if(!Number.isFinite(t)||Date.now()-t>RSTALE_H()*36e5)return 'Stale';return r.type||'Saved'}\r
+function rAt_(c){const r=(db.rates||{})[c];return r&&r.t?String(r.t).slice(0,10):'unknown date'}\r
+function rateBanner(){const st=db.cur.filter(c=>c.c!=B()&&rst_(c.c)=='Stale').map(c=>c.c+' (last refreshed '+rAt_(c.c)+')'),ms=db.cur.filter(c=>c.c!=B()&&rst_(c.c)=='None').map(c=>c.c);let h='';\r
+ if(st.length)h+=\`<p class=pill style="background:#fdecea;color:var(--bad)"><b>Exchange rates are out of date, not live:</b> \${E(st.join(', '))}. New entries would be marked <b>Stale</b>. Records you already saved keep their own rates. <a class=lk onclick="V.nav='Settings';render()">Refresh in Settings</a></p>\`;\r
+ if(ms.length)h+=\`<p class=pill style="background:#fdecea;color:var(--bad)"><b>No exchange rate:</b> \${E(ms.join(', '))}. Converted values for these currencies are unavailable (never guessed).</p>\`;return h}\r
+/* L4: records without a date are never dropped silently from a date-filtered view. */\r
+function undatedItems(F){const f={...F,a:'',b:''};const x=FL(f);return{pr:x.pr.filter(p=>!p.start),rc:x.rc.filter(c=>!c.date)}}\r
+function undatedNote(F){F=F||{};if(!F.a&&!F.b)return '';const u=undatedItems(F),n=u.pr.length+u.rc.length;if(!n)return '';const inc=F.ud=='1';\r
+ return \`<p class=pill style="background:var(--baby)"><b>\${n} undated record\${n>1?'s':''}</b> (\${u.pr.length} project\${u.pr.length==1?'':'s'}, \${u.rc.length} course\${u.rc.length==1?'':'s'}, no start date) \${inc?'are <b>included</b> in these totals.':'are <b>not included</b> in this date range.'} <label><input type=checkbox \${inc?'checked':''} onchange="P3ud(this.checked)"> Include undated</label></p>\`}\r
+function P3ud(on){const t=V.nav=='Reports'?V.RP.f:V.F;if(on)t.ud='1';else delete t.ud;render()}\r
+/* L6: reminders due now (server decides in Africa/Cairo time; each occurrence is surfaced once) */\r
+function remBanner(){if(P3.remErr)return \`<p class=pill style="background:#fdecea;color:var(--bad)">Reminders could not be checked: \${E(P3.remErr)}</p>\`;if(!P3.rem.length)return '';\r
+ return \`<div class=cd style="max-width:900px;border-left:4px solid var(--acc)"><b>Reminders due</b> <span class=mut>(shown while A+ Hub is open; nothing is delivered while it is closed)</span>\${P3.rem.map(r=>\`<div>\${E(r.date)} \${E(r.time)} — \${E(r.name||'Reminder')} <button class=lk onclick="P3ack(\${r.id},'\${E(r.date)}')">Got it</button></div>\`).join('')}</div>\`}\r
+function P3post(u,b,cb){const x=new XMLHttpRequest();x.open('POST',u,true);x.setRequestHeader('X-APlus-Token',(document.querySelector('meta[name=aplus-token]')||{}).content||'');x.setRequestHeader('Content-Type','application/json');x.onload=()=>cb(x.status>=200&&x.status<300?null:new Error('HTTP '+x.status));x.onerror=()=>cb(new Error('network error'));x.send(JSON.stringify(b))}\r
+function P3ack(id,date){P3post('/api/reminders/ack',{id,date},e=>{if(e){LOGE('reminder ack',e);toast('Could not mark the reminder: '+e.message,1);return}P3.rem=P3.rem.filter(r=>!(r.id==id&&r.date==date));render()})}\r
+function P3poll(){if(LOCK)return;const x=new XMLHttpRequest();x.open('GET','/api/reminders',true);x.onload=()=>{try{if(x.status!=200)throw new Error('HTTP '+x.status);const j=JSON.parse(x.responseText);const was=JSON.stringify(P3.rem);P3.rem=(j.due||[]).filter(r=>!(db.rd||{})[r.id+'|'+r.date]);P3.remErr='';if(JSON.stringify(P3.rem)!=was&&!$('#m').innerHTML&&V.nav=='Dashboard')render()}catch(e){P3.remErr=String(e.message||e);LOGE('reminders',e)}};x.onerror=()=>{P3.remErr='server not reachable'};x.send()}\r
+/* G: views get their notices without touching the original view code */\r
+function P3wrap(name,pre){const prev=VW[name];VW[name]=function(){return pre()+prev()}}\r
+function P3_INSTALL(){if(P3.inst)return;P3.inst=1;\r
+ P3wrap('Dashboard',()=>rateBanner()+remBanner()+undatedNote(V.F));P3wrap('Reports',()=>rateBanner()+undatedNote(V.RP.f));P3wrap('Cash Flow',()=>rateBanner());P3wrap('Settings',()=>rateBanner());P3wrap('Projects',()=>rateBanner());}\r
+function P3_BOOT(){try{P3poll();setInterval(P3poll,60000)}catch(e){LOGE('boot',e)}}\r
+/* L1: one list of university names already in use; the form suggests them and a near-identical spelling is mapped to the existing one by the server (new / edited records only) */\r
+function uniList(){const m=new Map();[...db.s,...db.sub,...db.pr,...db.rc].forEach(r=>{const v=String(r.uni||'').trim();if(!v)return;const k=v.toLowerCase().replace(/[.,'"()\\-_/]+/g,' ').replace(/\\s+/g,' ').trim(),z=m.get(k)||{n:0,c:{}};z.n++;z.c[v]=(z.c[v]||0)+1;m.set(k,z)});return [...m.values()].map(z=>Object.entries(z.c).sort((a,b)=>b[1]-a[1])[0][0]).sort()}\r
+function uniDL(){return \`<datalist id=unis>\${uniList().map(u=>\`<option value="\${E(u)}">\`).join('')}</datalist>\`}\r
+\r
+/* M9 helpers */\r
+function P3rq(){try{if(crypto&&crypto.randomUUID)return crypto.randomUUID().replace(/-/g,'')}catch(_){}return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,12)}\r
+function P3save(b){try{return apiX('POST','/api/save',b)}catch(e){if(e&&e.status===undefined&&!e.detail){LOGE('save transport, retrying once with the same request id',e);return apiX('POST','/api/save',b)}throw e}}\r
 `, "/app/src/client/preferences-ui.js": `/* UI preferences only. Source records, option values, money and API payloads stay unchanged. */\r
 const UI_PREFS={\r
  lang:'en',theme:'light',raw:new WeakMap(),painted:new WeakMap(),scheduled:false,\r
@@ -24171,76 +24171,76 @@ const UI_PREFS={\r
  },\r
  controls(){const language=document.querySelector('#ui_language'),theme=document.querySelector('#ui_theme');if(language){const label=this.lang==='en'?'العربية':'English';if(language.textContent!==label)language.textContent=label;language.title=this.lang==='en'?'Switch to Arabic':'التحويل إلى الإنجليزية';language.setAttribute('aria-label',language.title);language.onclick=()=>this.setLanguage();}if(theme){const label=this.lang==='ar'?(this.theme==='light'?'تفعيل الوضع الداكن':'تفعيل الوضع الفاتح'):(this.theme==='light'?'Switch to dark mode':'Switch to light mode');theme.title=label;theme.setAttribute('aria-label',label);theme.setAttribute('aria-pressed',String(this.theme==='dark'));if(theme.dataset.drawnTheme!==this.theme){theme.innerHTML=UX.icon(this.theme==='light'?'moon':'sun');theme.dataset.drawnTheme=this.theme;}theme.onclick=()=>this.setTheme();}},\r
 };\r
-`, "/app/src/client/redesign-ui.js": `/* Presentation only: no API calls, business calculations, database writes or route replacements. */
-const UX={
- tables:new Map(),seq:0,modalOpener:null,modalOpen:false,
- paths:{moon:'M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10',sun:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M5 19l1-1M18 6l1-1',bell:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',people:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',book:'M4 3h6a3 3 0 0 1 3 3v15a4 4 0 0 0-4-2H3V3zM13 6a3 3 0 0 1 3-3h5v16h-4a4 4 0 0 0-4 2',calendar:'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2',wallet:'M20 8V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h16v12H5a3 3 0 0 1-3-3V6M21 13h-5v4h5',chart:'M3 3v18h18M7 16v-4M12 16V8M17 16V5',check:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',folder:'M3 7V4h6l2 3h10v13H3z',clock:'M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',settings:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',search:'M21 21l-6-6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',menu:'M4 5h16M4 12h16M4 19h16',arrow:'M12 5l7 7-7 7M5 12h14',play:'M8 4l12 8-12 8z',note:'M4 3h16v18H4zM8 8h8M8 12h8M8 16h5'},
- icons:{Dashboard:'grid',Timetable:'calendar',Teachers:'people',Students:'people',Subjects:'book',Lessons:'play',Projects:'folder','Recorded Courses':'book',Payments:'wallet',Reports:'chart','Cash Flow':'chart',Settings:'settings','Daily Desk':'grid',Registrations:'note','Attendance & Notes':'check','Follow-up Tasks':'check',Scheduling:'clock',Billing:'wallet',Delivery:'folder',Team:'people','Teacher Preview':'people',Treasury:'wallet','Batch Payments':'wallet','Financial Summary':'chart','My Schedule':'calendar','My Subjects':'book','My Projects':'folder'},
- descriptions:{Dashboard:'Your academy at a glance. People, teaching and finances in one place.',Teachers:'Manage your teaching team, assigned work and financial accounts.',Students:'Keep student records, learning activity and balances organized.',Subjects:'Live lessons, recorded learning and project services.',Lessons:'Review delivered sessions, rates and recorded lesson activity.',Projects:'Manage project work, delivery and its recorded finances.','Recorded Courses':'Courses, enrolments and recorded learning in one workspace.',Payments:'Recorded receipts and payouts, with original currencies preserved.',Timetable:'Plan your week and manage each scheduled session.',Reports:'Explore financial performance with clear currency and period controls.','Cash Flow':'Follow dated receipts and payments, separated by currency.',Settings:'Manage academy preferences, exchange rates and verified backups.','Teacher Preview':'Preview the workspace each teacher sees, with their own records only.',Treasury:'Accounts, operating expenses and statement reconciliation.','Batch Payments':'Review eligible hours and record one consolidated teacher payment.'},
- icon(k){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(this.paths[k]||this.paths.grid)+'"/></svg>'},
- go(name,id){if(!TEAM_UI.allowed(name))return;V.nav=name;V.tid=V.sid=V.prid=V.rcid=null;if(id){if(name==='Teachers')V.tid=id;if(name==='Students')V.sid=id;}document.body.classList.remove('ui-drawer-open');close();render();window.scrollTo({top:0,behavior:'instant'});$('#v').focus({preventScroll:true})},
- syncNav(){const mobile=matchMedia('(max-width:760px)').matches,open=document.body.classList.contains('ui-drawer-open');$('#nv').inert=mobile&&!open;$('#nv').setAttribute('aria-hidden',String(mobile&&!open));$('#ui_nav_toggle')?.setAttribute('aria-expanded',String(mobile?open:!document.body.classList.contains('ui-collapsed')))},
- toggle(){if(matchMedia('(max-width:760px)').matches)document.body.classList.toggle('ui-drawer-open');else document.body.classList.toggle('ui-collapsed');this.syncNav();const b=$('#ui_nav_toggle');if(b)b.setAttribute('aria-expanded',String(matchMedia('(max-width:760px)').matches?document.body.classList.contains('ui-drawer-open'):!document.body.classList.contains('ui-collapsed')))},
- enhance(){
-  this.sizeObserver?.disconnect();const view=$('#v');this.nav();this.header();view.dataset.page=V.nav;
-  if(V.nav==='Dashboard')this.dashboard(view);
-  else{const title=view.querySelector('h2');if(title&&this.descriptions[V.nav]&&!V.tid&&!V.sid&&!V.prid&&!V.rcid){const p=document.createElement('p');p.className='ui-page-intro';p.textContent=this.descriptions[V.nav];title.after(p);}}
-  if(V.tid||V.sid||V.prid||V.rcid)this.detailIndex(view);
-  if(V.nav==='Timetable'){const grid=view.querySelector('.tg7');if(grid){const wrap=document.createElement('div');wrap.className='ui-calendar';grid.before(wrap);wrap.append(grid);}const bar=view.querySelector('.bar');if(bar){const legend=document.createElement('p');legend.className='ui-calendar-legend';legend.innerHTML='<span><i></i>Scheduled session — open for details</span><span><i></i>Completed / closed — status kept in history</span>';bar.after(legend);}}
-  view.querySelectorAll('.cards>.cd').forEach(c=>{if(!c.querySelector('.ui-kpi-icon')){const label=c.querySelector('span')?.textContent||'',i=document.createElement('div');i.className='ui-kpi-icon';i.innerHTML=this.icon(/student|teacher/i.test(label)?'people':/hour|lesson/i.test(label)?'clock':'chart');c.prepend(i);}});
-  view.querySelectorAll('.tw').forEach((tw,i)=>this.table(tw,i));
-  view.querySelectorAll('p.mut').forEach(p=>{if(/^(No |Nothing here|لا توجد|لم تُنشأ)/.test(p.textContent.trim())&&!p.closest('.cd'))p.classList.add('ui-empty')});
-  this.labelControls(view);view.querySelectorAll('a.lk:not([href])').forEach(a=>{a.href='#';a.addEventListener('click',e=>e.preventDefault())});
-  UI_PREFS.apply();if(document.body.classList.contains('ui-drawer-open'))$('#ui_nav_toggle')?.setAttribute('aria-expanded','true');
- },
- nav(){const nav=$('#nv'),links=[...nav.querySelectorAll('a')],map=new Map(links.map(a=>[a.textContent.trim(),a]));const name=nav.querySelector('h1')?.textContent||'A+ Hub Academy';this.identity=nav.querySelector('p');nav.replaceChildren();
-  const brand=document.createElement('div');brand.className='ui-brand';brand.innerHTML='<div class="ui-logo" aria-hidden="true">A+</div><div><h1>'+E(name)+'</h1><small>Academy workspace</small></div>';nav.append(brand);
-  const scroll=document.createElement('div');scroll.className='ui-nav-scroll';nav.append(scroll);
-  const groups=[['Workspace',['Dashboard','Daily Desk','Timetable','Scheduling','My Schedule']],['Academy',['Students','Teachers','Subjects','Lessons','Recorded Courses','Projects','My Subjects','My Projects']],['Finance',['Payments','Batch Payments','Treasury','Reports','Cash Flow','Billing','Financial Summary']],['Operations',['Registrations','Attendance & Notes','Follow-up Tasks','Delivery']],['Administration',['Teacher Preview','Team','Settings']]];
-  for(const [label,names]of groups){const visible=names.filter(n=>map.has(n));if(!visible.length)continue;const group=document.createElement('div');group.className='ui-nav-group';group.innerHTML='<div class="ui-nav-label">'+label+'</div>';for(const n of visible){const a=map.get(n);a.innerHTML=this.icon(this.icons[n])+'<span class="ui-nav-text">'+E(n)+'</span>';a.href='#';a.dataset.route=n;a.title=n;a.setAttribute('aria-label',n);if(a.classList.contains('on'))a.setAttribute('aria-current','page');a.addEventListener('click',e=>{e.preventDefault();document.body.classList.remove('ui-drawer-open');this.syncNav();window.scrollTo({top:0,behavior:'instant'})});group.append(a);map.delete(n);}scroll.append(group);}
-  // Any future registered destination remains reachable even before a group is assigned.
-  for(const [n,a]of map){a.href='#';a.title=n;a.addEventListener('click',e=>e.preventDefault());scroll.append(a);}
-  const foot=document.createElement('div');foot.className='ui-nav-foot';foot.innerHTML='<i></i><span>Development workspace<br>3005 · Independent review data</span>';nav.append(foot);
- },
- header(){const u=TEAM_UI.user,name=u.display_name||u.username||'Account',detail=V.tid?tn(V.tid):V.sid?sn(V.sid):V.prid?(g(db.pr,V.prid)?.name||''):V.rcid?(g(db.rc,V.rcid)?.name||''):'';
-  $('#topbar').innerHTML='<div class="ui-header-left"><button class="ui-icon-button" id="ui_nav_toggle" aria-label="Toggle navigation" aria-controls="nv" aria-expanded="'+(!document.body.classList.contains('ui-collapsed'))+'">'+this.icon('menu')+'</button><div class="ui-breadcrumb"><em style="font-style:normal">Workspace</em><span>/</span><strong>'+E(V.nav)+(detail?' / '+E(detail):'')+'</strong></div></div><div class="ui-header-right"><button class="ui-language-button" id="ui_language" type="button"></button><button class="ui-icon-button" id="ui_theme" type="button"></button><button class="ui-search-trigger" id="ui_search" aria-label="Search pages and people">'+this.icon('search')+'<span>Search workspace</span><kbd>Ctrl K</kbd></button>'+(TEAM_UI.allowed('Dashboard')?'<button class="ui-icon-button" id="ui_reminders" aria-label="Open dashboard reminders">'+this.icon('bell')+'</button>':'')+'<span class="ui-review">REVIEW · 3005</span><details class="ui-user"><summary aria-label="Account menu"><span class="ui-avatar">'+E(name.split(/\\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())+'</span><span class="ui-user-name">'+E(name)+'<small>'+E(u.role)+'</small></span></summary><div class="ui-user-panel"></div></details></div>';
-  if(this.identity)$('#topbar .ui-user-panel').append(this.identity);$('#ui_nav_toggle').onclick=()=>this.toggle();$('#ui_search').onclick=()=>this.search();if($('#ui_reminders'))$('#ui_reminders').onclick=()=>{this.go('Dashboard');[...$('#v').querySelectorAll('h3')].find(h=>h.textContent.includes('Upcoming recorded-course reminders'))?.scrollIntoView({block:'start'})};this.syncNav();
- },
- dashboard(view){
-  const title=view.querySelector('h2');if(!title)return;const heading=document.createElement('div');heading.className='ui-page-heading';heading.innerHTML='<div><span class="ui-eyebrow">Academy overview</span><h2>Dashboard</h2><p class="ui-page-intro" style="margin-bottom:0">'+this.descriptions.Dashboard+'</p></div><span class="ui-date">'+E(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Cairo',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date()))+'</span>';title.replaceWith(heading);view.prepend(heading);
-  const allCards=[...view.querySelectorAll(':scope>.cards')];const primary=document.createElement('div');primary.className='cards ui-overview';const labels=['Total Students','Total Teachers','Total Lessons','Total Revenue','Total Costs','Total A+ Profit'];
-  for(const label of labels){const c=allCards.flatMap(x=>[...x.children]).find(c=>c.querySelector('span')?.textContent.trim()===label);if(c)primary.append(c);}
-  if(primary.children.length){heading.after(primary);const note=document.createElement('p');note.className='mut';note.textContent='Revenue, costs and service profit use the existing saved-rate converted figures. Service profit is before operating expenses. Existing page filters still apply; people counts cover the academy.';primary.after(note);}
-  const more=document.createElement('details');more.className='ui-dashboard-details';more.innerHTML='<summary>Additional financial & teaching metrics</summary>';for(const c of allCards)more.append(c);view.append(more);
-  const charts=view.querySelector(':scope>.g');if(charts){const d=document.createElement('details');d.className='ui-dashboard-details';d.innerHTML='<summary>Analytics · revenue, costs & teaching activity</summary>';charts.before(d);d.append(charts);d.addEventListener('toggle',()=>{if(d.open)CH.forEach(c=>c.resize())});}
-  const financial=[...view.querySelectorAll(':scope>.cd')];financial.forEach(c=>c.classList.add('ui-dashboard-financial'));
-  const upcoming=[...view.querySelectorAll(':scope>h3')].find(h=>h.textContent==='Upcoming timetable');if(upcoming){const section=document.createElement('section');section.className='ui-section';const nodes=[];for(let el=upcoming;el;el=el.nextElementSibling){if(el!==upcoming&&/^H[23]$/.test(el.tagName))break;nodes.push(el);}for(const el of nodes)section.append(el);const lead=primary.nextElementSibling;lead.after(section);}
-  const payments=[...db.sp.map(p=>({...p,person:sn(p.p),direction:'Received',source:'Student payment'})),...db.tp.map(p=>({...p,person:tn(p.p),direction:'Paid out',source:p.src||'Unassigned'}))].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).slice(0,6);const recent=document.createElement('section');recent.className='ui-section';recent.innerHTML='<h3>Recent student & teacher payments</h3><p class="mut">All dates · latest six recorded student and teacher payments, independent of dashboard filters. Original amounts and currencies. Other service payments remain in their existing accounts.</p>'+T(['Date','Person','Direction','Amount · original','Source'],payments.map(p=>[E(p.date),E(p.person),E(p.direction),fm(p.amt,p.cur),E(p.source)]),'No recorded student or teacher payments yet.');view.append(recent);
-  // Bring the original filters forward; existing controls and handlers are moved intact.
-  const filters=view.querySelector(':scope>.bar');if(filters)heading.after(filters);
- },
- detailIndex(view){const headings=[...view.querySelectorAll('h3')];if(headings.length<3)return;const bar=document.createElement('nav');bar.className='ui-section-jumps';bar.setAttribute('aria-label','Account sections');headings.forEach((h,i)=>{h.id='ui_section_'+i;const a=document.createElement('a');a.href='#'+h.id;a.textContent=h.textContent;bar.append(a)});const first=view.querySelector('h2');if(first)first.after(bar);},
- table(tw,index){const table=tw.querySelector('table');if(!table||!table.tHead||!table.tBodies.length)return;tw.tabIndex=0;const headers=[...table.tHead.rows[0].cells],rows=[...table.tBodies[0].rows];let previous=tw.previousElementSibling;while(previous&&!/^H[23]$/.test(previous.tagName))previous=previous.previousElementSibling;const title=previous?.textContent||V.nav;table.setAttribute('aria-label',title);tw.setAttribute('aria-label',title+' table. Scroll horizontally for all columns.');
-  headers.forEach((th,col)=>{th.scope='col';if(/^(Day|Level|Type|Method|Source|Direction|Status)$/.test(th.textContent.trim()))rows.forEach(r=>{if(r.cells[col])r.cells[col].dataset.uiEnum='1'});const numeric=rows.length&&rows.every(r=>{const t=r.cells[col]?.textContent.trim()||'';return !t||t==='—'||/^[≈−\\-+]?\\s*[\\d,.]+(?:\\s+(?:[A-Z]{3}|ج\\.م|%))?$/.test(t)});if(numeric&&th.textContent.trim()){th.classList.add('ui-num');rows.forEach(r=>r.cells[col]?.classList.add('ui-num'));}rows.forEach(r=>{const cell=r.cells[col];if(cell&&/^\\d{2}:\\d{2}[–—-]\\d{2}:\\d{2}$/.test(cell.textContent.trim()))cell.classList.add('ui-time')});});
-  const statusCol=headers.findIndex(h=>/^(Status|الحالة)$/i.test(h.textContent.trim()));if(statusCol>=0)for(const r of rows){const cell=r.cells[statusCol];if(!cell)continue;const text=cell.textContent.trim();if(!text||cell.querySelector('button,input,a'))continue;const span=document.createElement('span');span.className='ui-status';span.textContent=text;cell.dataset.uiStatus=text;span.dataset.status=/^(Active|Completed|Approved|Paid|Sent|Confirmed|Done|نشط)$/i.test(text)?'good':/^(Cancelled|No Show|Inactive|Disabled|موقوف)$/i.test(text)?'danger':/^(Pending|In Progress|Review|Partially Paid|Outstanding|Overdue)$/i.test(text)?'warning':'info';cell.replaceChildren(span);}
-  for(const r of rows){const cell=r.cells[r.cells.length-1];if(!cell||cell.querySelector('input,select'))continue;const buttons=[...cell.children].filter(c=>c.tagName==='BUTTON');if(buttons.length<2||buttons.length!==cell.children.length)continue;const details=document.createElement('details');details.className='ui-row-actions';const summary=document.createElement('summary');summary.textContent='Actions';summary.setAttribute('aria-label','Actions for '+r.cells[0].textContent.trim());const menu=document.createElement('div');menu.className='ui-row-menu';menu.append(...buttons);details.append(summary,menu);cell.replaceChildren(details);details.addEventListener('toggle',()=>{if(!details.open)return;document.querySelectorAll('.ui-row-actions[open]').forEach(d=>{if(d!==details)d.open=false});this.placeMenu(details);});}
-  const directory=(V.nav==='Teachers'&&!V.tid)||(V.nav==='Students'&&!V.sid);if((rows.length<9&&!directory)||table.classList.contains('wg')||tw.classList.contains('wg')||table.querySelector('input,select')||V.nav==='Timetable')return;
-  const key=[V.nav,V.tid||V.sid||V.prid||V.rcid||'',index,headers.map(h=>h.textContent).join('|')].join('::'),saved=this.tables.get(key)||{q:'',status:'',page:0,sort:-1,dir:1};this.tables.set(key,saved);const pageSize=V.nav==='Dashboard'?5:25;const id='ui_table_'+(++this.seq),tools=document.createElement('div');tools.className='ui-table-tools';const left=document.createElement('div'),q=document.createElement('input');q.type='search';q.id=id+'_search';q.placeholder='Search this table…';q.setAttribute('aria-label','Search '+title+' table');q.value=saved.q;left.append(q);if(directory){const existing=$('#'+(V.nav==='Teachers'?'tq':'sq'));if(existing)left.replaceChildren(existing);}let status;
-  if(statusCol>=0){status=document.createElement('select');status.setAttribute('aria-label','Filter '+title+' by status');status.add(new Option('All statuses',''));[...new Set(rows.map(r=>(r.cells[statusCol].dataset.uiStatus||r.cells[statusCol].textContent.trim())))].sort().forEach(v=>status.add(new Option(v,v)));status.value=saved.status;left.append(status);}const count=document.createElement('span');count.className='ui-table-count';count.setAttribute('aria-live','polite');tools.append(left,count);tw.prepend(tools);tw.classList.add('ui-table-scroll');this.sizeObserver?.observe(tools);
-  const paging=document.createElement('div');paging.className='ui-pagination';const label=document.createElement('span'),actions=document.createElement('div'),prev=document.createElement('button'),next=document.createElement('button');for(const b of [prev,next])b.className='b2';prev.textContent='Previous';next.textContent='Next';prev.setAttribute('aria-label','Previous page in '+title);next.setAttribute('aria-label','Next page in '+title);actions.append(prev,next);paging.append(label,actions);tw.append(paging);
-  const empty=document.createElement('tr');empty.className='ui-no-rows';empty.innerHTML='<td colspan="'+headers.length+'">No rows match these table filters. Clear the search to see all records.</td>';empty.hidden=true;table.tBodies[0].append(empty);
-  const apply=()=>{const sorted=rows.slice();if(saved.sort>=0)sorted.sort((a,b)=>new Intl.Collator('en',{numeric:true,sensitivity:'base'}).compare(a.cells[saved.sort]?.textContent||'',b.cells[saved.sort]?.textContent||'')*saved.dir);const filtered=sorted.filter(r=>(!saved.q||r.textContent.toLocaleLowerCase().includes(saved.q.toLocaleLowerCase()))&&(!saved.status||(r.cells[statusCol]?.dataset.uiStatus||r.cells[statusCol]?.textContent.trim())===saved.status)),pages=Math.max(1,Math.ceil(filtered.length/pageSize));saved.page=Math.min(Math.max(0,saved.page),pages-1);const visible=new Set(filtered.slice(saved.page*pageSize,(saved.page+1)*pageSize));for(const r of sorted){r.hidden=!visible.has(r);table.tBodies[0].insertBefore(r,empty);}empty.hidden=!!filtered.length;count.textContent=filtered.length+' of '+rows.length+' rows';label.textContent='Page '+(saved.page+1)+' of '+pages+' · '+pageSize+' rows per page';prev.disabled=saved.page===0;next.disabled=saved.page>=pages-1;headers.forEach((h,i)=>{h.setAttribute('aria-sort',saved.sort===i?(saved.dir===1?'ascending':'descending'):'none');h.querySelector('.ui-sort')?.setAttribute('aria-pressed',String(saved.sort===i));});};
-  q.oninput=()=>{saved.q=q.value;saved.page=0;apply()};if(status)status.onchange=()=>{saved.status=status.value;saved.page=0;apply()};prev.onclick=()=>{saved.page--;apply()};next.onclick=()=>{saved.page++;apply()};headers.forEach((h,i)=>{if(!h.textContent.trim()||/^(Actions|Action)$/i.test(h.textContent.trim())||h.querySelector('input,button'))return;const b=document.createElement('button');b.className='ui-sort';b.textContent=h.textContent;b.setAttribute('aria-label','Sort by '+h.textContent);b.onclick=()=>{saved.dir=saved.sort===i?-saved.dir:1;saved.sort=i;apply()};h.replaceChildren(b);});apply();
-  const note=document.createElement('p');note.className='ui-table-note';note.textContent='Table search and pagination affect displayed rows only. Financial totals and exports keep their existing page filters.';tw.append(note);
- },
- placeMenu(d){const r=d.querySelector('summary').getBoundingClientRect(),menu=d.querySelector('.ui-row-menu');menu.style.left=Math.max(8,Math.min(innerWidth-170,r.right-155))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-10,r.bottom+5))+'px'},
- labelControls(root){root.querySelectorAll('input,select,textarea').forEach(el=>{if(el.closest('label')||el.hasAttribute('aria-label')||el.hasAttribute('aria-labelledby')||el.type==='hidden')return;let label=el.getAttribute('placeholder')||el.getAttribute('title');if(!label&&el.tagName==='SELECT')label=el.options[0]?.textContent;if(!label)label=el.id?.replace(/[_-]/g,' ')||el.type+' field';el.setAttribute('aria-label',label)});},
- search(){const items=NAV.filter(n=>TEAM_UI.allowed(n)).map(name=>({name,type:'Page',route:name}));if(TEAM_UI.allowed('Teachers'))db.t.forEach(t=>items.push({name:t.name,type:'Teacher',route:'Teachers',id:t.id}));if(TEAM_UI.allowed('Students'))db.s.forEach(s=>items.push({name:s.name,type:'Student',route:'Students',id:s.id}));modal('<h3 id="ui_command_title">Search workspace</h3><input class="ui-command-input" id="ui_command_q" type="search" aria-label="Search pages and people" placeholder="Search a page, teacher or student…"><div class="ui-command-results" id="ui_command_results"></div><div class="r"><button class="b2" onclick="MUI.cancel()">Close</button></div>');const show=()=>{const list=items.filter(x=>(x.name+' '+(UI_PREFS.maps.ar.get(x.name)||'')).toLowerCase().includes($('#ui_command_q').value.toLowerCase())).slice(0,30),result=$('#ui_command_results');result.replaceChildren();for(const item of list){const b=document.createElement('button');b.innerHTML=this.icon(item.type==='Page'?this.icons[item.route]:'people')+E(item.name)+'<small>'+item.type+'</small>';if(item.type==='Page')b.dataset.uiPage=item.route;b.onclick=()=>this.go(item.route,item.id);result.append(b);}if(!list.length)result.textContent='No matching pages or people.';};$('#ui_command_q').oninput=show;show();$('#ui_command_q').focus();},
- decorateModal(){const md=$('#md');if(!md){if(this.modalOpen){this.modalOpen=false;$('#app').inert=false;const opener=this.modalOpener;this.modalOpener=null;if(opener?.isConnected)opener.focus({preventScroll:true});}return;}if(!md.dataset.uiReady){md.dataset.uiReady='1';this.modalOpen=true;$('#app').inert=true;this.modalOpener=document.activeElement;md.setAttribute('role','dialog');md.setAttribute('aria-modal','true');const heading=md.querySelector('h3,h2');if(heading){heading.id=heading.id||'ui_dialog_title';md.setAttribute('aria-labelledby',heading.id)}else md.setAttribute('aria-label','Academy notification');const kicker=document.createElement('div');kicker.className='ui-dialog-kicker';kicker.textContent=V.nav+' / '+(heading?'Record details':'Notice');md.prepend(kicker);md.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const controls=[...md.querySelectorAll('input:not([type=hidden]),select,textarea,button,a[href],[tabindex="0"]')].filter(x=>!x.disabled&&x.getClientRects().length);if(!controls.length)return;const first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}});if(!md.contains(document.activeElement)){const focus=md.querySelector('input:not(.qs),select,textarea,button');focus?.focus({preventScroll:true})}}
-  this.labelControls(md);md.querySelectorAll('.fg').forEach(grid=>{if(grid.dataset.uiGrouped)return;grid.dataset.uiGrouped='1';const labels=[...grid.children].filter(e=>e.tagName==='LABEL');if(labels.length<10)return;const used=new Set();labels.forEach((label,index)=>{if(label.hasAttribute('data-v'))return;const id=label.querySelector('input:not(.qs),select,textarea')?.id||'';let title=index===0?'General details':index>2&&/^f_(date|sched|start)$/.test(id)?'Schedule & timing':index>2&&/^f_(tc|cur|rev|price|amount|tr)$/.test(id)?'Rates & financial details':/^f_notes$/.test(id)?'Additional notes':'';if(title&&!used.has(title)){used.add(title);const h=document.createElement('h4');h.className='ui-form-section';h.textContent=title;label.before(h);}})});md.querySelectorAll('label[data-required=true] input,label[data-required=true] select').forEach(el=>el.setAttribute('aria-required','true'));const er=md.querySelector('#er');if(er){er.setAttribute('role','alert');er.setAttribute('aria-live','polite');er.tabIndex=-1;md.querySelectorAll('label[data-required=true] input,label[data-required=true] select').forEach(el=>el.setAttribute('aria-invalid',String(!!er.textContent&&er.textContent.startsWith(el.closest('label').childNodes[0]?.textContent.trim()||'__'))));}
- },
- install(){UI_PREFS.init();this.sizeObserver=new ResizeObserver(entries=>{for(const e of entries)e.target.parentElement?.style.setProperty('--ui-tools-height',e.target.getBoundingClientRect().height+'px')});const backdrop=document.createElement('button');backdrop.className='ui-drawer-backdrop';backdrop.setAttribute('aria-label','Close navigation');backdrop.onclick=()=>{document.body.classList.remove('ui-drawer-open');this.syncNav();$('#ui_nav_toggle')?.focus()};document.body.append(backdrop);new MutationObserver(()=>this.decorateModal()).observe($('#m'),{childList:true,subtree:true});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();if(!$('#md'))this.search()}if(e.key==='Escape'){if(document.body.classList.contains('ui-drawer-open')){document.body.classList.remove('ui-drawer-open');this.syncNav();$('#ui_nav_toggle')?.focus();}document.querySelectorAll('.ui-user[open],.ui-row-actions[open]').forEach(d=>d.open=false);}});document.addEventListener('click',e=>{document.querySelectorAll('.ui-user[open],.ui-row-actions[open]').forEach(d=>{if(!d.contains(e.target))d.open=false})});window.addEventListener('resize',()=>{this.syncNav();document.querySelectorAll('.ui-row-actions[open]').forEach(d=>this.placeMenu(d))});document.addEventListener('scroll',()=>document.querySelectorAll('.ui-row-actions[open]').forEach(d=>d.open=false),true);}
-};
+`, "/app/src/client/redesign-ui.js": `/* Presentation only: no API calls, business calculations, database writes or route replacements. */\r
+const UX={\r
+ tables:new Map(),seq:0,modalOpener:null,modalOpen:false,\r
+ paths:{moon:'M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10',sun:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M5 19l1-1M18 6l1-1',bell:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',people:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',book:'M4 3h6a3 3 0 0 1 3 3v15a4 4 0 0 0-4-2H3V3zM13 6a3 3 0 0 1 3-3h5v16h-4a4 4 0 0 0-4 2',calendar:'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h2M14 14h2M8 18h2',wallet:'M20 8V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h16v12H5a3 3 0 0 1-3-3V6M21 13h-5v4h5',chart:'M3 3v18h18M7 16v-4M12 16V8M17 16V5',check:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',folder:'M3 7V4h6l2 3h10v13H3z',clock:'M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',settings:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',search:'M21 21l-6-6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',menu:'M4 5h16M4 12h16M4 19h16',arrow:'M12 5l7 7-7 7M5 12h14',play:'M8 4l12 8-12 8z',note:'M4 3h16v18H4zM8 8h8M8 12h8M8 16h5'},\r
+ icons:{Dashboard:'grid',Timetable:'calendar',Teachers:'people',Students:'people',Subjects:'book',Lessons:'play',Projects:'folder','Recorded Courses':'book',Payments:'wallet',Reports:'chart','Cash Flow':'chart',Settings:'settings','Daily Desk':'grid',Registrations:'note','Attendance & Notes':'check','Follow-up Tasks':'check',Scheduling:'clock',Billing:'wallet',Delivery:'folder',Team:'people','Teacher Preview':'people',Treasury:'wallet','Batch Payments':'wallet','Financial Summary':'chart','My Schedule':'calendar','My Subjects':'book','My Projects':'folder'},\r
+ descriptions:{Dashboard:'Your academy at a glance. People, teaching and finances in one place.',Teachers:'Manage your teaching team, assigned work and financial accounts.',Students:'Keep student records, learning activity and balances organized.',Subjects:'Live lessons, recorded learning and project services.',Lessons:'Review delivered sessions, rates and recorded lesson activity.',Projects:'Manage project work, delivery and its recorded finances.','Recorded Courses':'Courses, enrolments and recorded learning in one workspace.',Payments:'Recorded receipts and payouts, with original currencies preserved.',Timetable:'Plan your week and manage each scheduled session.',Reports:'Explore financial performance with clear currency and period controls.','Cash Flow':'Follow dated receipts and payments, separated by currency.',Settings:'Manage academy preferences, exchange rates and verified backups.','Teacher Preview':'Preview the workspace each teacher sees, with their own records only.',Treasury:'Accounts, operating expenses and statement reconciliation.','Batch Payments':'Review eligible hours and record one consolidated teacher payment.'},\r
+ icon(k){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(this.paths[k]||this.paths.grid)+'"/></svg>'},\r
+ go(name,id){if(!TEAM_UI.allowed(name))return;V.nav=name;V.tid=V.sid=V.prid=V.rcid=null;if(id){if(name==='Teachers')V.tid=id;if(name==='Students')V.sid=id;}document.body.classList.remove('ui-drawer-open');close();render();window.scrollTo({top:0,behavior:'instant'});$('#v').focus({preventScroll:true})},\r
+ syncNav(){const mobile=matchMedia('(max-width:760px)').matches,open=document.body.classList.contains('ui-drawer-open');$('#nv').inert=mobile&&!open;$('#nv').setAttribute('aria-hidden',String(mobile&&!open));$('#ui_nav_toggle')?.setAttribute('aria-expanded',String(mobile?open:!document.body.classList.contains('ui-collapsed')))},\r
+ toggle(){if(matchMedia('(max-width:760px)').matches)document.body.classList.toggle('ui-drawer-open');else document.body.classList.toggle('ui-collapsed');this.syncNav();const b=$('#ui_nav_toggle');if(b)b.setAttribute('aria-expanded',String(matchMedia('(max-width:760px)').matches?document.body.classList.contains('ui-drawer-open'):!document.body.classList.contains('ui-collapsed')))},\r
+ enhance(){\r
+  this.sizeObserver?.disconnect();const view=$('#v');this.nav();this.header();view.dataset.page=V.nav;\r
+  if(V.nav==='Dashboard')this.dashboard(view);\r
+  else{const title=view.querySelector('h2');if(title&&this.descriptions[V.nav]&&!V.tid&&!V.sid&&!V.prid&&!V.rcid){const p=document.createElement('p');p.className='ui-page-intro';p.textContent=this.descriptions[V.nav];title.after(p);}}\r
+  if(V.tid||V.sid||V.prid||V.rcid)this.detailIndex(view);\r
+  if(V.nav==='Timetable'){const grid=view.querySelector('.tg7');if(grid){const wrap=document.createElement('div');wrap.className='ui-calendar';grid.before(wrap);wrap.append(grid);}const bar=view.querySelector('.bar');if(bar){const legend=document.createElement('p');legend.className='ui-calendar-legend';legend.innerHTML='<span><i></i>Scheduled session — open for details</span><span><i></i>Completed / closed — status kept in history</span>';bar.after(legend);}}\r
+  view.querySelectorAll('.cards>.cd').forEach(c=>{if(!c.querySelector('.ui-kpi-icon')){const label=c.querySelector('span')?.textContent||'',i=document.createElement('div');i.className='ui-kpi-icon';i.innerHTML=this.icon(/student|teacher/i.test(label)?'people':/hour|lesson/i.test(label)?'clock':'chart');c.prepend(i);}});\r
+  view.querySelectorAll('.tw').forEach((tw,i)=>this.table(tw,i));\r
+  view.querySelectorAll('p.mut').forEach(p=>{if(/^(No |Nothing here|لا توجد|لم تُنشأ)/.test(p.textContent.trim())&&!p.closest('.cd'))p.classList.add('ui-empty')});\r
+  this.labelControls(view);view.querySelectorAll('a.lk:not([href])').forEach(a=>{a.href='#';a.addEventListener('click',e=>e.preventDefault())});\r
+  UI_PREFS.apply();if(document.body.classList.contains('ui-drawer-open'))$('#ui_nav_toggle')?.setAttribute('aria-expanded','true');\r
+ },\r
+ nav(){const nav=$('#nv'),links=[...nav.querySelectorAll('a')],map=new Map(links.map(a=>[a.textContent.trim(),a]));const name=nav.querySelector('h1')?.textContent||'A+ Hub Academy';this.identity=nav.querySelector('p');nav.replaceChildren();\r
+  const brand=document.createElement('div');brand.className='ui-brand';brand.innerHTML='<div class="ui-logo" aria-hidden="true">A+</div><div><h1>'+E(name)+'</h1><small>Academy workspace</small></div>';nav.append(brand);\r
+  const scroll=document.createElement('div');scroll.className='ui-nav-scroll';nav.append(scroll);\r
+  const groups=[['Workspace',['Dashboard','Daily Desk','Timetable','Scheduling','My Schedule']],['Academy',['Students','Teachers','Subjects','Lessons','Recorded Courses','Projects','My Subjects','My Projects']],['Finance',['Payments','Batch Payments','Treasury','Reports','Cash Flow','Billing','Financial Summary']],['Operations',['Registrations','Attendance & Notes','Follow-up Tasks','Delivery']],['Administration',['Teacher Preview','Team','Settings']]];\r
+  for(const [label,names]of groups){const visible=names.filter(n=>map.has(n));if(!visible.length)continue;const group=document.createElement('div');group.className='ui-nav-group';group.innerHTML='<div class="ui-nav-label">'+label+'</div>';for(const n of visible){const a=map.get(n);a.innerHTML=this.icon(this.icons[n])+'<span class="ui-nav-text">'+E(n)+'</span>';a.href='#';a.dataset.route=n;a.title=n;a.setAttribute('aria-label',n);if(a.classList.contains('on'))a.setAttribute('aria-current','page');a.addEventListener('click',e=>{e.preventDefault();document.body.classList.remove('ui-drawer-open');this.syncNav();window.scrollTo({top:0,behavior:'instant'})});group.append(a);map.delete(n);}scroll.append(group);}\r
+  // Any future registered destination remains reachable even before a group is assigned.\r
+  for(const [n,a]of map){a.href='#';a.title=n;a.addEventListener('click',e=>e.preventDefault());scroll.append(a);}\r
+  const foot=document.createElement('div');foot.className='ui-nav-foot';foot.innerHTML='<i></i><span>Development workspace<br>3005 · Independent review data</span>';nav.append(foot);\r
+ },\r
+ header(){const u=TEAM_UI.user,name=u.display_name||u.username||'Account',detail=V.tid?tn(V.tid):V.sid?sn(V.sid):V.prid?(g(db.pr,V.prid)?.name||''):V.rcid?(g(db.rc,V.rcid)?.name||''):'';\r
+  $('#topbar').innerHTML='<div class="ui-header-left"><button class="ui-icon-button" id="ui_nav_toggle" aria-label="Toggle navigation" aria-controls="nv" aria-expanded="'+(!document.body.classList.contains('ui-collapsed'))+'">'+this.icon('menu')+'</button><div class="ui-breadcrumb"><em style="font-style:normal">Workspace</em><span>/</span><strong>'+E(V.nav)+(detail?' / '+E(detail):'')+'</strong></div></div><div class="ui-header-right"><button class="ui-language-button" id="ui_language" type="button"></button><button class="ui-icon-button" id="ui_theme" type="button"></button><button class="ui-search-trigger" id="ui_search" aria-label="Search pages and people">'+this.icon('search')+'<span>Search workspace</span><kbd>Ctrl K</kbd></button>'+(TEAM_UI.allowed('Dashboard')?'<button class="ui-icon-button" id="ui_reminders" aria-label="Open dashboard reminders">'+this.icon('bell')+'</button>':'')+'<span class="ui-review">REVIEW · 3005</span><details class="ui-user"><summary aria-label="Account menu"><span class="ui-avatar">'+E(name.split(/\\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())+'</span><span class="ui-user-name">'+E(name)+'<small>'+E(u.role)+'</small></span></summary><div class="ui-user-panel"></div></details></div>';\r
+  if(this.identity)$('#topbar .ui-user-panel').append(this.identity);$('#ui_nav_toggle').onclick=()=>this.toggle();$('#ui_search').onclick=()=>this.search();if($('#ui_reminders'))$('#ui_reminders').onclick=()=>{this.go('Dashboard');[...$('#v').querySelectorAll('h3')].find(h=>h.textContent.includes('Upcoming recorded-course reminders'))?.scrollIntoView({block:'start'})};this.syncNav();\r
+ },\r
+ dashboard(view){\r
+  const title=view.querySelector('h2');if(!title)return;const heading=document.createElement('div');heading.className='ui-page-heading';heading.innerHTML='<div><span class="ui-eyebrow">Academy overview</span><h2>Dashboard</h2><p class="ui-page-intro" style="margin-bottom:0">'+this.descriptions.Dashboard+'</p></div><span class="ui-date">'+E(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Cairo',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date()))+'</span>';title.replaceWith(heading);view.prepend(heading);\r
+  const allCards=[...view.querySelectorAll(':scope>.cards')];const primary=document.createElement('div');primary.className='cards ui-overview';const labels=['Total Students','Total Teachers','Total Lessons','Total Revenue','Total Costs','Total A+ Profit'];\r
+  for(const label of labels){const c=allCards.flatMap(x=>[...x.children]).find(c=>c.querySelector('span')?.textContent.trim()===label);if(c)primary.append(c);}\r
+  if(primary.children.length){heading.after(primary);const note=document.createElement('p');note.className='mut';note.textContent='Revenue, costs and service profit use the existing saved-rate converted figures. Service profit is before operating expenses. Existing page filters still apply; people counts cover the academy.';primary.after(note);}\r
+  const more=document.createElement('details');more.className='ui-dashboard-details';more.innerHTML='<summary>Additional financial & teaching metrics</summary>';for(const c of allCards)more.append(c);view.append(more);\r
+  const charts=view.querySelector(':scope>.g');if(charts){const d=document.createElement('details');d.className='ui-dashboard-details';d.innerHTML='<summary>Analytics · revenue, costs & teaching activity</summary>';charts.before(d);d.append(charts);d.addEventListener('toggle',()=>{if(d.open)CH.forEach(c=>c.resize())});}\r
+  const financial=[...view.querySelectorAll(':scope>.cd')];financial.forEach(c=>c.classList.add('ui-dashboard-financial'));\r
+  const upcoming=[...view.querySelectorAll(':scope>h3')].find(h=>h.textContent==='Upcoming timetable');if(upcoming){const section=document.createElement('section');section.className='ui-section';const nodes=[];for(let el=upcoming;el;el=el.nextElementSibling){if(el!==upcoming&&/^H[23]$/.test(el.tagName))break;nodes.push(el);}for(const el of nodes)section.append(el);const lead=primary.nextElementSibling;lead.after(section);}\r
+  const payments=[...db.sp.map(p=>({...p,person:sn(p.p),direction:'Received',source:'Student payment'})),...db.tp.map(p=>({...p,person:tn(p.p),direction:'Paid out',source:p.src||'Unassigned'}))].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).slice(0,6);const recent=document.createElement('section');recent.className='ui-section';recent.innerHTML='<h3>Recent student & teacher payments</h3><p class="mut">All dates · latest six recorded student and teacher payments, independent of dashboard filters. Original amounts and currencies. Other service payments remain in their existing accounts.</p>'+T(['Date','Person','Direction','Amount · original','Source'],payments.map(p=>[E(p.date),E(p.person),E(p.direction),fm(p.amt,p.cur),E(p.source)]),'No recorded student or teacher payments yet.');view.append(recent);\r
+  // Bring the original filters forward; existing controls and handlers are moved intact.\r
+  const filters=view.querySelector(':scope>.bar');if(filters)heading.after(filters);\r
+ },\r
+ detailIndex(view){const headings=[...view.querySelectorAll('h3')];if(headings.length<3)return;const bar=document.createElement('nav');bar.className='ui-section-jumps';bar.setAttribute('aria-label','Account sections');headings.forEach((h,i)=>{h.id='ui_section_'+i;const a=document.createElement('a');a.href='#'+h.id;a.textContent=h.textContent;bar.append(a)});const first=view.querySelector('h2');if(first)first.after(bar);},\r
+ table(tw,index){const table=tw.querySelector('table');if(!table||!table.tHead||!table.tBodies.length)return;tw.tabIndex=0;const headers=[...table.tHead.rows[0].cells],rows=[...table.tBodies[0].rows];let previous=tw.previousElementSibling;while(previous&&!/^H[23]$/.test(previous.tagName))previous=previous.previousElementSibling;const title=previous?.textContent||V.nav;table.setAttribute('aria-label',title);tw.setAttribute('aria-label',title+' table. Scroll horizontally for all columns.');\r
+  headers.forEach((th,col)=>{th.scope='col';if(/^(Day|Level|Type|Method|Source|Direction|Status)$/.test(th.textContent.trim()))rows.forEach(r=>{if(r.cells[col])r.cells[col].dataset.uiEnum='1'});const numeric=rows.length&&rows.every(r=>{const t=r.cells[col]?.textContent.trim()||'';return !t||t==='—'||/^[≈−\\-+]?\\s*[\\d,.]+(?:\\s+(?:[A-Z]{3}|ج\\.م|%))?$/.test(t)});if(numeric&&th.textContent.trim()){th.classList.add('ui-num');rows.forEach(r=>r.cells[col]?.classList.add('ui-num'));}rows.forEach(r=>{const cell=r.cells[col];if(cell&&/^\\d{2}:\\d{2}[–—-]\\d{2}:\\d{2}$/.test(cell.textContent.trim()))cell.classList.add('ui-time')});});\r
+  const statusCol=headers.findIndex(h=>/^(Status|الحالة)$/i.test(h.textContent.trim()));if(statusCol>=0)for(const r of rows){const cell=r.cells[statusCol];if(!cell)continue;const text=cell.textContent.trim();if(!text||cell.querySelector('button,input,a'))continue;const span=document.createElement('span');span.className='ui-status';span.textContent=text;cell.dataset.uiStatus=text;span.dataset.status=/^(Active|Completed|Approved|Paid|Sent|Confirmed|Done|نشط)$/i.test(text)?'good':/^(Cancelled|No Show|Inactive|Disabled|موقوف)$/i.test(text)?'danger':/^(Pending|In Progress|Review|Partially Paid|Outstanding|Overdue)$/i.test(text)?'warning':'info';cell.replaceChildren(span);}\r
+  for(const r of rows){const cell=r.cells[r.cells.length-1];if(!cell||cell.querySelector('input,select'))continue;const buttons=[...cell.children].filter(c=>c.tagName==='BUTTON');if(buttons.length<2||buttons.length!==cell.children.length)continue;const details=document.createElement('details');details.className='ui-row-actions';const summary=document.createElement('summary');summary.textContent='Actions';summary.setAttribute('aria-label','Actions for '+r.cells[0].textContent.trim());const menu=document.createElement('div');menu.className='ui-row-menu';menu.append(...buttons);details.append(summary,menu);cell.replaceChildren(details);details.addEventListener('toggle',()=>{if(!details.open)return;document.querySelectorAll('.ui-row-actions[open]').forEach(d=>{if(d!==details)d.open=false});this.placeMenu(details);});}\r
+  const directory=(V.nav==='Teachers'&&!V.tid)||(V.nav==='Students'&&!V.sid);if((rows.length<9&&!directory)||table.classList.contains('wg')||tw.classList.contains('wg')||table.querySelector('input,select')||V.nav==='Timetable')return;\r
+  const key=[V.nav,V.tid||V.sid||V.prid||V.rcid||'',index,headers.map(h=>h.textContent).join('|')].join('::'),saved=this.tables.get(key)||{q:'',status:'',page:0,sort:-1,dir:1};this.tables.set(key,saved);const pageSize=V.nav==='Dashboard'?5:25;const id='ui_table_'+(++this.seq),tools=document.createElement('div');tools.className='ui-table-tools';const left=document.createElement('div'),q=document.createElement('input');q.type='search';q.id=id+'_search';q.placeholder='Search this table…';q.setAttribute('aria-label','Search '+title+' table');q.value=saved.q;left.append(q);if(directory){const existing=$('#'+(V.nav==='Teachers'?'tq':'sq'));if(existing)left.replaceChildren(existing);}let status;\r
+  if(statusCol>=0){status=document.createElement('select');status.setAttribute('aria-label','Filter '+title+' by status');status.add(new Option('All statuses',''));[...new Set(rows.map(r=>(r.cells[statusCol].dataset.uiStatus||r.cells[statusCol].textContent.trim())))].sort().forEach(v=>status.add(new Option(v,v)));status.value=saved.status;left.append(status);}const count=document.createElement('span');count.className='ui-table-count';count.setAttribute('aria-live','polite');tools.append(left,count);tw.prepend(tools);tw.classList.add('ui-table-scroll');this.sizeObserver?.observe(tools);\r
+  const paging=document.createElement('div');paging.className='ui-pagination';const label=document.createElement('span'),actions=document.createElement('div'),prev=document.createElement('button'),next=document.createElement('button');for(const b of [prev,next])b.className='b2';prev.textContent='Previous';next.textContent='Next';prev.setAttribute('aria-label','Previous page in '+title);next.setAttribute('aria-label','Next page in '+title);actions.append(prev,next);paging.append(label,actions);tw.append(paging);\r
+  const empty=document.createElement('tr');empty.className='ui-no-rows';empty.innerHTML='<td colspan="'+headers.length+'">No rows match these table filters. Clear the search to see all records.</td>';empty.hidden=true;table.tBodies[0].append(empty);\r
+  const apply=()=>{const sorted=rows.slice();if(saved.sort>=0)sorted.sort((a,b)=>new Intl.Collator('en',{numeric:true,sensitivity:'base'}).compare(a.cells[saved.sort]?.textContent||'',b.cells[saved.sort]?.textContent||'')*saved.dir);const filtered=sorted.filter(r=>(!saved.q||r.textContent.toLocaleLowerCase().includes(saved.q.toLocaleLowerCase()))&&(!saved.status||(r.cells[statusCol]?.dataset.uiStatus||r.cells[statusCol]?.textContent.trim())===saved.status)),pages=Math.max(1,Math.ceil(filtered.length/pageSize));saved.page=Math.min(Math.max(0,saved.page),pages-1);const visible=new Set(filtered.slice(saved.page*pageSize,(saved.page+1)*pageSize));for(const r of sorted){r.hidden=!visible.has(r);table.tBodies[0].insertBefore(r,empty);}empty.hidden=!!filtered.length;count.textContent=filtered.length+' of '+rows.length+' rows';label.textContent='Page '+(saved.page+1)+' of '+pages+' · '+pageSize+' rows per page';prev.disabled=saved.page===0;next.disabled=saved.page>=pages-1;headers.forEach((h,i)=>{h.setAttribute('aria-sort',saved.sort===i?(saved.dir===1?'ascending':'descending'):'none');h.querySelector('.ui-sort')?.setAttribute('aria-pressed',String(saved.sort===i));});};\r
+  q.oninput=()=>{saved.q=q.value;saved.page=0;apply()};if(status)status.onchange=()=>{saved.status=status.value;saved.page=0;apply()};prev.onclick=()=>{saved.page--;apply()};next.onclick=()=>{saved.page++;apply()};headers.forEach((h,i)=>{if(!h.textContent.trim()||/^(Actions|Action)$/i.test(h.textContent.trim())||h.querySelector('input,button'))return;const b=document.createElement('button');b.className='ui-sort';b.textContent=h.textContent;b.setAttribute('aria-label','Sort by '+h.textContent);b.onclick=()=>{saved.dir=saved.sort===i?-saved.dir:1;saved.sort=i;apply()};h.replaceChildren(b);});apply();\r
+  const note=document.createElement('p');note.className='ui-table-note';note.textContent='Table search and pagination affect displayed rows only. Financial totals and exports keep their existing page filters.';tw.append(note);\r
+ },\r
+ placeMenu(d){const r=d.querySelector('summary').getBoundingClientRect(),menu=d.querySelector('.ui-row-menu');menu.style.left=Math.max(8,Math.min(innerWidth-170,r.right-155))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-10,r.bottom+5))+'px'},\r
+ labelControls(root){root.querySelectorAll('input,select,textarea').forEach(el=>{if(el.closest('label')||el.hasAttribute('aria-label')||el.hasAttribute('aria-labelledby')||el.type==='hidden')return;let label=el.getAttribute('placeholder')||el.getAttribute('title');if(!label&&el.tagName==='SELECT')label=el.options[0]?.textContent;if(!label)label=el.id?.replace(/[_-]/g,' ')||el.type+' field';el.setAttribute('aria-label',label)});},\r
+ search(){const items=NAV.filter(n=>TEAM_UI.allowed(n)).map(name=>({name,type:'Page',route:name}));if(TEAM_UI.allowed('Teachers'))db.t.forEach(t=>items.push({name:t.name,type:'Teacher',route:'Teachers',id:t.id}));if(TEAM_UI.allowed('Students'))db.s.forEach(s=>items.push({name:s.name,type:'Student',route:'Students',id:s.id}));modal('<h3 id="ui_command_title">Search workspace</h3><input class="ui-command-input" id="ui_command_q" type="search" aria-label="Search pages and people" placeholder="Search a page, teacher or student…"><div class="ui-command-results" id="ui_command_results"></div><div class="r"><button class="b2" onclick="MUI.cancel()">Close</button></div>');const show=()=>{const list=items.filter(x=>(x.name+' '+(UI_PREFS.maps.ar.get(x.name)||'')).toLowerCase().includes($('#ui_command_q').value.toLowerCase())).slice(0,30),result=$('#ui_command_results');result.replaceChildren();for(const item of list){const b=document.createElement('button');b.innerHTML=this.icon(item.type==='Page'?this.icons[item.route]:'people')+E(item.name)+'<small>'+item.type+'</small>';if(item.type==='Page')b.dataset.uiPage=item.route;b.onclick=()=>this.go(item.route,item.id);result.append(b);}if(!list.length)result.textContent='No matching pages or people.';};$('#ui_command_q').oninput=show;show();$('#ui_command_q').focus();},\r
+ decorateModal(){const md=$('#md');if(!md){if(this.modalOpen){this.modalOpen=false;$('#app').inert=false;const opener=this.modalOpener;this.modalOpener=null;if(opener?.isConnected)opener.focus({preventScroll:true});}return;}if(!md.dataset.uiReady){md.dataset.uiReady='1';this.modalOpen=true;$('#app').inert=true;this.modalOpener=document.activeElement;md.setAttribute('role','dialog');md.setAttribute('aria-modal','true');const heading=md.querySelector('h3,h2');if(heading){heading.id=heading.id||'ui_dialog_title';md.setAttribute('aria-labelledby',heading.id)}else md.setAttribute('aria-label','Academy notification');const kicker=document.createElement('div');kicker.className='ui-dialog-kicker';kicker.textContent=V.nav+' / '+(heading?'Record details':'Notice');md.prepend(kicker);md.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const controls=[...md.querySelectorAll('input:not([type=hidden]),select,textarea,button,a[href],[tabindex="0"]')].filter(x=>!x.disabled&&x.getClientRects().length);if(!controls.length)return;const first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}});if(!md.contains(document.activeElement)){const focus=md.querySelector('input:not(.qs),select,textarea,button');focus?.focus({preventScroll:true})}}\r
+  this.labelControls(md);md.querySelectorAll('.fg').forEach(grid=>{if(grid.dataset.uiGrouped)return;grid.dataset.uiGrouped='1';const labels=[...grid.children].filter(e=>e.tagName==='LABEL');if(labels.length<10)return;const used=new Set();labels.forEach((label,index)=>{if(label.hasAttribute('data-v'))return;const id=label.querySelector('input:not(.qs),select,textarea')?.id||'';let title=index===0?'General details':index>2&&/^f_(date|sched|start)$/.test(id)?'Schedule & timing':index>2&&/^f_(tc|cur|rev|price|amount|tr)$/.test(id)?'Rates & financial details':/^f_notes$/.test(id)?'Additional notes':'';if(title&&!used.has(title)){used.add(title);const h=document.createElement('h4');h.className='ui-form-section';h.textContent=title;label.before(h);}})});md.querySelectorAll('label[data-required=true] input,label[data-required=true] select').forEach(el=>el.setAttribute('aria-required','true'));const er=md.querySelector('#er');if(er){er.setAttribute('role','alert');er.setAttribute('aria-live','polite');er.tabIndex=-1;md.querySelectorAll('label[data-required=true] input,label[data-required=true] select').forEach(el=>el.setAttribute('aria-invalid',String(!!er.textContent&&er.textContent.startsWith(el.closest('label').childNodes[0]?.textContent.trim()||'__'))));}\r
+ },\r
+ install(){UI_PREFS.init();this.sizeObserver=new ResizeObserver(entries=>{for(const e of entries)e.target.parentElement?.style.setProperty('--ui-tools-height',e.target.getBoundingClientRect().height+'px')});const backdrop=document.createElement('button');backdrop.className='ui-drawer-backdrop';backdrop.setAttribute('aria-label','Close navigation');backdrop.onclick=()=>{document.body.classList.remove('ui-drawer-open');this.syncNav();$('#ui_nav_toggle')?.focus()};document.body.append(backdrop);new MutationObserver(()=>this.decorateModal()).observe($('#m'),{childList:true,subtree:true});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();if(!$('#md'))this.search()}if(e.key==='Escape'){if(document.body.classList.contains('ui-drawer-open')){document.body.classList.remove('ui-drawer-open');this.syncNav();$('#ui_nav_toggle')?.focus();}document.querySelectorAll('.ui-user[open],.ui-row-actions[open]').forEach(d=>d.open=false);}});document.addEventListener('click',e=>{document.querySelectorAll('.ui-user[open],.ui-row-actions[open]').forEach(d=>{if(!d.contains(e.target))d.open=false})});window.addEventListener('resize',()=>{this.syncNav();document.querySelectorAll('.ui-row-actions[open]').forEach(d=>this.placeMenu(d))});document.addEventListener('scroll',()=>document.querySelectorAll('.ui-row-actions[open]').forEach(d=>d.open=false),true);}\r
+};\r
 `, "/app/src/client/redesign.css": `/* A+ Hub presentation tokens. Business values and their formatters are untouched. */\r
 :root:not([data-theme=light]),:root,:root[data-theme=dark],:root[data-theme=light]{color-scheme:light;--bg:#f6f8fc;--card:#fff;--ink:#18243c;--mut:#637189;--soft:#f1f5fc;--baby:#edf3ff;--acc:#2e5de5;--bd:#e4e9f2;--good:#14734c;--bad:#bb3445;--ui-nav:244px;--ui-radius:12px;--ui-space:24px;--ui-shadow:0 12px 40px #18243c12}\r
 html{scroll-padding-top:100px;scroll-behavior:smooth}html,body{font:14px/1.55 Inter,"Segoe UI",Tahoma,Arial,sans-serif;letter-spacing:-.012em}body{overflow-x:hidden}button,input,select,textarea{font:inherit}button,a,input,select,textarea,summary{touch-action:manipulation}button,a,summary{-webkit-tap-highlight-color:transparent}button:disabled{cursor:not-allowed;opacity:.5}button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid #5276d2;outline-offset:3px}button{transition:background .12s,border-color .12s}a{color:var(--acc)}\r
@@ -24338,3692 +24338,3692 @@ const TBUI={\r
  pay(){const d=this.data;TRUI.read();MUI.data={rev:d.rev};MUI.dialog('دفعة واحدة لساعات '+sn(+this.filters.student_id),[MUI.f('hours','الساعات المراد سدادها — توزع على الأقدم أولًا','number',d.totalHours),'<p id=tb_preview></p>',MUI.f('payment_date','تاريخ الدفع الفعلي','date',today()),MUI.f('rate','سعر الجنيه بعملة الحسابات — للتسجيل الداخلي فقط','number',B()==='EGP'?1:rfor('EGP')||''),MUI.s('method','طريقة الدفع','Cash',['Cash','Bank Transfer','KNET','Cheque','Other'].map(x=>[x,x])),MUI.s('account_id','خزينة الصرف بالجنيه — اختياري','',TRUI.ao('EGP'))],'batch:pay',{...this.filters,teacher_id:+this.filters.teacher_id,student_id:+this.filters.student_id},v=>({...v,hours:Number(v.hours),rate:Number(v.rate),account_id:v.account_id?+v.account_id:null}));const input=$('#op_hours');input.step='0.000001';const preview=()=>{let left=Math.round(Number(input.value)*1e6),amt=0;for(const r of d.rows){const h=Math.min(left,r.hoursMicros);if(h>0){amt+=h===r.hoursMicros?r.amount:Math.round(r.amount*h/r.hoursMicros);left-=h;}}$('#tb_preview').textContent=left>0?'الساعات تتجاوز المستحق':\`المبلغ المحسوب للدفعة الواحدة: \${n3(amt)} ج.م\`;};input.oninput=preview;preview()},\r
  allocate(id){const d=this.data,p=d.unallocatedPreviousPayments.find(p=>p.id===id);MUI.data={rev:d.rev};MUI.dialog('توزيع الدفعة #'+id+' — لا ينشئ دفعًا جديدًا',[MUI.f('amount','المبلغ من الدفعة القديمة المخصص لهذه الحصص — ج.م','number',Math.min(p.remaining,d.total)/1000),MUI.f('reason','سبب ربط الدفعة السابقة بهذا الطالب والفترة','textarea','')],'batch:allocate-existing',{...this.filters,teacher_id:+this.filters.teacher_id,student_id:+this.filters.student_id,payment_id:id},v=>({...v,amount:OPSUI.amount(v.amount)}))}\r
 };\r
-`, "/app/src/client/ui-translations.json": `[
-  [
-    "Workspace",
-    "مساحة العمل"
-  ],
-  [
-    "Academy workspace",
-    "إدارة الأكاديمية"
-  ],
-  [
-    "Academy overview",
-    "نظرة عامة على الأكاديمية"
-  ],
-  [
-    "Dashboard",
-    "لوحة التحكم"
-  ],
-  [
-    "Daily Desk",
-    "المتابعة اليومية"
-  ],
-  [
-    "Timetable",
-    "جدول المواعيد"
-  ],
-  [
-    "Scheduling",
-    "الجدولة"
-  ],
-  [
-    "Students",
-    "الطلاب"
-  ],
-  [
-    "Teachers",
-    "المدرسون"
-  ],
-  [
-    "Academy",
-    "الأكاديمية"
-  ],
-  [
-    "Finance",
-    "المالية"
-  ],
-  [
-    "Operations",
-    "التشغيل"
-  ],
-  [
-    "Administration",
-    "الإدارة"
-  ],
-  [
-    "Subjects",
-    "المواد والخدمات"
-  ],
-  [
-    "Lessons",
-    "الحصص المباشرة"
-  ],
-  [
-    "Lessons (Live)",
-    "الحصص المباشرة"
-  ],
-  [
-    "Recorded Courses",
-    "الكورسات المسجلة"
-  ],
-  [
-    "Projects",
-    "المشاريع"
-  ],
-  [
-    "Payments",
-    "المدفوعات"
-  ],
-  [
-    "Reports",
-    "التقارير المالية"
-  ],
-  [
-    "Cash Flow",
-    "التدفقات النقدية"
-  ],
-  [
-    "Settings",
-    "الإعدادات"
-  ],
-  [
-    "Registrations",
-    "التسجيلات"
-  ],
-  [
-    "Attendance & Notes",
-    "الحضور والملاحظات"
-  ],
-  [
-    "Follow-up Tasks",
-    "مهام المتابعة"
-  ],
-  [
-    "Billing",
-    "الباقات والتحصيل"
-  ],
-  [
-    "Delivery",
-    "التسليمات"
-  ],
-  [
-    "Team",
-    "فريق العمل"
-  ],
-  [
-    "Teacher Preview",
-    "معاينة حساب المدرس"
-  ],
-  [
-    "Treasury",
-    "الخزائن والمصروفات"
-  ],
-  [
-    "Batch Payments",
-    "الدفعات المجمعة"
-  ],
-  [
-    "Financial Summary",
-    "الملخص المالي"
-  ],
-  [
-    "My Schedule",
-    "جدولي"
-  ],
-  [
-    "My Subjects",
-    "موادي"
-  ],
-  [
-    "My Projects",
-    "مشاريعي"
-  ],
-  [
-    "Search workspace",
-    "البحث في النظام"
-  ],
-  [
-    "Search pages and people",
-    "البحث في الصفحات والأشخاص"
-  ],
-  [
-    "Search a page, teacher or student…",
-    "ابحث عن صفحة أو مدرس أو طالب…"
-  ],
-  [
-    "No matching pages or people.",
-    "لا توجد صفحات أو أشخاص مطابقون."
-  ],
-  [
-    "No matching pages or people",
-    "لا توجد صفحات أو أشخاص مطابقون"
-  ],
-  [
-    "Page",
-    "صفحة"
-  ],
-  [
-    "Teacher",
-    "مدرس"
-  ],
-  [
-    "Student",
-    "طالب"
-  ],
-  [
-    "Toggle navigation",
-    "فتح أو إغلاق القائمة"
-  ],
-  [
-    "Close navigation",
-    "إغلاق القائمة"
-  ],
-  [
-    "Account menu",
-    "قائمة الحساب"
-  ],
-  [
-    "Sign out",
-    "تسجيل الخروج"
-  ],
-  [
-    "Admin",
-    "المدير"
-  ],
-  [
-    "Accountant",
-    "المحاسب"
-  ],
-  [
-    "Coordinator",
-    "المنسق"
-  ],
-  [
-    "Close",
-    "إغلاق"
-  ],
-  [
-    "Cancel",
-    "إلغاء"
-  ],
-  [
-    "Save",
-    "حفظ"
-  ],
-  [
-    "OK",
-    "موافق"
-  ],
-  [
-    "Clear",
-    "مسح"
-  ],
-  [
-    "Clear filters",
-    "مسح الفلاتر"
-  ],
-  [
-    "Previous",
-    "السابق"
-  ],
-  [
-    "Next",
-    "التالي"
-  ],
-  [
-    "Search this table…",
-    "البحث في هذا الجدول…"
-  ],
-  [
-    "All statuses",
-    "كل الحالات"
-  ],
-  [
-    "Actions",
-    "الإجراءات"
-  ],
-  [
-    "Edit",
-    "تعديل"
-  ],
-  [
-    "Delete",
-    "حذف"
-  ],
-  [
-    "Open",
-    "مفتوح"
-  ],
-  [
-    "Review",
-    "مراجعة"
-  ],
-  [
-    "Details",
-    "التفاصيل"
-  ],
-  [
-    "Required",
-    "مطلوب"
-  ],
-  [
-    "Record details",
-    "تفاصيل السجل"
-  ],
-  [
-    "Notice",
-    "تنبيه"
-  ],
-  [
-    "General details",
-    "البيانات الأساسية"
-  ],
-  [
-    "Schedule & timing",
-    "المواعيد والتوقيت"
-  ],
-  [
-    "Rates & financial details",
-    "الأسعار والبيانات المالية"
-  ],
-  [
-    "Additional notes",
-    "ملاحظات إضافية"
-  ],
-  [
-    "Source",
-    "المصدر"
-  ],
-  [
-    "Date",
-    "التاريخ"
-  ],
-  [
-    "Name",
-    "الاسم"
-  ],
-  [
-    "Phone",
-    "الهاتف"
-  ],
-  [
-    "Email",
-    "البريد الإلكتروني"
-  ],
-  [
-    "Specialization",
-    "التخصص"
-  ],
-  [
-    "Default Cost/hr",
-    "الأجر الافتراضي للساعة"
-  ],
-  [
-    "Status",
-    "الحالة"
-  ],
-  [
-    "University",
-    "الجامعة"
-  ],
-  [
-    "Country",
-    "الدولة"
-  ],
-  [
-    "Major",
-    "التخصص الدراسي"
-  ],
-  [
-    "Level",
-    "المستوى"
-  ],
-  [
-    "Phone / WhatsApp",
-    "الهاتف / واتساب"
-  ],
-  [
-    "Balance",
-    "الرصيد"
-  ],
-  [
-    "Subject",
-    "المادة"
-  ],
-  [
-    "Instructor",
-    "المدرس"
-  ],
-  [
-    "Student(s)",
-    "الطلاب"
-  ],
-  [
-    "Hours",
-    "الساعات"
-  ],
-  [
-    "Teacher Rate",
-    "سعر ساعة المدرس"
-  ],
-  [
-    "Student Rate",
-    "سعر ساعة الطالب"
-  ],
-  [
-    "Teacher Cost",
-    "أجر المدرس"
-  ],
-  [
-    "Charge",
-    "التكلفة على الطالب"
-  ],
-  [
-    "Margin",
-    "هامش الربح"
-  ],
-  [
-    "Amount",
-    "المبلغ"
-  ],
-  [
-    "Rate",
-    "سعر التحويل"
-  ],
-  [
-    "Method",
-    "الطريقة"
-  ],
-  [
-    "Notes",
-    "الملاحظات"
-  ],
-  [
-    "Paid",
-    "المدفوع"
-  ],
-  [
-    "Accrued",
-    "المستحق"
-  ],
-  [
-    "Earned",
-    "المستحق"
-  ],
-  [
-    "Remaining",
-    "المتبقي"
-  ],
-  [
-    "Outstanding",
-    "المتبقي للتحصيل"
-  ],
-  [
-    "Charged",
-    "إجمالي الرسوم"
-  ],
-  [
-    "Currency",
-    "العملة"
-  ],
-  [
-    "Type",
-    "النوع"
-  ],
-  [
-    "Time",
-    "الوقت"
-  ],
-  [
-    "Day",
-    "اليوم"
-  ],
-  [
-    "From",
-    "من"
-  ],
-  [
-    "To",
-    "إلى"
-  ],
-  [
-    "All teachers",
-    "كل المدرسين"
-  ],
-  [
-    "All students",
-    "كل الطلاب"
-  ],
-  [
-    "All subjects",
-    "كل المواد"
-  ],
-  [
-    "All levels",
-    "كل المستويات"
-  ],
-  [
-    "All currencies",
-    "كل العملات"
-  ],
-  [
-    "All work types",
-    "كل أنواع العمل"
-  ],
-  [
-    "From date",
-    "من تاريخ"
-  ],
-  [
-    "To date",
-    "إلى تاريخ"
-  ],
-  [
-    "Subject Name",
-    "اسم المادة"
-  ],
-  [
-    "Teacher Name",
-    "اسم المدرس"
-  ],
-  [
-    "Student Name",
-    "اسم الطالب"
-  ],
-  [
-    "Phone Number",
-    "رقم الهاتف"
-  ],
-  [
-    "Search teachers by name",
-    "البحث باسم المدرس"
-  ],
-  [
-    "Search students by name",
-    "البحث باسم الطالب"
-  ],
-  [
-    "Search subjects",
-    "البحث في المواد"
-  ],
-  [
-    "Search",
-    "بحث"
-  ],
-  [
-    "Default Hourly Cost",
-    "أجر الساعة الافتراضي"
-  ],
-  [
-    "Payment Currency",
-    "عملة الدفع"
-  ],
-  [
-    "Billing Currency",
-    "عملة الفاتورة"
-  ],
-  [
-    "University (pick one already used, or type a new one)",
-    "الجامعة (اختر جامعة مسجلة أو اكتب اسمًا جديدًا)"
-  ],
-  [
-    "Major / Specialization",
-    "التخصص الدراسي"
-  ],
-  [
-    "Academic Level",
-    "المستوى الدراسي"
-  ],
-  [
-    "Add Teacher",
-    "إضافة مدرس"
-  ],
-  [
-    "Edit Teacher",
-    "تعديل مدرس"
-  ],
-  [
-    "+ Add Teacher",
-    "+ إضافة مدرس"
-  ],
-  [
-    "Add Student",
-    "إضافة طالب"
-  ],
-  [
-    "Edit Student",
-    "تعديل طالب"
-  ],
-  [
-    "+ Add Student",
-    "+ إضافة طالب"
-  ],
-  [
-    "+ Add New Subject",
-    "+ إضافة مادة جديدة"
-  ],
-  [
-    "Add New Subject",
-    "إضافة مادة جديدة"
-  ],
-  [
-    "Add Lesson",
-    "إضافة حصة"
-  ],
-  [
-    "Edit Lesson",
-    "تعديل حصة"
-  ],
-  [
-    "+ Add Lesson",
-    "+ إضافة حصة"
-  ],
-  [
-    "Add Project",
-    "إضافة مشروع"
-  ],
-  [
-    "Edit Project",
-    "تعديل مشروع"
-  ],
-  [
-    "+ Add Project",
-    "+ إضافة مشروع"
-  ],
-  [
-    "+ Add Recorded Course",
-    "+ إضافة كورس مسجل"
-  ],
-  [
-    "Add Recorded Course",
-    "إضافة كورس مسجل"
-  ],
-  [
-    "Edit Recorded Course",
-    "تعديل كورس مسجل"
-  ],
-  [
-    "+ Add Reminder",
-    "+ إضافة تذكير"
-  ],
-  [
-    "Add Reminder",
-    "إضافة تذكير"
-  ],
-  [
-    "Add Student Payment",
-    "إضافة دفعة طالب"
-  ],
-  [
-    "Add Teacher Payment",
-    "إضافة دفعة مدرس"
-  ],
-  [
-    "+ Student Payment",
-    "+ دفعة طالب"
-  ],
-  [
-    "+ Teacher Payment",
-    "+ دفعة مدرس"
-  ],
-  [
-    "+ Record Payment",
-    "+ تسجيل دفعة"
-  ],
-  [
-    "+ Add Entry",
-    "+ إضافة موعد"
-  ],
-  [
-    "Add Timetable Entry",
-    "إضافة موعد في الجدول"
-  ],
-  [
-    "Edit Timetable Entry",
-    "تعديل موعد في الجدول"
-  ],
-  [
-    "+ Availability",
-    "+ أوقات التوافر"
-  ],
-  [
-    "+ Book lesson",
-    "+ حجز حصة"
-  ],
-  [
-    "+ Waiting-list request",
-    "+ طلب في قائمة الانتظار"
-  ],
-  [
-    "Find available slots",
-    "البحث عن مواعيد متاحة"
-  ],
-  [
-    "Teacher availability",
-    "أوقات توافر المدرس"
-  ],
-  [
-    "Book a lesson",
-    "حجز حصة"
-  ],
-  [
-    "Waiting-list request",
-    "طلب في قائمة الانتظار"
-  ],
-  [
-    "+ Activate agreement",
-    "+ تفعيل اتفاق"
-  ],
-  [
-    "Activate a package / collection agreement",
-    "تفعيل باقة أو اتفاق تحصيل"
-  ],
-  [
-    "+ Register student",
-    "+ تسجيل طالب"
-  ],
-  [
-    "Register student in a service",
-    "تسجيل طالب في خدمة"
-  ],
-  [
-    "+ New task",
-    "+ مهمة جديدة"
-  ],
-  [
-    "New follow-up task",
-    "مهمة متابعة جديدة"
-  ],
-  [
-    "+ Project milestone",
-    "+ مرحلة مشروع"
-  ],
-  [
-    "+ Course material",
-    "+ مادة كورس"
-  ],
-  [
-    "Project milestone / delivery",
-    "مرحلة مشروع / تسليم"
-  ],
-  [
-    "Recorded-course material delivery",
-    "تسليم محتوى كورس مسجل"
-  ],
-  [
-    "+ Create account",
-    "+ إنشاء حساب"
-  ],
-  [
-    "Create team account",
-    "إنشاء حساب فريق"
-  ],
-  [
-    "Edit team account",
-    "تعديل حساب فريق"
-  ],
-  [
-    "Keep it",
-    "الإبقاء عليه"
-  ],
-  [
-    "Archive (set Inactive)",
-    "أرشفة (تعيين غير نشط)"
-  ],
-  [
-    "Active",
-    "نشط"
-  ],
-  [
-    "Inactive",
-    "غير نشط"
-  ],
-  [
-    "Completed",
-    "مكتمل"
-  ],
-  [
-    "Cancelled",
-    "ملغى"
-  ],
-  [
-    "Rescheduled",
-    "أُعيدت جدولته"
-  ],
-  [
-    "No Show",
-    "لم يحضر"
-  ],
-  [
-    "Pending",
-    "قيد الانتظار"
-  ],
-  [
-    "In Progress",
-    "قيد التنفيذ"
-  ],
-  [
-    "Approved",
-    "معتمد"
-  ],
-  [
-    "Planned",
-    "مخطط"
-  ],
-  [
-    "Sent",
-    "تم الإرسال"
-  ],
-  [
-    "Confirmed",
-    "مؤكد"
-  ],
-  [
-    "Done",
-    "منجز"
-  ],
-  [
-    "Skipped",
-    "متجاوز"
-  ],
-  [
-    "Scheduled",
-    "مجدول"
-  ],
-  [
-    "Disabled",
-    "معطل"
-  ],
-  [
-    "Closed",
-    "مغلق"
-  ],
-  [
-    "Partially Paid",
-    "مدفوع جزئيًا"
-  ],
-  [
-    "Credit",
-    "رصيد دائن"
-  ],
-  [
-    "Overpaid",
-    "مدفوع بالزيادة"
-  ],
-  [
-    "Overdue",
-    "متأخر"
-  ],
-  [
-    "Cash",
-    "نقدي"
-  ],
-  [
-    "Bank",
-    "بنك"
-  ],
-  [
-    "Wallet",
-    "محفظة"
-  ],
-  [
-    "Bank Transfer",
-    "تحويل بنكي"
-  ],
-  [
-    "Other",
-    "أخرى"
-  ],
-  [
-    "Live",
-    "حصص مباشرة"
-  ],
-  [
-    "Recorded",
-    "مسجل"
-  ],
-  [
-    "Recorded Course",
-    "كورس مسجل"
-  ],
-  [
-    "Project",
-    "مشروع"
-  ],
-  [
-    "Live Sessions",
-    "الحصص المباشرة"
-  ],
-  [
-    "Project Name",
-    "اسم المشروع"
-  ],
-  [
-    "Course Name",
-    "اسم الكورس"
-  ],
-  [
-    "Service Type",
-    "نوع الخدمة"
-  ],
-  [
-    "Payment Source",
-    "مصدر الدفعة"
-  ],
-  [
-    "Payment Date",
-    "تاريخ الدفع"
-  ],
-  [
-    "Start Date",
-    "تاريخ البداية"
-  ],
-  [
-    "Due Date",
-    "موعد التسليم"
-  ],
-  [
-    "Date of Birth",
-    "تاريخ الميلاد"
-  ],
-  [
-    "Start",
-    "البداية"
-  ],
-  [
-    "End",
-    "النهاية"
-  ],
-  [
-    "Location",
-    "المكان"
-  ],
-  [
-    "Duration",
-    "المدة"
-  ],
-  [
-    "High School",
-    "الثانوي"
-  ],
-  [
-    "Undergraduate",
-    "جامعي"
-  ],
-  [
-    "Postgraduate",
-    "دراسات عليا"
-  ],
-  [
-    "Student charge currency",
-    "عملة رسوم الطالب"
-  ],
-  [
-    "Teacher cost currency",
-    "عملة أجر المدرس"
-  ],
-  [
-    "Currency applies to: student charge",
-    "العملة تخص: رسوم الطالب"
-  ],
-  [
-    "Total Students",
-    "إجمالي الطلاب"
-  ],
-  [
-    "Total Teachers",
-    "إجمالي المدرسين"
-  ],
-  [
-    "Total Lessons",
-    "إجمالي الحصص"
-  ],
-  [
-    "Total Teaching Hours",
-    "إجمالي ساعات التدريس"
-  ],
-  [
-    "Total Hours",
-    "إجمالي الساعات"
-  ],
-  [
-    "Total Revenue",
-    "إجمالي الإيراد"
-  ],
-  [
-    "Total Costs",
-    "إجمالي التكاليف"
-  ],
-  [
-    "Total A+ Profit",
-    "إجمالي ربح الأكاديمية"
-  ],
-  [
-    "Live Profit",
-    "ربح الحصص المباشرة"
-  ],
-  [
-    "Project Profit",
-    "ربح المشاريع"
-  ],
-  [
-    "Recorded Profit",
-    "ربح الكورسات المسجلة"
-  ],
-  [
-    "Avg Profit / Live Lesson",
-    "متوسط ربح الحصة المباشرة"
-  ],
-  [
-    "Student Outstanding Balances",
-    "الأرصدة المستحقة على الطلاب"
-  ],
-  [
-    "This Month's Revenue",
-    "إيراد هذا الشهر"
-  ],
-  [
-    "This Month's Costs",
-    "تكاليف هذا الشهر"
-  ],
-  [
-    "This Month's Profit",
-    "ربح هذا الشهر"
-  ],
-  [
-    "TOTAL A+ ACADEMY PROFIT",
-    "إجمالي ربح الأكاديمية"
-  ],
-  [
-    "TOTAL TEACHER PROFIT",
-    "إجمالي ربح أعمال المدرسين"
-  ],
-  [
-    "EGP Profit",
-    "الربح بالجنيه المصري"
-  ],
-  [
-    "KWD Profit",
-    "الربح بالدينار الكويتي"
-  ],
-  [
-    "Profit",
-    "الربح"
-  ],
-  [
-    "Costs / shares",
-    "التكاليف / النسب"
-  ],
-  [
-    "Revenue",
-    "الإيراد"
-  ],
-  [
-    "Mixed-currency lessons: revenue",
-    "حصص بعملات مختلفة: الإيراد"
-  ],
-  [
-    "Mixed-currency lessons: cost",
-    "حصص بعملات مختلفة: التكلفة"
-  ],
-  [
-    "Profit (same-currency)",
-    "الربح (بنفس العملة)"
-  ],
-  [
-    "Upcoming timetable",
-    "المواعيد القادمة"
-  ],
-  [
-    "Upcoming recorded-course reminders (next 7 days)",
-    "تذكيرات الكورسات المسجلة (السبعة أيام القادمة)"
-  ],
-  [
-    "Student outstanding balances (live + recorded + projects)",
-    "مستحقات الطلاب (حصص + كورسات مسجلة + مشاريع)"
-  ],
-  [
-    "Additional financial & teaching metrics",
-    "مؤشرات مالية وتعليمية إضافية"
-  ],
-  [
-    "Analytics · revenue, costs & teaching activity",
-    "التحليلات · الإيراد والتكلفة ونشاط التدريس"
-  ],
-  [
-    "Recent student & teacher payments",
-    "آخر دفعات الطلاب والمدرسين"
-  ],
-  [
-    "Person",
-    "الاسم"
-  ],
-  [
-    "Direction",
-    "الاتجاه"
-  ],
-  [
-    "Amount · original",
-    "المبلغ · العملة الأصلية"
-  ],
-  [
-    "Received",
-    "وارد"
-  ],
-  [
-    "Paid out",
-    "صادر"
-  ],
-  [
-    "Student payment",
-    "دفعة طالب"
-  ],
-  [
-    "Unassigned",
-    "غير موزعة"
-  ],
-  [
-    "General",
-    "عام"
-  ],
-  [
-    "TOTAL",
-    "الإجمالي"
-  ],
-  [
-    "Note",
-    "ملاحظة"
-  ],
-  [
-    "Accrued (EGP)",
-    "المستحق (EGP)"
-  ],
-  [
-    "Paid (EGP)",
-    "المدفوع (EGP)"
-  ],
-  [
-    "Remaining (EGP)",
-    "المتبقي (EGP)"
-  ],
-  [
-    "Excess paid",
-    "دفع زائد"
-  ],
-  [
-    "Overpaid overall",
-    "إجمالي مدفوع زائد"
-  ],
-  [
-    "Unassigned (older payments)",
-    "غير موزعة (دفعات قديمة)"
-  ],
-  [
-    "Balance by original currency",
-    "الرصيد حسب العملة الأصلية"
-  ],
-  [
-    "Cross-currency settlements",
-    "تسويات بين العملات"
-  ],
-  [
-    "Financial summary (all work types)",
-    "الملخص المالي (كل أنواع العمل)"
-  ],
-  [
-    "Weekly timetable (fixed, no dates)",
-    "الجدول الأسبوعي الثابت"
-  ],
-  [
-    "Recent & completed (last 30 days)",
-    "الحديث والمكتمل (آخر ٣٠ يومًا)"
-  ],
-  [
-    "Payments to this teacher",
-    "دفعات هذا المدرس"
-  ],
-  [
-    "Payments from this student",
-    "دفعات هذا الطالب"
-  ],
-  [
-    "Lesson history",
-    "سجل الحصص"
-  ],
-  [
-    "← All teachers",
-    "← كل المدرسين"
-  ],
-  [
-    "← All students",
-    "← كل الطلاب"
-  ],
-  [
-    "Revenue Generated",
-    "الإيراد الناتج"
-  ],
-  [
-    "Academy Profit",
-    "ربح الأكاديمية"
-  ],
-  [
-    "Total Earned (all work)",
-    "إجمالي المستحق (كل الأعمال)"
-  ],
-  [
-    "Lesson earnings only",
-    "مستحقات الحصص فقط"
-  ],
-  [
-    "Paid to Teacher",
-    "المدفوع للمدرس"
-  ],
-  [
-    "Total Paid",
-    "إجمالي المدفوع"
-  ],
-  [
-    "Total Charged",
-    "إجمالي الرسوم"
-  ],
-  [
-    "Live charges",
-    "رسوم الحصص"
-  ],
-  [
-    "Recorded course charges",
-    "رسوم الكورسات المسجلة"
-  ],
-  [
-    "Project charges",
-    "رسوم المشاريع"
-  ],
-  [
-    "Teacher Costs",
-    "تكاليف المدرسين"
-  ],
-  [
-    "Avg Revenue / hr",
-    "متوسط إيراد الساعة"
-  ],
-  [
-    "Avg Cost / hr",
-    "متوسط تكلفة الساعة"
-  ],
-  [
-    "Avg Profit / hr",
-    "متوسط ربح الساعة"
-  ],
-  [
-    "Student payments (money received)",
-    "دفعات الطلاب (وارد)"
-  ],
-  [
-    "Student balances",
-    "أرصدة الطلاب"
-  ],
-  [
-    "Teacher payments (money paid out)",
-    "دفعات المدرسين (صادر)"
-  ],
-  [
-    "Teacher balances",
-    "أرصدة المدرسين"
-  ],
-  [
-    "Earned (all work)",
-    "المستحق (كل الأعمال)"
-  ],
-  [
-    "By original currency",
-    "حسب العملة الأصلية"
-  ],
-  [
-    "Ledger checks…",
-    "مراجعة السجل المالي…"
-  ],
-  [
-    "Payment Method",
-    "طريقة الدفع"
-  ],
-  [
-    "Link to a specific lesson / course / project (optional)",
-    "ربط بحصة / كورس / مشروع محدد (اختياري)"
-  ],
-  [
-    "— None (whole category) —",
-    "— بدون تحديد (كل الفئة) —"
-  ],
-  [
-    "None",
-    "بدون"
-  ],
-  [
-    "— Select —",
-    "— اختر —"
-  ],
-  [
-    "— Select teacher —",
-    "— اختر مدرسًا —"
-  ],
-  [
-    "— Select student —",
-    "— اختر طالبًا —"
-  ],
-  [
-    "Engineer",
-    "المدرس / المهندس"
-  ],
-  [
-    "Engineer Share",
-    "نسبة المدرس / المهندس"
-  ],
-  [
-    "A+ Profit",
-    "ربح الأكاديمية"
-  ],
-  [
-    "Instructor Share",
-    "نسبة المدرس"
-  ],
-  [
-    "Price",
-    "السعر"
-  ],
-  [
-    "Cost",
-    "التكلفة"
-  ],
-  [
-    "Students (Ctrl/Cmd-click for several)",
-    "الطلاب (Ctrl/Cmd لاختيار أكثر من طالب)"
-  ],
-  [
-    "Instructor / Engineer",
-    "المدرس / المهندس"
-  ],
-  [
-    "Teacher / Engineer",
-    "المدرس / المهندس"
-  ],
-  [
-    "Teacher Currency",
-    "عملة المدرس"
-  ],
-  [
-    "Teacher Hourly Cost",
-    "أجر ساعة المدرس"
-  ],
-  [
-    "Student Currency",
-    "عملة الطالب"
-  ],
-  [
-    "Student Hourly Price",
-    "سعر ساعة الطالب"
-  ],
-  [
-    "Profit Share (%)",
-    "نسبة المستحق (%)"
-  ],
-  [
-    "Revenue / Price",
-    "الإيراد / السعر"
-  ],
-  [
-    "Paid so far",
-    "المدفوع حتى الآن"
-  ],
-  [
-    "Student price",
-    "سعر الطالب"
-  ],
-  [
-    "Total",
-    "الإجمالي"
-  ],
-  [
-    "Enrolments",
-    "التسجيلات"
-  ],
-  [
-    "Course",
-    "الكورس"
-  ],
-  [
-    "Reminder",
-    "التذكير"
-  ],
-  [
-    "Today",
-    "اليوم"
-  ],
-  [
-    "Weekly",
-    "أسبوعي"
-  ],
-  [
-    "Monthly",
-    "شهري"
-  ],
-  [
-    "weekly",
-    "أسبوعي"
-  ],
-  [
-    "monthly",
-    "شهري"
-  ],
-  [
-    "daily",
-    "يومي"
-  ],
-  [
-    "custom",
-    "فترة مخصصة"
-  ],
-  [
-    "Monday",
-    "الاثنين"
-  ],
-  [
-    "Tuesday",
-    "الثلاثاء"
-  ],
-  [
-    "Wednesday",
-    "الأربعاء"
-  ],
-  [
-    "Thursday",
-    "الخميس"
-  ],
-  [
-    "Friday",
-    "الجمعة"
-  ],
-  [
-    "Saturday",
-    "السبت"
-  ],
-  [
-    "Sunday",
-    "الأحد"
-  ],
-  [
-    "DONE",
-    "تم التنفيذ"
-  ],
-  [
-    "RESCHEDULE",
-    "إعادة جدولة"
-  ],
-  [
-    "Reschedule",
-    "إعادة جدولة"
-  ],
-  [
-    "Undo",
-    "تراجع"
-  ],
-  [
-    "From time",
-    "من الساعة"
-  ],
-  [
-    "To time",
-    "إلى الساعة"
-  ],
-  [
-    "Teacher(s)",
-    "المدرسون"
-  ],
-  [
-    "Title",
-    "العنوان"
-  ],
-  [
-    "Owner",
-    "المسؤول"
-  ],
-  [
-    "Responsible person",
-    "الشخص المسؤول"
-  ],
-  [
-    "Priority",
-    "الأولوية"
-  ],
-  [
-    "Due date",
-    "تاريخ الاستحقاق"
-  ],
-  [
-    "Follow-up date",
-    "تاريخ المتابعة"
-  ],
-  [
-    "Lesson date",
-    "تاريخ الحصة"
-  ],
-  [
-    "Task",
-    "المهمة"
-  ],
-  [
-    "Task title",
-    "عنوان المهمة"
-  ],
-  [
-    "Description",
-    "الوصف"
-  ],
-  [
-    "Contact",
-    "التواصل"
-  ],
-  [
-    "Service",
-    "الخدمة"
-  ],
-  [
-    "Service registration",
-    "تسجيل خدمة"
-  ],
-  [
-    "Attendance",
-    "الحضور"
-  ],
-  [
-    "Lesson Notes",
-    "ملاحظات الحصة"
-  ],
-  [
-    "Present",
-    "حاضر"
-  ],
-  [
-    "Absent",
-    "غائب"
-  ],
-  [
-    "Late",
-    "متأخر"
-  ],
-  [
-    "Excused",
-    "بعذر"
-  ],
-  [
-    "Scheduled date",
-    "التاريخ المحدد"
-  ],
-  [
-    "Low",
-    "منخفضة"
-  ],
-  [
-    "Normal",
-    "عادية"
-  ],
-  [
-    "High",
-    "مرتفعة"
-  ],
-  [
-    "Urgent",
-    "عاجلة"
-  ],
-  [
-    "View all lessons",
-    "عرض كل الحصص"
-  ],
-  [
-    "Scheduling & Teacher Availability",
-    "الجدولة وأوقات توافر المدرسين"
-  ],
-  [
-    "Packages, Installments & Collection",
-    "الباقات والأقساط والتحصيل"
-  ],
-  [
-    "Service Registrations",
-    "تسجيلات الخدمات"
-  ],
-  [
-    "Attendance & Lesson Notes",
-    "الحضور وملاحظات الحصص"
-  ],
-  [
-    "Projects & Recorded-course Delivery",
-    "تسليمات المشاريع والكورسات المسجلة"
-  ],
-  [
-    "Team Accounts & Permissions",
-    "حسابات الفريق والصلاحيات"
-  ],
-  [
-    "Username",
-    "اسم المستخدم"
-  ],
-  [
-    "Display name",
-    "اسم العرض"
-  ],
-  [
-    "Role",
-    "الصلاحية"
-  ],
-  [
-    "Linked teacher",
-    "المدرس المرتبط"
-  ],
-  [
-    "Account status",
-    "حالة الحساب"
-  ],
-  [
-    "Recent activity",
-    "آخر النشاط"
-  ],
-  [
-    "Who",
-    "المستخدم"
-  ],
-  [
-    "Action",
-    "الإجراء"
-  ],
-  [
-    "Record",
-    "السجل"
-  ],
-  [
-    "Detail",
-    "التفاصيل"
-  ],
-  [
-    "Academy name",
-    "اسم الأكاديمية"
-  ],
-  [
-    "Academy Base Currency",
-    "عملة حسابات الأكاديمية الأساسية"
-  ],
-  [
-    "Default teacher rate/hr",
-    "أجر ساعة المدرس الافتراضي"
-  ],
-  [
-    "Default student rate/hr",
-    "سعر ساعة الطالب الافتراضي"
-  ],
-  [
-    "Project profit is recognised",
-    "يُحتسب ربح المشروع"
-  ],
-  [
-    "Exchange rates count as out of date after (hours)",
-    "تعتبر أسعار الصرف قديمة بعد (ساعات)"
-  ],
-  [
-    "Save settings",
-    "حفظ الإعدادات"
-  ],
-  [
-    "Exchange Rates",
-    "أسعار الصرف"
-  ],
-  [
-    "Refresh rates",
-    "تحديث أسعار الصرف"
-  ],
-  [
-    "Refresh live rates",
-    "تحديث أسعار الصرف المباشرة"
-  ],
-  [
-    "Original currencies",
-    "العملات الأصلية"
-  ],
-  [
-    "Converted view",
-    "العرض المحول"
-  ],
-  [
-    "Original-currency view (default).",
-    "عرض العملات الأصلية (الافتراضي)."
-  ],
-  [
-    "Totals by original currency",
-    "الإجماليات حسب العملة الأصلية"
-  ],
-  [
-    "Open Reports",
-    "فتح التقارير"
-  ],
-  [
-    "Open Cash Flow",
-    "فتح التدفقات النقدية"
-  ],
-  [
-    "Backups (on this computer)",
-    "النسخ الاحتياطية (على هذا الجهاز)"
-  ],
-  [
-    "Create backup now",
-    "إنشاء نسخة احتياطية الآن"
-  ],
-  [
-    "Download financial JSON export",
-    "تنزيل التصدير المالي JSON"
-  ],
-  [
-    "Download administrative JSON",
-    "تنزيل البيانات الإدارية JSON"
-  ],
-  [
-    "Backup",
-    "النسخة الاحتياطية"
-  ],
-  [
-    "Created",
-    "تاريخ الإنشاء"
-  ],
-  [
-    "Records",
-    "السجلات"
-  ],
-  [
-    "Restore…",
-    "استعادة…"
-  ],
-  [
-    "Export Full Report (.xlsx)",
-    "تصدير التقرير الكامل (.xlsx)"
-  ],
-  [
-    "Work by currency",
-    "الأعمال حسب العملة"
-  ],
-  [
-    "Cash by currency",
-    "النقدية حسب العملة"
-  ],
-  [
-    "Teacher report",
-    "تقرير المدرسين"
-  ],
-  [
-    "Student report",
-    "تقرير الطلاب"
-  ],
-  [
-    "Live lessons",
-    "الحصص المباشرة"
-  ],
-  [
-    "All-work ledger",
-    "سجل كل الأعمال"
-  ],
-  [
-    "Payment report",
-    "تقرير الدفعات"
-  ],
-  [
-    "All lessons (all dates)",
-    "كل الحصص (كل التواريخ)"
-  ],
-  [
-    "Monthly Cash Flow Report",
-    "تقرير التدفقات النقدية الشهري"
-  ],
-  [
-    "Currency → KWD rate",
-    "سعر تحويل العملة إلى KWD"
-  ],
-  [
-    "Cash flow",
-    "التدفق النقدي"
-  ],
-  [
-    "Rate type",
-    "نوع السعر"
-  ],
-  [
-    "Last updated",
-    "آخر تحديث"
-  ],
-  [
-    "Rate unavailable",
-    "سعر التحويل غير متاح"
-  ],
-  [
-    "EGP rate unavailable",
-    "سعر الجنيه المصري غير متاح"
-  ],
-  [
-    "Egyptian Pound",
-    "جنيه مصري"
-  ],
-  [
-    "Kuwaiti Dinar",
-    "دينار كويتي"
-  ],
-  [
-    "Saudi Riyal",
-    "ريال سعودي"
-  ],
-  [
-    "Qatari Riyal",
-    "ريال قطري"
-  ],
-  [
-    "UAE Dirham",
-    "درهم إماراتي"
-  ],
-  [
-    "Bahraini Dinar",
-    "دينار بحريني"
-  ],
-  [
-    "Omani Rial",
-    "ريال عماني"
-  ],
-  [
-    "US Dollar",
-    "دولار أمريكي"
-  ],
-  [
-    "Page title",
-    "عنوان الصفحة"
-  ],
-  [
-    "Skip to content",
-    "تخطي إلى المحتوى"
-  ],
-  [
-    "Open dashboard reminders",
-    "فتح تذكيرات لوحة التحكم"
-  ],
-  [
-    "No rows match these table filters. Clear the search to see all records.",
-    "لا توجد صفوف مطابقة. امسح البحث لعرض كل السجلات."
-  ],
-  [
-    "Table search and pagination affect displayed rows only. Financial totals and exports keep their existing page filters.",
-    "البحث وتقسيم الصفحات يخصان الصفوف المعروضة فقط. الإجماليات والتصدير يحتفظان بفلاتر الصفحة الأصلية."
-  ],
-  [
-    "Nothing here yet — use the Add button.",
-    "لا توجد سجلات بعد — استخدم زر الإضافة."
-  ],
-  [
-    "No teachers found.",
-    "لا يوجد مدرسون مطابقون."
-  ],
-  [
-    "No students found.",
-    "لا يوجد طلاب مطابقون."
-  ],
-  [
-    "No projects yet.",
-    "لا توجد مشاريع بعد."
-  ],
-  [
-    "No lessons match.",
-    "لا توجد حصص مطابقة."
-  ],
-  [
-    "No data in this period.",
-    "لا توجد بيانات في هذه الفترة."
-  ],
-  [
-    "No classes scheduled in the next 14 days.",
-    "لا توجد حصص مجدولة خلال ١٤ يومًا قادمة."
-  ],
-  [
-    "No reminders due in the next 7 days.",
-    "لا توجد تذكيرات مستحقة خلال ٧ أيام قادمة."
-  ],
-  [
-    "No outstanding balances.",
-    "لا توجد أرصدة مستحقة."
-  ],
-  [
-    "No recorded student or teacher payments yet.",
-    "لا توجد دفعات طلاب أو مدرسين مسجلة بعد."
-  ],
-  [
-    "Your academy at a glance. People, teaching and finances in one place.",
-    "أكاديميتك بنظرة واحدة. الطلاب والمدرسون والحصص والمالية في مكان واحد."
-  ],
-  [
-    "Manage your teaching team, assigned work and financial accounts.",
-    "إدارة فريق التدريس والأعمال المسندة والحسابات المالية."
-  ],
-  [
-    "Keep student records, learning activity and balances organized.",
-    "تنظيم بيانات الطلاب ونشاطهم الدراسي وأرصدتهم."
-  ],
-  [
-    "Live lessons, recorded learning and project services.",
-    "الحصص المباشرة والكورسات المسجلة وخدمات المشاريع."
-  ],
-  [
-    "Review delivered sessions, rates and recorded lesson activity.",
-    "مراجعة الحصص المنفذة والأسعار ونشاط التدريس المسجل."
-  ],
-  [
-    "Manage project work, delivery and its recorded finances.",
-    "إدارة أعمال المشاريع وتسليماتها وحساباتها المسجلة."
-  ],
-  [
-    "Courses, enrolments and recorded learning in one workspace.",
-    "الكورسات والتسجيلات والتعلم المسجل في مكان واحد."
-  ],
-  [
-    "Recorded receipts and payouts, with original currencies preserved.",
-    "المقبوضات والمدفوعات المسجلة مع الاحتفاظ بالعملات الأصلية."
-  ],
-  [
-    "Plan your week and manage each scheduled session.",
-    "خطط لأسبوعك وأدر كل موعد مسجل."
-  ],
-  [
-    "Explore financial performance with clear currency and period controls.",
-    "استعرض الأداء المالي مع تحديد العملة والفترة بوضوح."
-  ],
-  [
-    "Follow dated receipts and payments, separated by currency.",
-    "متابعة المقبوضات والمدفوعات المؤرخة لكل عملة على حدة."
-  ],
-  [
-    "Manage academy preferences, exchange rates and verified backups.",
-    "إدارة إعدادات الأكاديمية وأسعار الصرف والنسخ الاحتياطية المتحققة."
-  ],
-  [
-    "Preview the workspace each teacher sees, with their own records only.",
-    "معاينة حساب كل مدرس وسجلاته الخاصة فقط."
-  ],
-  [
-    "Accounts, operating expenses and statement reconciliation.",
-    "الحسابات والمصروفات التشغيلية ومطابقة كشوف الحساب."
-  ],
-  [
-    "Review eligible hours and record one consolidated teacher payment.",
-    "مراجعة الساعات المستحقة وتسجيل دفعة مجمعة للمدرس."
-  ],
-  [
-    "Revenue, costs and service profit use the existing saved-rate converted figures. Service profit is before operating expenses. Existing page filters still apply; people counts cover the academy.",
-    "الإيرادات والتكاليف وربح الخدمات حسب الحسابات المحولة الحالية. ربح الخدمات قبل المصروفات التشغيلية. فلاتر الصفحة سارية، وأعداد الأشخاص تشمل الأكاديمية."
-  ],
-  [
-    "All dates · latest six recorded student and teacher payments, independent of dashboard filters. Original amounts and currencies. Other service payments remain in their existing accounts.",
-    "كل التواريخ · آخر ست دفعات طلاب ومدرسين، مستقلة عن فلاتر لوحة التحكم. المبالغ بعملاتها الأصلية. دفعات الخدمات الأخرى موجودة في حساباتها الحالية."
-  ],
-  [
-    "Development workspace",
-    "نسخة التطوير"
-  ],
-  [
-    "3005 · Independent review data",
-    "3005 · بيانات تجربة مستقلة"
-  ],
-  [
-    "REVIEW · 3005",
-    "تجربة · 3005"
-  ],
-  [
-    "Review version — 3005 — Changes here do not affect the working version on 3000",
-    "نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000"
-  ],
-  [
-    "DONE on a Live session opens a form to record the actual lesson (saved in Lessons; no payment is recorded); other session types are simply marked completed. Either way only that one session is affected and it stays in the history. DELETE lets you move that one session to a new date/time — it never removes the weekly schedule.",
-    "تنفيذ الحصة المباشرة يفتح نموذجًا لتسجيلها في الحصص دون تسجيل أي دفعة. الأنواع الأخرى تُعلّم كمكتملة فقط. التغيير يخص هذا الموعد وحده مع الاحتفاظ بسجله، ونقل موعده لا يحذف الجدول الأسبوعي."
-  ],
-  [
-    "Each row foots: Revenue − Costs = Profit + (mixed-currency revenue − mixed-currency cost). Services whose student charge and teacher cost are in different currencies are left out of Profit (their profit exists only in the converted view) but their revenue and cost are shown here so nothing is hidden.",
-    "لكل صف: الإيراد − التكلفة = الربح + (إيراد العملات المختلفة − تكلفتها). الخدمات التي تختلف فيها عملة الطالب عن المدرس لا تُضاف لربح نفس العملة؛ يظهر ربحها في العرض المحول، وتظل إيراداتها وتكاليفها ظاهرة هنا."
-  ],
-  [
-    "The charts and cards below combine currencies using the rate saved on each record (converted view).",
-    "الرسوم والمؤشرات التالية تجمع العملات باستخدام سعر الصرف المحفوظ بكل سجل (العرض المحول)."
-  ],
-  [
-    "+ Follow-up task",
-    "+ مهمة متابعة"
-  ],
-  [
-    "+ Service registration",
-    "+ تسجيل خدمة"
-  ],
-  [
-    "Record attendance / lesson notes",
-    "تسجيل الحضور / ملاحظات الحصة"
-  ],
-  [
-    "Open timetable",
-    "فتح جدول المواعيد"
-  ],
-  [
-    "Tasks due today or overdue",
-    "مهام اليوم والمهام المتأخرة"
-  ],
-  [
-    "No tasks in this selection.",
-    "لا توجد مهام ضمن الاختيارات."
-  ],
-  [
-    "Today’s scheduled sessions",
-    "المواعيد المجدولة اليوم"
-  ],
-  [
-    "Today’s lesson records",
-    "سجلات حصص اليوم"
-  ],
-  [
-    "No lesson records dated today. Scheduled sessions appear above until recorded in Lessons.",
-    "لا توجد حصص مسجلة بتاريخ اليوم. تظل المواعيد بالأعلى حتى تسجيلها في الحصص."
-  ],
-  [
-    "Unexcused absences · last 7 days",
-    "غياب دون عذر · آخر ٧ أيام"
-  ],
-  [
-    "No recorded unexcused absences in the last 7 days.",
-    "لا يوجد غياب دون عذر مسجل خلال آخر ٧ أيام."
-  ],
-  [
-    "Record an outcome when you complete a follow-up. Full SQLite backups include registrations, attendance, lesson notes and tasks. The administrative JSON export is a reference copy; use verified database backups for recovery.",
-    "سجل نتيجة المتابعة عند إتمامها. النسخ الكاملة لقاعدة SQLite تشمل التسجيلات والحضور وملاحظات الحصص والمهام. التصدير الإداري JSON نسخة مرجعية؛ استخدم النسخ المتحققة لقاعدة البيانات للاستعادة."
-  ],
-  [
-    "Completed sessions (history)",
-    "المواعيد المكتملة (السجل)"
-  ],
-  [
-    "Bookings and confirmations",
-    "الحجوزات والتأكيدات"
-  ],
-  [
-    "Weekly availability",
-    "أوقات التوافر الأسبوعية"
-  ],
-  [
-    "Waiting list",
-    "قائمة الانتظار"
-  ],
-  [
-    "No managed bookings yet. Existing timetable records remain on Timetable.",
-    "لا توجد حجوزات جديدة بعد. المواعيد القديمة ما زالت في جدول المواعيد."
-  ],
-  [
-    "No availability recorded. Add a window before creating a booking.",
-    "لم تُسجل أوقات توافر. أضف فترة توافر قبل إنشاء الحجز."
-  ],
-  [
-    "No waiting-list requests.",
-    "لا توجد طلبات في قائمة الانتظار."
-  ],
-  [
-    "Bookings are checked against teacher availability, the existing timetable, other bookings and timed completed lessons. Booking a slot creates no charge. Changes to date, time, student or teacher clear recorded confirmations.",
-    "يفحص الحجز أوقات توافر المدرس والجدول والحجوزات الأخرى والحصص المنفذة ذات التوقيت. الحجز لا ينشئ رسومًا. تغيير التاريخ أو التوقيت أو الطالب أو المدرس يلغي التأكيدات المسجلة."
-  ],
-  [
-    "One list for Live subjects, Recorded Courses and Projects. Recorded courses and projects are also managed in their own pages; they are the same records.",
-    "قائمة موحدة للمواد المباشرة والكورسات المسجلة والمشاريع. إدارة الكورسات والمشاريع من صفحاتها تستخدم نفس السجلات دون تكرار."
-  ],
-  [
-    "Course Cost",
-    "تكلفة الكورس"
-  ],
-  [
-    "Reminders (e.g. Send Recorded Lectures)",
-    "التذكيرات (مثل إرسال المحاضرات المسجلة)"
-  ],
-  [
-    "What reminders do:",
-    "وظيفة التذكيرات:"
-  ],
-  [
-    "a reminder appears on this screen while A+ Hub is open in your browser (checked about once a minute, using the Africa/Cairo time and date). Nothing is sent by e-mail, SMS or phone notification, and nothing is delivered while the app or the computer is closed; a reminder that came due within the last 7 days while the app was closed is shown once when you next open it. For alerts outside the app, import the calendar file",
-    "يظهر التذكير أثناء فتح النظام في المتصفح، ويُفحص تقريبًا كل دقيقة بتوقيت القاهرة. لا تُرسل رسائل بريد أو SMS أو إشعارات هاتف، ولا يعمل أثناء إغلاق التطبيق أو الجهاز. يظهر التذكير المستحق خلال آخر ٧ أيام عند فتح النظام. للتنبيه خارج النظام، استورد ملف التقويم"
-  ],
-  [
-    "into your own calendar application.",
-    "إلى تطبيق التقويم الخاص بك."
-  ],
-  [
-    "Days",
-    "الأيام"
-  ],
-  [
-    "Repeat",
-    "التكرار"
-  ],
-  [
-    "Coming up (next 30 days)",
-    "القادم (خلال ٣٠ يومًا)"
-  ],
-  [
-    "Nothing due in the next 30 days.",
-    "لا توجد استحقاقات خلال ٣٠ يومًا."
-  ],
-  [
-    "Original currencies (default)",
-    "العملات الأصلية (الافتراضي)"
-  ],
-  [
-    "never added together",
-    "لا تُجمع معًا أبدًا"
-  ],
-  [
-    "A. Work by original currency (revenue, cost, profit - never combined across currencies)",
-    "أ. الأعمال بالعملة الأصلية (الإيراد والتكلفة والربح — دون جمع العملات المختلفة)"
-  ],
-  [
-    "Live Revenue",
-    "إيراد الحصص المباشرة"
-  ],
-  [
-    "Live Teacher Cost",
-    "أجور مدرس الحصص المباشرة"
-  ],
-  [
-    "Live Profit - lessons billed and paid in the same currency",
-    "ربح الحصص المحصلة والمدفوعة بنفس العملة"
-  ],
-  [
-    "Mixed-currency Lessons: Revenue, not in profit",
-    "حصص بعملات مختلفة: إيراد لا يدخل في ربح نفس العملة"
-  ],
-  [
-    "Mixed-currency Lessons: Teacher Cost, not in profit",
-    "حصص بعملات مختلفة: تكلفة مدرس لا تدخل في ربح نفس العملة"
-  ],
-  [
-    "Project Revenue",
-    "إيراد المشاريع"
-  ],
-  [
-    "Project Teacher Share",
-    "نسبة مدرس المشاريع"
-  ],
-  [
-    "Course Revenue",
-    "إيراد الكورسات"
-  ],
-  [
-    "Course Share",
-    "نسبة مدرس الكورسات"
-  ],
-  [
-    "Course Profit",
-    "ربح الكورسات"
-  ],
-  [
-    "B. Cash by original currency (dated receipts and payments; opening balances shown separately). With a Work Type filter only the allocated part of a student receipt and teacher payments with a recorded source are counted; unallocated receipts and unassigned payments have no work type and are excluded, never given an invented one. Refunds carry no method or work type and are excluded when either filter is set",
-    "ب. النقدية بالعملة الأصلية (المقبوضات والمدفوعات المؤرخة، والافتتاحي منفصل). عند فلترة نوع العمل تُحسب الأجزاء المخصصة من دفعات الطلاب ودفعات المدرسين ذات المصدر المسجل فقط. غير الموزع يُستبعد دون تخمين مصدر. المبالغ المستردة لا تحمل طريقة أو نوع عمل وتُستبعد عند استخدام أي منهما."
-  ],
-  [
-    "Student Payments in Period",
-    "دفعات الطلاب خلال الفترة"
-  ],
-  [
-    "Project Payments in Period",
-    "دفعات المشاريع خلال الفترة"
-  ],
-  [
-    "Total Dated Receipts",
-    "إجمالي المقبوضات المؤرخة"
-  ],
-  [
-    "Teacher Payments in Period",
-    "دفعات المدرسين خلال الفترة"
-  ],
-  [
-    "Net Dated Cash",
-    "صافي النقدية المؤرخة"
-  ],
-  [
-    "NOT DATED CASH - Project Opening Paid",
-    "مبلغ غير مؤرخ — مدفوع افتتاحي للمشاريع"
-  ],
-  [
-    "NOT DATED CASH - Course Enrolment Paid, running total",
-    "مبلغ غير مؤرخ — إجمالي مدفوع تسجيل الكورسات"
-  ],
-  [
-    "C. Teachers by currency",
-    "ج. المدرسون حسب العملة"
-  ],
-  [
-    "Earned in Period",
-    "المستحق خلال الفترة"
-  ],
-  [
-    "Paid in Period",
-    "المدفوع خلال الفترة"
-  ],
-  [
-    "Balance All-Time, same currency",
-    "رصيد كل الفترات بنفس العملة"
-  ],
-  [
-    "D. Students by currency",
-    "د. الطلاب حسب العملة"
-  ],
-  [
-    "Charges in Period",
-    "رسوم الفترة"
-  ],
-  [
-    "Dated Payments in Period",
-    "الدفعات المؤرخة خلال الفترة"
-  ],
-  [
-    "D. Lesson Report (Live)",
-    "د. تقرير الحصص المباشرة"
-  ],
-  [
-    "Subject Type",
-    "نوع المادة"
-  ],
-  [
-    "Work Type",
-    "نوع العمل"
-  ],
-  [
-    "Student Charge",
-    "رسوم الطالب"
-  ],
-  [
-    "Teacher Exchange Rate",
-    "سعر صرف المدرس"
-  ],
-  [
-    "Student Exchange Rate",
-    "سعر صرف الطالب"
-  ],
-  [
-    "Rate Type",
-    "نوع سعر الصرف"
-  ],
-  [
-    "Base Currency",
-    "العملة الأساسية"
-  ],
-  [
-    "Start Time",
-    "وقت البداية"
-  ],
-  [
-    "End Time",
-    "وقت النهاية"
-  ],
-  [
-    "Project Report",
-    "تقرير المشاريع"
-  ],
-  [
-    "Recorded Course Report",
-    "تقرير الكورسات المسجلة"
-  ],
-  [
-    "All-Work Ledger (original + converted)",
-    "سجل كل الأعمال (الأصلي + المحول)"
-  ],
-  [
-    "Original Currency",
-    "العملة الأصلية"
-  ],
-  [
-    "Original Amount",
-    "المبلغ الأصلي"
-  ],
-  [
-    "Exchange Rate",
-    "سعر الصرف"
-  ],
-  [
-    "Converted Amount",
-    "المبلغ المحول"
-  ],
-  [
-    "Payment",
-    "الدفعة"
-  ],
-  [
-    "Source Detail",
-    "تفاصيل المصدر"
-  ],
-  [
-    "Work-type applicability",
-    "ارتباط نوع العمل"
-  ],
-  [
-    "Timetable in period",
-    "المواعيد خلال الفترة"
-  ],
-  [
-    "Schedule",
-    "الجدول"
-  ],
-  [
-    "Payments in period (with a student filter: that student's receipts and the teacher payments linked to that student's lessons only; with a work-type filter, receipts without an allocation and payments without a source are listed and labelled)",
-    "دفعات الفترة (عند فلترة طالب: مقبوضاته ودفعات المدرس المرتبطة بحصصه فقط. عند فلترة نوع العمل، تُعرض الدفعات غير الموزعة أو دون مصدر مع توضيح حالتها)."
-  ],
-  [
-    "kept in the currency it was paid in",
-    "تظل بالعملة التي دُفعت بها"
-  ],
-  [
-    "Month",
-    "الشهر"
-  ],
-  [
-    "Export to Excel (.xlsx)",
-    "تصدير إلى Excel (.xlsx)"
-  ],
-  [
-    "Cash movement by currency",
-    "حركة النقدية حسب العملة"
-  ],
-  [
-    "Received from students",
-    "المقبوض من الطلاب"
-  ],
-  [
-    "Paid to teachers",
-    "المدفوع للمدرسين"
-  ],
-  [
-    "Net movement (before other expenses)",
-    "صافي الحركة (قبل المصروفات الأخرى)"
-  ],
-  [
-    "1. Cash received from students",
-    "١. المقبوضات من الطلاب"
-  ],
-  [
-    "By work type",
-    "حسب نوع العمل"
-  ],
-  [
-    "None in this month.",
-    "لا توجد عمليات هذا الشهر."
-  ],
-  [
-    "By payment method",
-    "حسب طريقة الدفع"
-  ],
-  [
-    "Transactions",
-    "الحركات"
-  ],
-  [
-    "No student payments in this month.",
-    "لا توجد دفعات طلاب هذا الشهر."
-  ],
-  [
-    "2. Payments made to teachers",
-    "٢. المدفوعات للمدرسين"
-  ],
-  [
-    "By payment source",
-    "حسب مصدر الدفعة"
-  ],
-  [
-    "By teacher",
-    "حسب المدرس"
-  ],
-  [
-    "Related service",
-    "الخدمة المرتبطة"
-  ],
-  [
-    "3. Net cash movement",
-    "٣. صافي حركة النقدية"
-  ],
-  [
-    "Student receipts",
-    "مقبوضات الطلاب"
-  ],
-  [
-    "Teacher payments",
-    "دفعات المدرسين"
-  ],
-  [
-    "Net before other expenses",
-    "الصافي قبل المصروفات الأخرى"
-  ],
-  [
-    "4. Opening and closing cash balance",
-    "٤. رصيد النقدية الافتتاحي والختامي"
-  ],
-  [
-    "Cash, bank accounts and wallets are not tracked in this system, so an opening balance, other cash movements and an actual closing balance cannot be determined.",
-    "هذا التقرير القديم لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا أو حركات نقدية أخرى."
-  ],
-  [
-    "Charges minus payments",
-    "الرسوم ناقص المدفوعات"
-  ],
-  [
-    ". A negative figure means the student has paid more than was charged in that currency (credit).",
-    ". الرقم السالب يعني أن الطالب دفع أكثر من الرسوم بنفس العملة (رصيد دائن)."
-  ],
-  [
-    "Paid (incl. undated opening paid)",
-    "المدفوع (يشمل الافتتاحي غير المؤرخ)"
-  ],
-  [
-    "of which undated opening paid",
-    "منه مدفوع افتتاحي غير مؤرخ"
-  ],
-  [
-    "of which Unassigned source",
-    "منه مصدر غير موزع"
-  ],
-  [
-    "Measure",
-    "المؤشر"
-  ],
-  [
-    "Difference",
-    "الفرق"
-  ],
-  [
-    "Change",
-    "التغير"
-  ],
-  [
-    "8. Data checks",
-    "٨. فحوص البيانات"
-  ],
-  [
-    "• Other academy expenses and other cash movements are not recorded in this system, so they are not included. Net cash movement is receipts minus teacher payments only, per currency.",
-    "• المصروفات الأخرى والحركات الأخرى لا تدخل في هذا التقرير القديم. صافي الحركة هنا هو المقبوضات ناقص دفعات المدرسين لكل عملة."
-  ],
-  [
-    "• Cash, bank or wallet balances are not tracked, so an opening or closing cash balance cannot be determined.",
-    "• هذا التقرير لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا."
-  ],
-  [
-    "• Ageing of outstanding balances needs one currency to allocate payments across charges, so it is only available in the converted view.",
-    "• تحليل أعمار الديون يحتاج عملة واحدة لتوزيع الدفعات على الرسوم، وهو متاح في العرض المحول فقط."
-  ],
-  [
-    "Live packages are charged as lessons are delivered, using the agreed package price split across sessions. Collection in advance appears as student credit until delivery. Project/course agreements refer to their existing charges. No agreement creates a duplicate charge or payment.",
-    "تُحتسب رسوم الباقات عند تنفيذ الحصص بتوزيع السعر المتفق عليه عليها. التحصيل المسبق يظهر كرصيد دائن للطالب حتى التنفيذ. اتفاقات المشاريع والكورسات تشير لرسومها الحالية ولا تنشئ رسومًا أو دفعات مكررة."
-  ],
-  [
-    "Issued receipts",
-    "الإيصالات الصادرة"
-  ],
-  [
-    "No receipts issued through agreements yet.",
-    "لم تصدر إيصالات من الاتفاقات بعد."
-  ],
-  [
-    "Administrative follow-up only. These records do not create charges, payments or change teacher earnings. Existing lessons have no attendance or summary until you record one.",
-    "للمتابعة الإدارية فقط. هذه السجلات لا تنشئ رسومًا أو دفعات ولا تغير مستحقات المدرس. لا يُفترض حضور أو ملخص للحصص القديمة قبل تسجيله."
-  ],
-  [
-    "No matching registrations. Add registrations as new agreements are made; historical agreements are not guessed.",
-    "لا توجد تسجيلات مطابقة. أضف التسجيل عند الاتفاق الجديد؛ لا تُخمن الاتفاقات القديمة."
-  ],
-  [
-    "Attendance describes the student’s participation. It does not change the lesson’s financial status. To record a scheduled session first, use Timetable → DONE.",
-    "الحضور يصف مشاركة الطالب ولا يغير الحالة المالية للحصة. لتسجيل موعد مجدول أولًا، استخدم جدول المواعيد ← تم التنفيذ."
-  ],
-  [
-    "No lessons in this selection. Choose another date or view all lessons.",
-    "لا توجد حصص ضمن الاختيارات. اختر تاريخًا آخر أو اعرض كل الحصص."
-  ],
-  [
-    "Every follow-up has a responsible person, a due date and an outcome. No message is sent automatically.",
-    "لكل متابعة مسؤول وتاريخ استحقاق ونتيجة. لا تُرسل رسائل تلقائيًا."
-  ],
-  [
-    "Track deliverables, revision requests and materials sent. A Sent record does not prove viewing or understanding; no message is sent automatically. Links open externally only when you choose them.",
-    "تابع التسليمات وطلبات التعديل والمواد المرسلة. حالة تم الإرسال لا تعني المشاهدة أو الفهم، ولا تُرسل رسالة تلقائيًا. الروابط الخارجية تُفتح عند اختيارها فقط."
-  ],
-  [
-    "Project milestones",
-    "مراحل المشاريع"
-  ],
-  [
-    "No project milestones yet.",
-    "لا توجد مراحل مشاريع بعد."
-  ],
-  [
-    "Revision requests",
-    "طلبات التعديل"
-  ],
-  [
-    "No revision requests.",
-    "لا توجد طلبات تعديل."
-  ],
-  [
-    "Recorded-course materials",
-    "مواد الكورسات المسجلة"
-  ],
-  [
-    "No recorded-course deliveries planned.",
-    "لا توجد تسليمات كورسات مسجلة مخططة."
-  ],
-  [
-    "Admin: full management. Coordinator: scheduling, registrations and delivery, without financial access. Accountant: collection and financial records, without team administration. Teacher: their own students, lessons, availability and deliveries. Role changes and disabling an account end its sessions. Only administration approves project delivery.",
-    "المدير: إدارة كاملة. المنسق: الجدولة والتسجيلات والتسليم دون وصول مالي. المحاسب: التحصيل والسجلات المالية دون إدارة الفريق. المدرس: طلابه وحصصه وتوافره وتسليماته فقط. تغيير الصلاحية أو تعطيل الحساب ينهي جلساته. الإدارة وحدها تعتمد تسليم المشروع."
-  ],
-  [
-    "Defaults only pre-fill new lessons; rates can always be changed per lesson. Data is stored in the local A+ Hub database on this computer.",
-    "الإعدادات الافتراضية تملأ الحصص الجديدة فقط، ويمكن تغيير أسعار كل حصة. البيانات محفوظة في قاعدة النظام المحلية على هذا الجهاز."
-  ],
-  [
-    "SQLite backups include registrations, attendance, lesson summaries and follow-up tasks. The older financial JSON export does not include those records; administrative JSON is a reference export, not a database restore. Restore first makes a safety backup of the current data, verifies the chosen backup, and rolls everything back if a step fails.",
-    "نسخ SQLite تشمل التسجيلات والحضور وملخصات الحصص ومهام المتابعة. التصدير المالي JSON القديم لا يشملها، والتصدير الإداري مرجع وليس نسخة استعادة. الاستعادة تنشئ نسخة أمان أولًا وتتحقق من النسخة المختارة وتتراجع بالكامل عند فشل أي خطوة."
-  ],
-  [
-    "Rates are never invented: if a rate is unavailable, enter it manually. Each transaction stores the rate used when it was recorded, so changing rates later never alters old records.",
-    "لا يُخمن سعر الصرف: أدخله يدويًا إن لم يتوفر. تحتفظ كل عملية بسعرها عند التسجيل؛ تغيير الأسعار لاحقًا لا يغير السجلات القديمة."
-  ],
-  [
-    "+ Add currency",
-    "+ إضافة عملة"
-  ],
-  [
-    "Current Rate",
-    "سعر الصرف الحالي"
-  ],
-  [
-    "Last Updated",
-    "آخر تحديث"
-  ],
-  [
-    "Manual rate",
-    "سعر يدوي"
-  ],
-  [
-    "Set",
-    "تعيين"
-  ],
-  [
-    "The same all-time totals and category calculations as the existing administration Financial Summary. Only its EGP columns are exposed here. This display conversion does not change recorded payments or create a currency settlement.",
-    "نفس إجماليات كل الفترات وطريقة حساب الفئات في ملخص الإدارة. المعروض هنا أعمدة الجنيه المصري فقط، والتحويل للعرض لا يغير دفعات ولا ينشئ تسوية عملة."
-  ],
-  [
-    "Net profit after operating expenses",
-    "صافي الربح بعد المصروفات التشغيلية"
-  ],
-  [
-    "Service profit before expenses",
-    "ربح الخدمات قبل المصروفات"
-  ],
-  [
-    "Recorded operating expenses",
-    "المصروفات المسجلة"
-  ],
-  [
-    "Net profit",
-    "صافي الربح"
-  ],
-  [
-    "All-time totals under the existing service accounting rules. Each expense is counted once when recorded, whether paid or not. Other profit figures on this page are before operating expenses. Opening balances and internal transfers are not revenue.",
-    "إجماليات كل الفترات وفق قواعد احتساب الخدمات الحالية. المصروف يُحتسب مرة واحدة عند تسجيله، سواء سُدد أم لا. أرقام الأرباح الأخرى في الصفحة قبل المصروفات التشغيلية. الأرصدة الافتتاحية والتحويلات الداخلية لا تُعد إيرادًا."
-  ],
-  [
-    "Expenses, accounts & reconciliation",
-    "المصروفات والخزائن والمطابقة"
-  ],
-  [
-    "Batch Payments — student hours",
-    "Batch Payments — دفعة مجمّعة لساعات طالب"
-  ],
-  [
-    "Select teacher, student and period. Payment uses saved completed-lesson costs, not the current hourly rate. One payment is linked automatically to the lessons or portions it covers. All amounts are EGP.",
-    "اختر المدرس والطالب والفترة. السداد حسب تكلفة الحصص المنفذة المحفوظة، وليس سعر الساعة الحالي. دفعة واحدة مرتبطة تلقائيًا بالحصة أو أجزاء الحصص التي تغطيها. كل المبالغ بالجنيه المصري."
-  ],
-  [
-    "Student",
-    "الطالب"
-  ],
-  [
-    "Calculate hours & amount due",
-    "حساب الساعات والمستحق"
-  ],
-  [
-    "Previous month",
-    "الشهر السابق"
-  ],
-  [
-    "Admin and Accountant only. Linking an original payment identifies its cash account without creating another payment. Opening balances are at the start of the chosen day; link only later transactions not already included.",
-    "متاحة للمدير والمحاسب فقط. ربط دفعة أصلية بخزينة يحدد مكان النقد ولا ينشئ دفعة ثانية. الرصيد الافتتاحي في بداية اليوم المختار؛ اربط فقط العمليات اللاحقة غير الداخلة فيه."
-  ],
-  [
-    "Accounts & transactions",
-    "الخزائن والحركات"
-  ],
-  [
-    "Operating expenses",
-    "المصروفات"
-  ],
-  [
-    "Reconciliation",
-    "المطابقة"
-  ],
-  [
-    "+ Account / cashbox",
-    "+ خزينة / حساب"
-  ],
-  [
-    "Transfer between accounts",
-    "تحويل بين حسابين"
-  ],
-  [
-    "No accounts yet. Start with a known opening balance for each account.",
-    "لم تُنشأ خزائن بعد. ابدأ برصيد افتتاحي معلوم لكل حساب."
-  ],
-  [
-    "Original payments without an account",
-    "دفعات أصلية لم تُنسب لخزينة"
-  ],
-  [
-    "These amounts already exist in the financial ledger. Linking them does not repeat collection or payment.",
-    "الأرقام التالية موجودة بالفعل في السجل المالي. ربطها لا يعيد التحصيل أو الصرف."
-  ],
-  [
-    "Reference",
-    "المرجع"
-  ],
-  [
-    "Link to account",
-    "ربط بخزينة"
-  ],
-  [
-    "Transaction history",
-    "سجل الحركات"
-  ],
-  [
-    "No transactions.",
-    "لا توجد حركات."
-  ],
-  [
-    "Teacher workspace preview",
-    "معاينة حساب المدرس"
-  ],
-  [
-    "Read-only preview as seen by the teacher, without student pricing or other teachers’ records.",
-    "عرض للقراءة كما يظهر للمدرس، دون أسعار الطلاب أو بيانات باقي المدرسين."
-  ],
-  [
-    "Schedule",
-    "جدوله"
-  ],
-  [
-    "Subjects",
-    "مواده"
-  ],
-  [
-    "Projects",
-    "مشاريعه"
-  ],
-  [
-    "EGP account",
-    "حسابه بالجنيه"
-  ],
-  [
-    "My schedule & lesson times",
-    "جدولي ومواعيد حصصي"
-  ],
-  [
-    "Existing timetable, new bookings and lesson records in one place. Times are in Cairo time. A booking alone does not mean a lesson was delivered.",
-    "الجدول القديم والحجوزات الجديدة وسجلات الحصص في مكان واحد. المواعيد بتوقيت القاهرة. الحجز وحده لا يعني تنفيذ حصة."
-  ],
-  [
-    "View period",
-    "عرض الفترة"
-  ],
-  [
-    "From — to",
-    "من — إلى"
-  ],
-  [
-    "Work",
-    "العمل"
-  ],
-  [
-    "Subject / work",
-    "المادة / العمل"
-  ],
-  [
-    "My availability & booking confirmations",
-    "أوقات توافري وتأكيد الحجوزات"
-  ],
-  [
-    "Add a cashbox or account",
-    "إضافة خزينة أو حساب"
-  ],
-  [
-    "Account name",
-    "اسم الحساب"
-  ],
-  [
-    "Account type",
-    "نوع الحساب"
-  ],
-  [
-    "Balance at the start of the day",
-    "الرصيد في بداية يوم"
-  ],
-  [
-    "Opening balance",
-    "الرصيد الافتتاحي"
-  ],
-  [
-    "Allow a negative balance",
-    "السماح برصيد سالب"
-  ],
-  [
-    "Record an account transfer — not revenue",
-    "تسجيل تحويل بين الحسابات — لا يُعد إيرادًا"
-  ],
-  [
-    "From account",
-    "من حساب"
-  ],
-  [
-    "To account",
-    "إلى حساب"
-  ],
-  [
-    "Actual transfer date",
-    "تاريخ التحويل الفعلي"
-  ],
-  [
-    "Amount out in source-account currency",
-    "المبلغ الخارج بعملة الحساب الأول"
-  ],
-  [
-    "Amount in in destination-account currency",
-    "المبلغ الداخل بعملة الحساب الثاني"
-  ],
-  [
-    "Transfer reference / description",
-    "مرجع التحويل / البيان"
-  ],
-  [
-    "— Select an account —",
-    "— اختر حسابًا —"
-  ],
-  [
-    "Account",
-    "الحساب"
-  ],
-  [
-    "Type",
-    "النوع"
-  ],
-  [
-    "Currency",
-    "العملة"
-  ],
-  [
-    "From date",
-    "من تاريخ"
-  ],
-  [
-    "Balance",
-    "الرصيد"
-  ],
-  [
-    "Status",
-    "الحالة"
-  ],
-  [
-    "Active",
-    "نشط"
-  ],
-  [
-    "Suspended",
-    "موقوف"
-  ],
-  [
-    "Suspend",
-    "إيقاف"
-  ],
-  [
-    "Activate",
-    "تنشيط"
-  ],
-  [
-    "Amount",
-    "المبلغ"
-  ],
-  [
-    "Direction",
-    "الاتجاه"
-  ],
-  [
-    "Currency not established",
-    "عملة غير مثبتة"
-  ],
-  [
-    "In",
-    "داخل"
-  ],
-  [
-    "Out",
-    "خارج"
-  ],
-  [
-    "All payments are assigned to accounts.",
-    "كل الدفعات منسوبة لحسابات."
-  ],
-  [
-    "Account / currency",
-    "الحساب / العملة"
-  ],
-  [
-    "Type / reference",
-    "النوع / المرجع"
-  ],
-  [
-    "Signed amount",
-    "المبلغ الموقّع"
-  ],
-  [
-    "Description",
-    "البيان"
-  ],
-  [
-    "Cash",
-    "نقدي"
-  ],
-  [
-    "Bank",
-    "بنك"
-  ],
-  [
-    "Wallet",
-    "محفظة"
-  ],
-  [
-    "No",
-    "لا"
-  ],
-  [
-    "Yes — overdraft account",
-    "نعم — حساب بسحب على المكشوف"
-  ],
-  [
-    "Activate account",
-    "تنشيط الحساب"
-  ],
-  [
-    "Suspend zero-balance account",
-    "إيقاف حساب رصيده صفر"
-  ],
-  [
-    "Account in the payment currency",
-    "الحساب بنفس عملة الدفعة"
-  ],
-  [
-    "Correct a payment account — correction history retained",
-    "تصحيح خزينة الدفعة — مع الاحتفاظ بتاريخ التصحيح"
-  ],
-  [
-    "Correct account",
-    "الحساب الصحيح"
-  ],
-  [
-    "Reason for correction",
-    "سبب التصحيح"
-  ],
-  [
-    "Reverse an erroneous entry — not a transfer or refund request",
-    "إلغاء حركة سُجلت بالخطأ — ليس طلب تحويل أو رد أموال"
-  ],
-  [
-    "Document / date",
-    "المستند / التاريخ"
-  ],
-  [
-    "Category / supplier",
-    "الفئة / المورد"
-  ],
-  [
-    "Paid",
-    "المدفوع"
-  ],
-  [
-    "Remaining",
-    "المتبقي"
-  ],
-  [
-    "No recorded expenses.",
-    "لا توجد مصروفات مسجلة."
-  ],
-  [
-    "Record an operating expense — no automatic cash payout",
-    "تسجيل مصروف تشغيلي — دون صرف نقدي تلقائي"
-  ],
-  [
-    "Expense date",
-    "تاريخ المصروف"
-  ],
-  [
-    "Category",
-    "الفئة"
-  ],
-  [
-    "Advertising",
-    "إعلانات"
-  ],
-  [
-    "Software & subscriptions",
-    "برامج واشتراكات"
-  ],
-  [
-    "Transfer fees",
-    "عمولات تحويل"
-  ],
-  [
-    "Rent",
-    "إيجار"
-  ],
-  [
-    "Internet & communications",
-    "إنترنت واتصالات"
-  ],
-  [
-    "Other",
-    "أخرى"
-  ],
-  [
-    "Supplier / payee",
-    "المورد / الجهة"
-  ],
-  [
-    "Supplier invoice number — optional",
-    "رقم فاتورة المورد — اختياري"
-  ],
-  [
-    "Expense description",
-    "وصف المصروف"
-  ],
-  [
-    "Expense currency",
-    "عملة المصروف"
-  ],
-  [
-    "Total expense amount",
-    "إجمالي قيمة المصروف"
-  ],
-  [
-    "Payment account",
-    "حساب الصرف"
-  ],
-  [
-    "Actual payout date",
-    "تاريخ الصرف الفعلي"
-  ],
-  [
-    "Payment reference",
-    "مرجع السداد"
-  ],
-  [
-    "Cancel an unpaid document, keeping its history",
-    "إلغاء مستند غير مسدد مع الاحتفاظ به"
-  ],
-  [
-    "Reason for cancellation",
-    "سبب الإلغاء"
-  ],
-  [
-    "Bank reference",
-    "مرجع البنك"
-  ],
-  [
-    "Import a local bank statement — no external service upload",
-    "استيراد كشف حساب محلي — لا إرسال لخدمة خارجية"
-  ],
-  [
-    "Period start",
-    "بداية الفترة"
-  ],
-  [
-    "Period end",
-    "نهاية الفترة"
-  ],
-  [
-    "Statement opening balance",
-    "رصيد أول الفترة بالكشف"
-  ],
-  [
-    "Statement closing balance",
-    "رصيد آخر الفترة بالكشف"
-  ],
-  [
-    "CSV contents: Date,Amount,Reference,Description",
-    "محتوى CSV: Date,Amount,Reference,Description"
-  ],
-  [
-    "Maximum 150 KB",
-    "الحد الأقصى 150 KB"
-  ],
-  [
-    "Matching transaction",
-    "الحركة المطابقة"
-  ],
-  [
-    "— Select —",
-    "— اختر —"
-  ],
-  [
-    "Unmatch in an open statement",
-    "فك مطابقة في كشف مفتوح"
-  ],
-  [
-    "Approve reconciliation — prevents new entries in the closed period",
-    "اعتماد المطابقة — يمنع حركات جديدة داخل الفترة المقفلة"
-  ],
-  [
-    "Choose teacher, student and a valid period ending no later than today",
-    "اختر المدرس والطالب وفترة صحيحة لا تتجاوز اليوم"
-  ],
-  [
-    "Saved hourly rate — EGP",
-    "أجر الساعة المسجل — ج.م"
-  ],
-  [
-    "Unpaid hours",
-    "الساعات غير المسددة"
-  ],
-  [
-    "Amount — EGP",
-    "المبلغ — ج.م"
-  ],
-  [
-    "No payable hours under these filters.",
-    "لا توجد ساعات مستحقة بهذه الشروط."
-  ],
-  [
-    "Subject",
-    "المادة"
-  ],
-  [
-    "Remaining — EGP",
-    "المتبقي — ج.م"
-  ],
-  [
-    "No lessons.",
-    "لا توجد حصص."
-  ],
-  [
-    "Payment ID",
-    "رقم الدفعة"
-  ],
-  [
-    "Unallocated amount — EGP",
-    "المتبقي للتوزيع — ج.م"
-  ],
-  [
-    "Period",
-    "الفترة"
-  ],
-  [
-    "Hours",
-    "الساعات"
-  ],
-  [
-    "New payment",
-    "دفعة جديدة"
-  ],
-  [
-    "Allocate an earlier payment",
-    "توزيع دفعة قديمة"
-  ],
-  [
-    "No batch payments for this student.",
-    "لا توجد دفعات مجمعة لهذا الطالب."
-  ],
-  [
-    "Hours to pay — allocated oldest first",
-    "الساعات المراد سدادها — توزع على الأقدم أولًا"
-  ],
-  [
-    "Actual payment date",
-    "تاريخ الدفع الفعلي"
-  ],
-  [
-    "EGP rate in the accounting currency — internal recording only",
-    "سعر الجنيه بعملة الحسابات — للتسجيل الداخلي فقط"
-  ],
-  [
-    "Payment method",
-    "طريقة الدفع"
-  ],
-  [
-    "EGP payment account — optional",
-    "خزينة الصرف بالجنيه — اختياري"
-  ],
-  [
-    "Hours exceed the payable amount",
-    "الساعات تتجاوز المستحق"
-  ],
-  [
-    "Amount from the earlier payment allocated to these lessons — EGP",
-    "المبلغ من الدفعة القديمة المخصص لهذه الحصص — ج.م"
-  ],
-  [
-    "Reason for linking the earlier payment to this student and period",
-    "سبب ربط الدفعة السابقة بهذا الطالب والفترة"
-  ],
-  [
-    "Choose a valid period",
-    "اختر فترة صحيحة"
-  ],
-  [
-    "Choose a period of no more than 63 days",
-    "اختر فترة لا تزيد عن 63 يومًا"
-  ],
-  [
-    "Not specified",
-    "غير محدد"
-  ],
-  [
-    "No sessions in the selected period.",
-    "لا توجد مواعيد في الفترة المختارة."
-  ],
-  [
-    "Service type",
-    "نوع الخدمة"
-  ],
-  [
-    "Level",
-    "المستوى"
-  ],
-  [
-    "Students in lessons & subject",
-    "طلاب الحصص والمادة"
-  ],
-  [
-    "Completed lessons",
-    "حصص منفذة"
-  ],
-  [
-    "No subjects assigned yet.",
-    "لا توجد مواد مسندة لك حتى الآن."
-  ],
-  [
-    "Project / subject",
-    "المشروع / المادة"
-  ],
-  [
-    "Start",
-    "البداية"
-  ],
-  [
-    "Due date",
-    "موعد التسليم"
-  ],
-  [
-    "No projects assigned.",
-    "لا توجد مشاريع مسندة لك."
-  ],
-  [
-    "Completed lesson",
-    "حصة منفذة"
-  ],
-  [
-    "Project earnings",
-    "مستحق مشروع"
-  ],
-  [
-    "Recorded-course earnings",
-    "مستحق كورس مسجل"
-  ],
-  [
-    "Payment received",
-    "دفعة مستلمة"
-  ],
-  [
-    "Details",
-    "التفاصيل"
-  ],
-  [
-    "Accrued / equivalent — EGP",
-    "مستحق / معادل — ج.م"
-  ],
-  [
-    "Paid / equivalent — EGP",
-    "مدفوع / معادل — ج.م"
-  ],
-  [
-    "Balance / equivalent — EGP",
-    "الرصيد / معادله — ج.م"
-  ],
-  [
-    "Undated",
-    "بدون تاريخ"
-  ],
-  [
-    "No transactions in the selected period.",
-    "لا توجد حركات خلال الفترة المختارة."
-  ],
-  [
-    "Financial Summary — EGP only",
-    "Financial Summary — الجنيه المصري فقط"
-  ],
-  [
-    "My teaching subjects",
-    "المواد التي أدرّسها"
-  ],
-  [
-    "Subjects assigned to you and those in your lessons, projects and courses.",
-    "المواد المسندة لك والمواد الموجودة في حصصك ومشاريعك وكورساتك."
-  ],
-  [
-    "My project work",
-    "المشاريع التي أعمل عليها"
-  ],
-  [
-    "Your current and previous projects only. Academy pricing and accounts are not shown here.",
-    "مشاريعك الحالية والسابقة فقط. الأسعار وحسابات الأكاديمية لا تظهر هنا."
-  ],
-  [
-    "Delivery milestones & revision requests",
-    "مراحل التسليم وطلبات التعديل"
-  ],
-  [
-    "Transaction details",
-    "تفصيل الحركات"
-  ],
-  [
-    "All transactions",
-    "كل الحركات"
-  ],
-  [
-    "The same teacher’s administration summary, showing EGP columns only. Like administration, the summary covers all dates. Stored accounting-base values are converted using the latest saved EGP rate. This is display-only: it does not change hourly pay or original payments and creates no currency settlement.",
-    "نفس بيانات جدول الإدارة لنفس المدرس، بأعمدة الجنيه فقط. الملخص لكل الفترات مثل جدول الإدارة. الحساب يعتمد على القيم المحفوظة بعملة حسابات الأكاديمية ثم تحويلها للجنيه بآخر سعر محفوظ؛ هذا معادل للعرض فقط، ولا يغير أجر الساعة أو أصل الدفعات ولا يسجل تسوية عملة."
-  ],
-  [
-    "The date filter applies to the transaction details below only; it does not change the all-time summary above. The displayed equivalent may differ from an original EGP transaction if exchange rates changed.",
-    "فلتر التاريخ للتفاصيل التالية فقط؛ لا يغيّر إجمالي الملخص أعلاه. المعادل المعروض قد يختلف عن مبلغ العملية الأصلي بالجنيه عند تغير سعر الصرف."
-  ],
-  [
-    "Rate timestamp — Cairo time:",
-    "تاريخ سعر التحويل — بتوقيت القاهرة:"
-  ],
-  [
-    "A rate is saved, but its timestamp is unavailable.",
-    "سعر التحويل محفوظ، لكن تاريخه غير متاح."
-  ],
-  [
-    "The exchange rate is missing, or records with another accounting-base currency are excluded just as in administration.",
-    "سعر التحويل غير متاح، أو توجد عمليات بعملة أساس مختلفة مستبعدة من الحساب مثل جدول الإدارة."
-  ],
-  [
-    "Subject / Course / Project Name",
-    "اسم المادة / الكورس / المشروع"
-  ],
-  [
-    "Full Course / Project Price",
-    "السعر الكامل للكورس / المشروع"
-  ],
-  [
-    "Teacher / Engineer Profit Share %",
-    "نسبة مستحق المدرس / المهندس %"
-  ],
-  [
-    "Number of Students",
-    "عدد الطلاب"
-  ],
-  [
-    "Project Status",
-    "حالة المشروع"
-  ],
-  [
-    "Amount Paid (so far)",
-    "المدفوع حتى الآن"
-  ],
-  [
-    "Subject (only subjects linked to this student and instructor)",
-    "المادة (المواد المرتبطة بهذا الطالب والمدرس فقط)"
-  ],
-  [
-    "Duration (hours)",
-    "المدة (بالساعات)"
-  ],
-  [
-    "Free / waived session (leave as normal for a paid session)",
-    "حصة مجانية / معفاة (اتركها عادية للحصة المدفوعة)"
-  ],
-  [
-    "Reason for the free / waived session (required, kept in the audit log)",
-    "سبب الحصة المجانية / المعفاة (مطلوب ويحفظ في سجل التدقيق)"
-  ],
-  [
-    "Engineer Profit Share %",
-    "نسبة مستحق المهندس %"
-  ],
-  [
-    "Course Selling Price",
-    "سعر بيع الكورس"
-  ],
-  [
-    "Instructor Share %",
-    "نسبة مستحق المدرس %"
-  ],
-  [
-    "Reminder Name (e.g. Send Recorded Lectures)",
-    "عنوان التذكير (مثل إرسال المحاضرات المسجلة)"
-  ],
-  [
-    "Related Recorded Course",
-    "الكورس المسجل المرتبط"
-  ],
-  [
-    "Day(s) — Ctrl/Cmd-click for several",
-    "الأيام — استخدم Ctrl/Cmd لاختيار أكثر من يوم"
-  ],
-  [
-    "End Date",
-    "تاريخ النهاية"
-  ],
-  [
-    "Repeat Frequency",
-    "معدل التكرار"
-  ],
-  [
-    "Other Payment Source Description",
-    "وصف مصدر الدفعة الأخرى"
-  ],
-  [
-    "Schedule Type",
-    "نوع الجدول"
-  ],
-  [
-    "Date (day is set automatically)",
-    "التاريخ (يُحدد اليوم تلقائيًا)"
-  ],
-  [
-    "Day of the week",
-    "يوم الأسبوع"
-  ],
-  [
-    "Student(s) — Ctrl/Cmd-click for several",
-    "الطلاب — استخدم Ctrl/Cmd لاختيار أكثر من طالب"
-  ],
-  [
-    "Weekday",
-    "يوم الأسبوع"
-  ],
-  [
-    "Available from",
-    "متاح من الساعة"
-  ],
-  [
-    "Available until",
-    "متاح حتى الساعة"
-  ],
-  [
-    "Availability status",
-    "حالة التوافر"
-  ],
-  [
-    "Live subject",
-    "مادة مباشرة"
-  ],
-  [
-    "Session date",
-    "تاريخ الحصة"
-  ],
-  [
-    "Booking status",
-    "حالة الحجز"
-  ],
-  [
-    "Matching completed lesson (required for completion)",
-    "الحصة المنفذة المطابقة (مطلوبة للإتمام)"
-  ],
-  [
-    "Scheduling notes",
-    "ملاحظات الجدولة"
-  ],
-  [
-    "Preferred teacher",
-    "المدرس المفضل"
-  ],
-  [
-    "Preferred days / times",
-    "الأيام / المواعيد المفضلة"
-  ],
-  [
-    "Request status",
-    "حالة الطلب"
-  ],
-  [
-    "Duration in minutes",
-    "المدة بالدقائق"
-  ],
-  [
-    "Find slots",
-    "البحث عن مواعيد"
-  ],
-  [
-    "Agreed total (original currency)",
-    "الإجمالي المتفق عليه (بالعملة الأصلية)"
-  ],
-  [
-    "Number of sessions (1 for projects/courses)",
-    "عدد الحصص (١ للمشاريع / الكورسات)"
-  ],
-  [
-    "Agreement starts",
-    "بداية الاتفاق"
-  ],
-  [
-    "Agreement ends (optional)",
-    "نهاية الاتفاق (اختياري)"
-  ],
-  [
-    "Existing service (leave blank for a new Live package)",
-    "خدمة موجودة (اتركها فارغة لباقة حصص جديدة)"
-  ],
-  [
-    "Registration / service name",
-    "اسم التسجيل / الخدمة"
-  ],
-  [
-    "Subject / service",
-    "المادة / الخدمة"
-  ],
-  [
-    "Responsible teacher",
-    "المدرس المسؤول"
-  ],
-  [
-    "End date (optional)",
-    "تاريخ النهاية (اختياري)"
-  ],
-  [
-    "Registration status",
-    "حالة التسجيل"
-  ],
-  [
-    "Agreement basis (reference only)",
-    "أساس الاتفاق (مرجعي فقط)"
-  ],
-  [
-    "Agreed price (optional; does not charge the student)",
-    "السعر المتفق عليه (اختياري ولا ينشئ رسومًا على الطالب)"
-  ],
-  [
-    "Agreement currency",
-    "عملة الاتفاق"
-  ],
-  [
-    "Planned sessions (optional whole number)",
-    "عدد الحصص المخططة (عدد صحيح اختياري)"
-  ],
-  [
-    "Learning goal / agreement notes",
-    "هدف التعلم / ملاحظات الاتفاق"
-  ],
-  [
-    "Save record",
-    "حفظ السجل"
-  ],
-  [
-    "Task / follow-up",
-    "المهمة / المتابعة"
-  ],
-  [
-    "Task status",
-    "حالة المهمة"
-  ],
-  [
-    "Related student",
-    "الطالب المرتبط"
-  ],
-  [
-    "Related teacher",
-    "المدرس المرتبط"
-  ],
-  [
-    "Related registration",
-    "التسجيل المرتبط"
-  ],
-  [
-    "Description / what needs doing",
-    "الوصف / المطلوب تنفيذه"
-  ],
-  [
-    "Result / outcome (required when Done)",
-    "النتيجة (مطلوبة عند الإتمام)"
-  ],
-  [
-    "Milestone / deliverable",
-    "المرحلة / المطلوب تسليمه"
-  ],
-  [
-    "Delivery status",
-    "حالة التسليم"
-  ],
-  [
-    "Deliverable link (optional)",
-    "رابط التسليم (اختياري)"
-  ],
-  [
-    "Delivery notes",
-    "ملاحظات التسليم"
-  ],
-  [
-    "Student / course enrolment",
-    "الطالب / تسجيل الكورس"
-  ],
-  [
-    "Material / lecture",
-    "المادة / المحاضرة"
-  ],
-  [
-    "Material link (optional)",
-    "رابط المادة (اختياري)"
-  ],
-  [
-    "Planned delivery date",
-    "تاريخ التسليم المخطط"
-  ],
-  [
-    "Actual delivery date (blank until sent)",
-    "تاريخ التسليم الفعلي (فارغ حتى الإرسال)"
-  ],
-  [
-    "Username (letters / numbers / dots)",
-    "اسم المستخدم (حروف / أرقام / نقاط)"
-  ],
-  [
-    "Linked teacher (required for Teacher)",
-    "المدرس المرتبط (مطلوب لحساب المدرس)"
-  ],
-  [
-    "Password (12+ characters)",
-    "كلمة المرور (١٢ حرفًا أو أكثر)"
-  ],
-  [
-    "New password (blank keeps existing; 12+ characters)",
-    "كلمة مرور جديدة (اتركها فارغة للإبقاء على الحالية؛ ١٢ حرفًا أو أكثر)"
-  ]
-]`, "/app/src/config.js": `'use strict';
-// Small settings file that lives NEXT TO the database (not inside it), so a restore never changes it.
-const fs = require('fs'), path = require('path');
-const DEFAULTS = { autoBackup: true, backupIntervalHours: 24, keepAutoBackups: 30, secondBackupDir: '', staleRateHours: 24, sessionMinutes: 480 };
-const fileFor = dbFile => dbFile + '.config.json';
-function load(dbFile) { let o = {}; try { o = JSON.parse(fs.readFileSync(fileFor(dbFile), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') require('./log').warn('settings file unreadable, defaults used', e); } return { ...DEFAULTS, ...o }; }
-function validate(c) {
-  const e = []; const n = (k, lo, hi) => { if (c[k] !== undefined && !(Number.isFinite(+c[k]) && +c[k] >= lo && +c[k] <= hi)) e.push(\`\${k} must be a number from \${lo} to \${hi}\`); };
-  n('backupIntervalHours', 1, 24 * 30); n('keepAutoBackups', 1, 1000); n('staleRateHours', 1, 24 * 365); n('sessionMinutes', 5, 60 * 24 * 30);
-  if (c.secondBackupDir !== undefined && (typeof c.secondBackupDir !== 'string' || c.secondBackupDir.length > 500 || /[\\0<>|"?*]/.test(c.secondBackupDir.replace(/^[A-Za-z]:/, '')))) e.push('secondBackupDir is not a valid folder path');
-  if (c.autoBackup !== undefined && typeof c.autoBackup !== 'boolean') e.push('autoBackup must be true or false');
-  return e;
-}
-function save(dbFile, patch) {
-  const cur = load(dbFile), next = { ...cur }; for (const k of Object.keys(DEFAULTS)) if (patch[k] !== undefined) next[k] = typeof DEFAULTS[k] === 'number' ? +patch[k] : patch[k];
-  const e = validate(next); if (e.length) { const x = new Error(e.join('; ')); x.problems = e; throw x; }
-  fs.mkdirSync(path.dirname(fileFor(dbFile)), { recursive: true }); const tmp = fileFor(dbFile) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(next, null, 1)); fs.renameSync(tmp, fileFor(dbFile)); return next;
-}
-module.exports = { load, save, validate, DEFAULTS, fileFor };
-`, "/app/src/db.js": `'use strict';
-// Database layer: opens SQLite with safe pragmas and applies forward-only migrations in order.
-const { DatabaseSync } = require('node:sqlite');
-const fs = require('fs'), path = require('path');
-const MIG_DIR = path.join(__dirname, '..', 'db', 'migrations');
-const migFiles = () => fs.readdirSync(MIG_DIR).filter(f => /^\\d+_.*\\.sql$/.test(f)).sort();
-const SCHEMA_VERSION = Math.max(...migFiles().map(f => parseInt(f, 10))); // highest migration file number shipped
-
-function open(file) {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
-  db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;');
-  return db;
-}
-// migrations that have not been applied to this database yet (does not change anything)
-function pending(db) {
-  let done = new Set(); try { done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version)); } catch (_) {}
-  return migFiles().filter(f => !done.has(parseInt(f, 10)));
-}
-const hasData = db => { try { return db.prepare("SELECT count(*) c FROM settings").get().c > 0; } catch (_) { return false; } };
-function migrate(db) {
-  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');
-  const done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version));
-  const files = migFiles();
-  const applied = [];
-  for (const f of files) {
-    const v = parseInt(f, 10); if (done.has(v)) continue;
-    const sql = fs.readFileSync(path.join(MIG_DIR, f), 'utf8');
-    db.exec('BEGIN');
-    try {
-      db.exec(sql);
-      db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(v, f, new Date().toISOString());
-      db.exec('COMMIT'); applied.push(f);
-    } catch (e) { db.exec('ROLLBACK'); throw new Error('migration ' + f + ' failed and was rolled back: ' + e.message); }
-  }
-  return applied;
-}
-const tx = (db, fn) => { db.exec('BEGIN IMMEDIATE'); try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { try { db.exec('ROLLBACK'); } catch (_) {} throw e; } };
-module.exports = { open, migrate, pending, hasData, tx, SCHEMA_VERSION, MIG_DIR };
-`, "/app/src/defaults.js": `'use strict';
-// Factory state of a brand-new database. Used by the server (fresh DB) and by the importer (to recognise an untouched, app-seeded target).
-const DEFAULT = () => ({ cp: [], al: [], ad: [], ts: [], v: 5, id: 1, set: { name: 'A+ Hub Academy', tr: '0', sr: '0', base: 'KWD' }, cur: [{ c: 'KWD', n: 'Kuwaiti Dinar' }, { c: 'EGP', n: 'Egyptian Pound' }, { c: 'USD', n: 'US Dollar' }, { c: 'SAR', n: 'Saudi Riyal' }, { c: 'QAR', n: 'Qatari Riyal' }, { c: 'AED', n: 'UAE Dirham' }, { c: 'BHD', n: 'Bahraini Dinar' }, { c: 'OMR', n: 'Omani Rial' }], rates: {}, t: [], s: [], sub: [], l: [], sp: [], tp: [], tt: [], pr: [], pp: [], rc: [], re: [], rm: [], rd: {} });
-module.exports = { DEFAULT };
-`, "/app/src/dryrun.js": `'use strict';
-// The 21-item dry-run report required before ANY real import. Pure reading: it never writes to the active database.
-const fs = require('fs'), os = require('os'), path = require('path');
-const { DatabaseSync } = require('node:sqlite');
-const { analyse, unwrap, sha, migrate, planTarget } = require('./importer');
-const { ORDER } = require('./mapping');
-const { open, migrate: mig } = require('./db');
-const { assemble } = require('./state');
-const f = require('./finance');
-const { makeOrig } = require('./orig');
-
-const bump = (o, c, k, v) => { const r = o[c || '—'] || (o[c || '—'] = {}); r[k] = (r[k] || 0) + v; };
-function totalsOf(d) {
-  const o = makeOrig({ O: f.O, pj: p => f.pj(d, p), rcc: f.rcc }), W = o.work(f.all(d)).byCurrency, T = JSON.parse(JSON.stringify(W));
-  const pr = new Map((d.pr || []).map(p => [p.id, p])), rc = new Map((d.rc || []).map(c => [c.id, c]));
-  (d.sp || []).forEach(p => bump(T, p.cur, 'studentPaymentsReceived', p.amt));
-  (d.tp || []).forEach(p => bump(T, p.cur, 'teacherPaymentsMade', p.amt));
-  (d.pp || []).forEach(p => { const q = pr.get(p.pr); if (q) bump(T, q.cur, 'projectPaymentsReceived', p.amt); });
-  (d.pr || []).forEach(p => { if (p.paid0) bump(T, p.cur, 'projectOpeningPaid_undated', p.paid0); });
-  (d.re || []).forEach(e => { const c = rc.get(e.rc); if (c && e.paid) bump(T, c.cur, 'courseEnrolmentPaid_undated', e.paid); });
-  return T;
-}
-function counts(d) { return Object.fromEntries(ORDER.map(k => [k, (d[k] || []).length])); }
-function readActive(dbFile, planFn) {
-  if (!dbFile || !fs.existsSync(dbFile) || fs.statSync(dbFile).size === 0) return { exists: false, counts: Object.fromEntries(ORDER.map(k => [k, 0])), totals: {} };
-  // Work on a throw-away COPY (database + any -wal), so the active files are only read, never opened by SQLite: no -shm/-wal side files, no mtime change.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aplus-dry-')); let h;
-  try { const cp = path.join(tmp, 'copy.sqlite'); fs.copyFileSync(dbFile, cp); if (fs.existsSync(dbFile + '-wal')) fs.copyFileSync(dbFile + '-wal', cp + '-wal');
-    h = new DatabaseSync(cp); const st = assemble(h); const r = { exists: true, counts: counts(st), totals: totalsOf(st), plan: planFn ? planFn(h) : null }; h.close(); return r; }
-  catch (e) { try { h && h.close(); } catch (_) {} return { exists: true, unreadable: String(e.message), counts: null, totals: null }; }
-  finally { fs.rmSync(tmp, { recursive: true, force: true }); }
-}
-
-function build(text, { sourceName = '(unnamed)', activeDb = null } = {}) {
-  const { data } = unwrap(text), srcSha = sha(text);
-  const rep = migrate(text, { mode: 'dry-run' });               // verified in-memory import; touches no file
-  const R = { items: {}, sourceSha256: srcSha, approvalCode: srcSha.slice(0, 12), importerStatus: rep.status };
-  const A = analyse(JSON.parse(JSON.stringify(unwrap(text).data)));
-  const base = (data.set && data.set.base) || '';
-  const I = R.items;
-  I['1_source'] = { file: sourceName, sha256: srcSha, validationStatus: rep.status, format: rep.sourceFormat, errors: rep.errors };
-  I['2_legacySchemaVersion'] = { version: data.v, supported: data.v === 5 };
-  if (rep.status === 'REJECTED' || !A.keep) { I['8_rejected'] = { fileRejected: true, reasons: rep.errors }; R.canProceed = false; R.verdict = 'The file was REJECTED; nothing can be imported from it.'; return R; }
-  I['3_totalsByEntity'] = Object.fromEntries(ORDER.map(k => [k, rep.counts[k].read]));
-  // classify every kept row: exact / transformed / has-extra-fields
-  let exact = 0, transformed = [], extra = 0;
-  for (const k of ORDER) for (const row of A.keep[k].values()) {
-    const t = []; if (row.__nullify) t.push(\`optional link(s) \${row.__nullify.join(',')} stored empty\`); if (row.__dropLinks) t.push(\`list link(s) \${Object.keys(row.__dropLinks).join(',')} lost missing ids\`);
-    if (t.length) transformed.push({ entity: k, id: row.id, changes: t }); else exact++;
-  }
-  Object.values(rep.unknownFields).forEach(m => Object.values(m).forEach(n => { extra += n; }));
-  I['4_eligibleForExactImport'] = { records: exact };
-  I['5_optionalFieldsPreservedSafely'] = { recordsWithUnknownFields: extra, where: 'extra_json (kept verbatim)', fields: rep.unknownFields };
-  I['6_requiringTransformation'] = { records: transformed.length, list: transformed.slice(0, 200) };
-  const q = rep.quarantined;
-  I['7_quarantined'] = { records: q.length, list: q.map(x => ({ entity: x.entity, id: x.id, reason: x.reason })) };
-  I['8_rejected'] = { fileRejected: false, rows: 0, note: 'Nothing is silently dropped: a row that cannot be stored exactly is quarantined (item 7) with its original JSON kept and the precise reason.' };
-  I['9_duplicateIds'] = q.filter(x => /is also used by/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason }));
-  I['10_missingOrInvalidReferences'] = { quarantinedRequiredLinks: q.filter(x => /link/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason })), optionalLinksStoredEmpty: rep.warnings.filter(w => /does not exist/.test(w)) };
-  I['11_unknownStatusValues'] = q.filter(x => /not one of/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason }));
-  // rates
-  const miss = [], unver = [], keepAll = k => [...A.keep[k].values()];
-  const rateOk = (cur, rx) => cur === base || (typeof rx === 'number' && rx > 0);
-  const chk = (entity, r, cur, rx, amt, bamt) => { if (cur === base) return; if (!rateOk(cur, rx)) { miss.push({ entity, id: r.id, currency: cur, reason: 'no saved rate on this record' }); unver.push({ entity, id: r.id, currency: cur, reason: 'no rate, so the base-currency value cannot be verified' }); }
-    else if (bamt != null && f.k_(amt, rx) !== bamt) unver.push({ entity, id: r.id, currency: cur, reason: \`stored base amount \${bamt} != amount \${amt} x saved rate \${rx} = \${f.k_(amt, rx)}\` }); };
-  keepAll('sp').forEach(r => chk('sp', r, r.cur, r.rx, r.amt, r.bamt)); keepAll('tp').forEach(r => chk('tp', r, r.cur, r.rx, r.amt, r.bamt));
-  keepAll('pr').forEach(r => { if (r.cur !== base && !rateOk(r.cur, r.rx)) { miss.push({ entity: 'pr', id: r.id, currency: r.cur, reason: 'no saved rate' }); unver.push({ entity: 'pr', id: r.id, currency: r.cur, reason: 'project revenue cannot be valued' }); } });
-  keepAll('rc').forEach(r => { if (r.cur !== base && !rateOk(r.cur, r.rx)) { miss.push({ entity: 'rc', id: r.id, currency: r.cur, reason: 'no saved rate' }); unver.push({ entity: 'rc', id: r.id, currency: r.cur, reason: 'course revenue cannot be valued' }); } });
-  keepAll('l').forEach(l => { const o = f.O(l); if (l.st !== 'Completed') return; chk('l.cost', l, l.tc, l.trx, o.cost, l.bcost); chk('l.charge', l, l.sc, l.srx, o.chg, l.bchg); });
-  I['12_missingHistoricalExchangeRates'] = { records: miss.length, list: miss.slice(0, 200), note: 'These are never filled in with today\\'s rate or any invented value; they are listed so you can decide.' };
-  I['13_conversionsThatCannotBeVerified'] = { records: unver.length, list: unver.slice(0, 200) };
-  I['14_openingBalancesWithoutDates'] = { projects: keepAll('pr').filter(p => p.paid0 > 0).map(p => ({ id: p.id, currency: p.cur, amount: p.paid0 })), note: 'Reported separately, never shown as a dated receipt.' };
-  const reAll = keepAll('re'); I['15_courseEnrolmentsWithoutPaymentHistory'] = { enrolments: reAll.length, withAmountPaidButNoHistory: reAll.filter(e => e.paid > 0).length, note: 'The legacy data stores one "paid so far" number per enrolment, with no dated payments. They are imported as an undated opening amount.' };
-  I['16_projectPaymentsValuedFromParentRate'] = { payments: keepAll('pp').length, note: 'Project payments carry no rate of their own; they are valued with the project\\'s saved rate.' };
-  // before / after
-  const act = readActive(activeDb, h => planTarget(h, data, A)); const kept = { ...data, rates: A.rates || data.rates, cur: A.cur || data.cur }; for (const k of ORDER) kept[k] = [...A.keep[k].values()].map(r => { const o = { ...r }; delete o.__nullify; delete o.__dropLinks; return o; });
-  const pre = act.plan ? { wouldBeRefused: act.plan.refuse || null, existingBusinessRows: act.plan.existingBusinessRows || {}, conflicts: act.plan.conflicts, appSeededConfigThatWillBeReplaced: !!act.plan.hasSeed, previousConfigKeptIn: act.plan.hasSeed ? 'audit_log (before_json); exchange_rate_history is never deleted' : null, rules: 'see CUTOVER_PROCEDURE.md' } : { note: 'no active database yet (or it could not be read): nothing to conflict with' };
-  I['17_entityCountsBeforeAfter'] = { targetPreflight: pre, activeDatabase: act.exists ? (act.unreadable ? 'could not be read read-only: ' + act.unreadable : act.counts) : 'no active database yet (empty)', afterImport: counts(kept), note: 'Import is refused unless the target is empty, so "after" = the imported rows.' };
-  I['18_totalsByOriginalCurrencyBeforeAfter'] = { activeDatabase: act.exists ? act.totals : {}, wholeSourceFile: totalsOf(data), afterImport: totalsOf(kept), note: 'Amounts are integer thousandths of each currency; currencies are never added together.' };
-  const defensible = miss.length === 0 && unver.length === 0;
-  I['19_convertedTotals'] = defensible ? { basis: 'each record\\'s own saved rate (never today\\'s rate)', baseCurrency: base, totals: rep.reconciliation && rep.reconciliation.expected } : { withheld: true, reason: \`\${miss.length} record(s) have no saved rate and \${unver.length} conversion(s) cannot be verified, so no single converted figure is shown.\` };
-  const disc = []; if (rep.reconciliation && !rep.reconciliation.matches) disc.push('financial totals from SQLite differ from legacy rows: ' + rep.reconciliation.differingTotals.join(', '));
-  if (rep.roundTrip && !rep.roundTrip.identical) disc.push(\`round trip differs in \${rep.roundTrip.totalDifferences} place(s): \` + rep.roundTrip.differences.slice(0, 5).join(' ; '));
-  if (rep.integrity && (rep.integrity.integrity_check !== 'ok' || rep.integrity.foreign_key_violations)) disc.push('database integrity/foreign-key check failed');
-  if (q.length) disc.push(\`\${q.length} record(s) are quarantined; totals of the imported data are lower than the whole source by: \` + JSON.stringify(rep.reconciliation && rep.reconciliation.effectOfQuarantineOnTotals));
-  if (unver.length) disc.push(\`\${unver.length} conversion(s) cannot be verified\`); if (miss.length) disc.push(\`\${miss.length} record(s) lack a saved exchange rate\`);
-  I['20_unresolvedDiscrepancies'] = disc;
-  const exactAll = rep.status === 'OK' && !transformed.length && rep.roundTrip && rep.roundTrip.identical && !q.length;
-  I['21_preservesAllSupportedInformationExactly'] = { answer: exactAll ? 'YES' : 'NO', why: exactAll ? 'Every record imported unchanged and read back identical.' : [q.length && \`\${q.length} quarantined\`, transformed.length && \`\${transformed.length} transformed\`, rep.status !== 'OK' && 'status ' + rep.status].filter(Boolean).join('; ') };
-  R.canProceed = ['OK', 'OK_WITH_QUARANTINE'].includes(rep.status) && !(act.plan && act.plan.refuse);
-  if (act.plan && act.plan.refuse) disc.push('the existing target database would be refused: ' + act.plan.refuse);
-  R.verdict = R.canProceed ? 'Dry run finished. NOTHING has been imported. A real import needs your separate explicit approval after you and the assistant have read this report.' : 'The dry run did not verify; do not import.';
-  return R;
-}
-
-function markdown(R) {
-  const I = R.items, L = [\`# Migration dry-run report (21 items)\`, '', \`**\${R.verdict}**\`, '', \`Importer status: \\\`\${R.importerStatus}\\\` · Source SHA-256: \\\`\${R.sourceSha256}\\\`\`, ''];
-  const j = x => '\`\`\`json\\n' + JSON.stringify(x, null, 1) + '\\n\`\`\`';
-  for (const [k, v] of Object.entries(I)) L.push(\`## \${k.replace('_', '. ').replace(/([a-z])([A-Z])/g, '$1 $2')}\`, '', j(v), '');
-  L.push('---', 'This report is not permission to import. A real import requires: (1) your explicit written approval after reviewing this report, then (2) \`--apply --approve=<first 12 characters of the source SHA-256 above>\` run by you.', '');
-  return L.join('\\n');
-}
-module.exports = { build, markdown, totalsOf, readActive };
+`, "/app/src/client/ui-translations.json": `[\r
+  [\r
+    "Workspace",\r
+    "مساحة العمل"\r
+  ],\r
+  [\r
+    "Academy workspace",\r
+    "إدارة الأكاديمية"\r
+  ],\r
+  [\r
+    "Academy overview",\r
+    "نظرة عامة على الأكاديمية"\r
+  ],\r
+  [\r
+    "Dashboard",\r
+    "لوحة التحكم"\r
+  ],\r
+  [\r
+    "Daily Desk",\r
+    "المتابعة اليومية"\r
+  ],\r
+  [\r
+    "Timetable",\r
+    "جدول المواعيد"\r
+  ],\r
+  [\r
+    "Scheduling",\r
+    "الجدولة"\r
+  ],\r
+  [\r
+    "Students",\r
+    "الطلاب"\r
+  ],\r
+  [\r
+    "Teachers",\r
+    "المدرسون"\r
+  ],\r
+  [\r
+    "Academy",\r
+    "الأكاديمية"\r
+  ],\r
+  [\r
+    "Finance",\r
+    "المالية"\r
+  ],\r
+  [\r
+    "Operations",\r
+    "التشغيل"\r
+  ],\r
+  [\r
+    "Administration",\r
+    "الإدارة"\r
+  ],\r
+  [\r
+    "Subjects",\r
+    "المواد والخدمات"\r
+  ],\r
+  [\r
+    "Lessons",\r
+    "الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Lessons (Live)",\r
+    "الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Recorded Courses",\r
+    "الكورسات المسجلة"\r
+  ],\r
+  [\r
+    "Projects",\r
+    "المشاريع"\r
+  ],\r
+  [\r
+    "Payments",\r
+    "المدفوعات"\r
+  ],\r
+  [\r
+    "Reports",\r
+    "التقارير المالية"\r
+  ],\r
+  [\r
+    "Cash Flow",\r
+    "التدفقات النقدية"\r
+  ],\r
+  [\r
+    "Settings",\r
+    "الإعدادات"\r
+  ],\r
+  [\r
+    "Registrations",\r
+    "التسجيلات"\r
+  ],\r
+  [\r
+    "Attendance & Notes",\r
+    "الحضور والملاحظات"\r
+  ],\r
+  [\r
+    "Follow-up Tasks",\r
+    "مهام المتابعة"\r
+  ],\r
+  [\r
+    "Billing",\r
+    "الباقات والتحصيل"\r
+  ],\r
+  [\r
+    "Delivery",\r
+    "التسليمات"\r
+  ],\r
+  [\r
+    "Team",\r
+    "فريق العمل"\r
+  ],\r
+  [\r
+    "Teacher Preview",\r
+    "معاينة حساب المدرس"\r
+  ],\r
+  [\r
+    "Treasury",\r
+    "الخزائن والمصروفات"\r
+  ],\r
+  [\r
+    "Batch Payments",\r
+    "الدفعات المجمعة"\r
+  ],\r
+  [\r
+    "Financial Summary",\r
+    "الملخص المالي"\r
+  ],\r
+  [\r
+    "My Schedule",\r
+    "جدولي"\r
+  ],\r
+  [\r
+    "My Subjects",\r
+    "موادي"\r
+  ],\r
+  [\r
+    "My Projects",\r
+    "مشاريعي"\r
+  ],\r
+  [\r
+    "Search workspace",\r
+    "البحث في النظام"\r
+  ],\r
+  [\r
+    "Search pages and people",\r
+    "البحث في الصفحات والأشخاص"\r
+  ],\r
+  [\r
+    "Search a page, teacher or student…",\r
+    "ابحث عن صفحة أو مدرس أو طالب…"\r
+  ],\r
+  [\r
+    "No matching pages or people.",\r
+    "لا توجد صفحات أو أشخاص مطابقون."\r
+  ],\r
+  [\r
+    "No matching pages or people",\r
+    "لا توجد صفحات أو أشخاص مطابقون"\r
+  ],\r
+  [\r
+    "Page",\r
+    "صفحة"\r
+  ],\r
+  [\r
+    "Teacher",\r
+    "مدرس"\r
+  ],\r
+  [\r
+    "Student",\r
+    "طالب"\r
+  ],\r
+  [\r
+    "Toggle navigation",\r
+    "فتح أو إغلاق القائمة"\r
+  ],\r
+  [\r
+    "Close navigation",\r
+    "إغلاق القائمة"\r
+  ],\r
+  [\r
+    "Account menu",\r
+    "قائمة الحساب"\r
+  ],\r
+  [\r
+    "Sign out",\r
+    "تسجيل الخروج"\r
+  ],\r
+  [\r
+    "Admin",\r
+    "المدير"\r
+  ],\r
+  [\r
+    "Accountant",\r
+    "المحاسب"\r
+  ],\r
+  [\r
+    "Coordinator",\r
+    "المنسق"\r
+  ],\r
+  [\r
+    "Close",\r
+    "إغلاق"\r
+  ],\r
+  [\r
+    "Cancel",\r
+    "إلغاء"\r
+  ],\r
+  [\r
+    "Save",\r
+    "حفظ"\r
+  ],\r
+  [\r
+    "OK",\r
+    "موافق"\r
+  ],\r
+  [\r
+    "Clear",\r
+    "مسح"\r
+  ],\r
+  [\r
+    "Clear filters",\r
+    "مسح الفلاتر"\r
+  ],\r
+  [\r
+    "Previous",\r
+    "السابق"\r
+  ],\r
+  [\r
+    "Next",\r
+    "التالي"\r
+  ],\r
+  [\r
+    "Search this table…",\r
+    "البحث في هذا الجدول…"\r
+  ],\r
+  [\r
+    "All statuses",\r
+    "كل الحالات"\r
+  ],\r
+  [\r
+    "Actions",\r
+    "الإجراءات"\r
+  ],\r
+  [\r
+    "Edit",\r
+    "تعديل"\r
+  ],\r
+  [\r
+    "Delete",\r
+    "حذف"\r
+  ],\r
+  [\r
+    "Open",\r
+    "مفتوح"\r
+  ],\r
+  [\r
+    "Review",\r
+    "مراجعة"\r
+  ],\r
+  [\r
+    "Details",\r
+    "التفاصيل"\r
+  ],\r
+  [\r
+    "Required",\r
+    "مطلوب"\r
+  ],\r
+  [\r
+    "Record details",\r
+    "تفاصيل السجل"\r
+  ],\r
+  [\r
+    "Notice",\r
+    "تنبيه"\r
+  ],\r
+  [\r
+    "General details",\r
+    "البيانات الأساسية"\r
+  ],\r
+  [\r
+    "Schedule & timing",\r
+    "المواعيد والتوقيت"\r
+  ],\r
+  [\r
+    "Rates & financial details",\r
+    "الأسعار والبيانات المالية"\r
+  ],\r
+  [\r
+    "Additional notes",\r
+    "ملاحظات إضافية"\r
+  ],\r
+  [\r
+    "Source",\r
+    "المصدر"\r
+  ],\r
+  [\r
+    "Date",\r
+    "التاريخ"\r
+  ],\r
+  [\r
+    "Name",\r
+    "الاسم"\r
+  ],\r
+  [\r
+    "Phone",\r
+    "الهاتف"\r
+  ],\r
+  [\r
+    "Email",\r
+    "البريد الإلكتروني"\r
+  ],\r
+  [\r
+    "Specialization",\r
+    "التخصص"\r
+  ],\r
+  [\r
+    "Default Cost/hr",\r
+    "الأجر الافتراضي للساعة"\r
+  ],\r
+  [\r
+    "Status",\r
+    "الحالة"\r
+  ],\r
+  [\r
+    "University",\r
+    "الجامعة"\r
+  ],\r
+  [\r
+    "Country",\r
+    "الدولة"\r
+  ],\r
+  [\r
+    "Major",\r
+    "التخصص الدراسي"\r
+  ],\r
+  [\r
+    "Level",\r
+    "المستوى"\r
+  ],\r
+  [\r
+    "Phone / WhatsApp",\r
+    "الهاتف / واتساب"\r
+  ],\r
+  [\r
+    "Balance",\r
+    "الرصيد"\r
+  ],\r
+  [\r
+    "Subject",\r
+    "المادة"\r
+  ],\r
+  [\r
+    "Instructor",\r
+    "المدرس"\r
+  ],\r
+  [\r
+    "Student(s)",\r
+    "الطلاب"\r
+  ],\r
+  [\r
+    "Hours",\r
+    "الساعات"\r
+  ],\r
+  [\r
+    "Teacher Rate",\r
+    "سعر ساعة المدرس"\r
+  ],\r
+  [\r
+    "Student Rate",\r
+    "سعر ساعة الطالب"\r
+  ],\r
+  [\r
+    "Teacher Cost",\r
+    "أجر المدرس"\r
+  ],\r
+  [\r
+    "Charge",\r
+    "التكلفة على الطالب"\r
+  ],\r
+  [\r
+    "Margin",\r
+    "هامش الربح"\r
+  ],\r
+  [\r
+    "Amount",\r
+    "المبلغ"\r
+  ],\r
+  [\r
+    "Rate",\r
+    "سعر التحويل"\r
+  ],\r
+  [\r
+    "Method",\r
+    "الطريقة"\r
+  ],\r
+  [\r
+    "Notes",\r
+    "الملاحظات"\r
+  ],\r
+  [\r
+    "Paid",\r
+    "المدفوع"\r
+  ],\r
+  [\r
+    "Accrued",\r
+    "المستحق"\r
+  ],\r
+  [\r
+    "Earned",\r
+    "المستحق"\r
+  ],\r
+  [\r
+    "Remaining",\r
+    "المتبقي"\r
+  ],\r
+  [\r
+    "Outstanding",\r
+    "المتبقي للتحصيل"\r
+  ],\r
+  [\r
+    "Charged",\r
+    "إجمالي الرسوم"\r
+  ],\r
+  [\r
+    "Currency",\r
+    "العملة"\r
+  ],\r
+  [\r
+    "Type",\r
+    "النوع"\r
+  ],\r
+  [\r
+    "Time",\r
+    "الوقت"\r
+  ],\r
+  [\r
+    "Day",\r
+    "اليوم"\r
+  ],\r
+  [\r
+    "From",\r
+    "من"\r
+  ],\r
+  [\r
+    "To",\r
+    "إلى"\r
+  ],\r
+  [\r
+    "All teachers",\r
+    "كل المدرسين"\r
+  ],\r
+  [\r
+    "All students",\r
+    "كل الطلاب"\r
+  ],\r
+  [\r
+    "All subjects",\r
+    "كل المواد"\r
+  ],\r
+  [\r
+    "All levels",\r
+    "كل المستويات"\r
+  ],\r
+  [\r
+    "All currencies",\r
+    "كل العملات"\r
+  ],\r
+  [\r
+    "All work types",\r
+    "كل أنواع العمل"\r
+  ],\r
+  [\r
+    "From date",\r
+    "من تاريخ"\r
+  ],\r
+  [\r
+    "To date",\r
+    "إلى تاريخ"\r
+  ],\r
+  [\r
+    "Subject Name",\r
+    "اسم المادة"\r
+  ],\r
+  [\r
+    "Teacher Name",\r
+    "اسم المدرس"\r
+  ],\r
+  [\r
+    "Student Name",\r
+    "اسم الطالب"\r
+  ],\r
+  [\r
+    "Phone Number",\r
+    "رقم الهاتف"\r
+  ],\r
+  [\r
+    "Search teachers by name",\r
+    "البحث باسم المدرس"\r
+  ],\r
+  [\r
+    "Search students by name",\r
+    "البحث باسم الطالب"\r
+  ],\r
+  [\r
+    "Search subjects",\r
+    "البحث في المواد"\r
+  ],\r
+  [\r
+    "Search",\r
+    "بحث"\r
+  ],\r
+  [\r
+    "Default Hourly Cost",\r
+    "أجر الساعة الافتراضي"\r
+  ],\r
+  [\r
+    "Payment Currency",\r
+    "عملة الدفع"\r
+  ],\r
+  [\r
+    "Billing Currency",\r
+    "عملة الفاتورة"\r
+  ],\r
+  [\r
+    "University (pick one already used, or type a new one)",\r
+    "الجامعة (اختر جامعة مسجلة أو اكتب اسمًا جديدًا)"\r
+  ],\r
+  [\r
+    "Major / Specialization",\r
+    "التخصص الدراسي"\r
+  ],\r
+  [\r
+    "Academic Level",\r
+    "المستوى الدراسي"\r
+  ],\r
+  [\r
+    "Add Teacher",\r
+    "إضافة مدرس"\r
+  ],\r
+  [\r
+    "Edit Teacher",\r
+    "تعديل مدرس"\r
+  ],\r
+  [\r
+    "+ Add Teacher",\r
+    "+ إضافة مدرس"\r
+  ],\r
+  [\r
+    "Add Student",\r
+    "إضافة طالب"\r
+  ],\r
+  [\r
+    "Edit Student",\r
+    "تعديل طالب"\r
+  ],\r
+  [\r
+    "+ Add Student",\r
+    "+ إضافة طالب"\r
+  ],\r
+  [\r
+    "+ Add New Subject",\r
+    "+ إضافة مادة جديدة"\r
+  ],\r
+  [\r
+    "Add New Subject",\r
+    "إضافة مادة جديدة"\r
+  ],\r
+  [\r
+    "Add Lesson",\r
+    "إضافة حصة"\r
+  ],\r
+  [\r
+    "Edit Lesson",\r
+    "تعديل حصة"\r
+  ],\r
+  [\r
+    "+ Add Lesson",\r
+    "+ إضافة حصة"\r
+  ],\r
+  [\r
+    "Add Project",\r
+    "إضافة مشروع"\r
+  ],\r
+  [\r
+    "Edit Project",\r
+    "تعديل مشروع"\r
+  ],\r
+  [\r
+    "+ Add Project",\r
+    "+ إضافة مشروع"\r
+  ],\r
+  [\r
+    "+ Add Recorded Course",\r
+    "+ إضافة كورس مسجل"\r
+  ],\r
+  [\r
+    "Add Recorded Course",\r
+    "إضافة كورس مسجل"\r
+  ],\r
+  [\r
+    "Edit Recorded Course",\r
+    "تعديل كورس مسجل"\r
+  ],\r
+  [\r
+    "+ Add Reminder",\r
+    "+ إضافة تذكير"\r
+  ],\r
+  [\r
+    "Add Reminder",\r
+    "إضافة تذكير"\r
+  ],\r
+  [\r
+    "Add Student Payment",\r
+    "إضافة دفعة طالب"\r
+  ],\r
+  [\r
+    "Add Teacher Payment",\r
+    "إضافة دفعة مدرس"\r
+  ],\r
+  [\r
+    "+ Student Payment",\r
+    "+ دفعة طالب"\r
+  ],\r
+  [\r
+    "+ Teacher Payment",\r
+    "+ دفعة مدرس"\r
+  ],\r
+  [\r
+    "+ Record Payment",\r
+    "+ تسجيل دفعة"\r
+  ],\r
+  [\r
+    "+ Add Entry",\r
+    "+ إضافة موعد"\r
+  ],\r
+  [\r
+    "Add Timetable Entry",\r
+    "إضافة موعد في الجدول"\r
+  ],\r
+  [\r
+    "Edit Timetable Entry",\r
+    "تعديل موعد في الجدول"\r
+  ],\r
+  [\r
+    "+ Availability",\r
+    "+ أوقات التوافر"\r
+  ],\r
+  [\r
+    "+ Book lesson",\r
+    "+ حجز حصة"\r
+  ],\r
+  [\r
+    "+ Waiting-list request",\r
+    "+ طلب في قائمة الانتظار"\r
+  ],\r
+  [\r
+    "Find available slots",\r
+    "البحث عن مواعيد متاحة"\r
+  ],\r
+  [\r
+    "Teacher availability",\r
+    "أوقات توافر المدرس"\r
+  ],\r
+  [\r
+    "Book a lesson",\r
+    "حجز حصة"\r
+  ],\r
+  [\r
+    "Waiting-list request",\r
+    "طلب في قائمة الانتظار"\r
+  ],\r
+  [\r
+    "+ Activate agreement",\r
+    "+ تفعيل اتفاق"\r
+  ],\r
+  [\r
+    "Activate a package / collection agreement",\r
+    "تفعيل باقة أو اتفاق تحصيل"\r
+  ],\r
+  [\r
+    "+ Register student",\r
+    "+ تسجيل طالب"\r
+  ],\r
+  [\r
+    "Register student in a service",\r
+    "تسجيل طالب في خدمة"\r
+  ],\r
+  [\r
+    "+ New task",\r
+    "+ مهمة جديدة"\r
+  ],\r
+  [\r
+    "New follow-up task",\r
+    "مهمة متابعة جديدة"\r
+  ],\r
+  [\r
+    "+ Project milestone",\r
+    "+ مرحلة مشروع"\r
+  ],\r
+  [\r
+    "+ Course material",\r
+    "+ مادة كورس"\r
+  ],\r
+  [\r
+    "Project milestone / delivery",\r
+    "مرحلة مشروع / تسليم"\r
+  ],\r
+  [\r
+    "Recorded-course material delivery",\r
+    "تسليم محتوى كورس مسجل"\r
+  ],\r
+  [\r
+    "+ Create account",\r
+    "+ إنشاء حساب"\r
+  ],\r
+  [\r
+    "Create team account",\r
+    "إنشاء حساب فريق"\r
+  ],\r
+  [\r
+    "Edit team account",\r
+    "تعديل حساب فريق"\r
+  ],\r
+  [\r
+    "Keep it",\r
+    "الإبقاء عليه"\r
+  ],\r
+  [\r
+    "Archive (set Inactive)",\r
+    "أرشفة (تعيين غير نشط)"\r
+  ],\r
+  [\r
+    "Active",\r
+    "نشط"\r
+  ],\r
+  [\r
+    "Inactive",\r
+    "غير نشط"\r
+  ],\r
+  [\r
+    "Completed",\r
+    "مكتمل"\r
+  ],\r
+  [\r
+    "Cancelled",\r
+    "ملغى"\r
+  ],\r
+  [\r
+    "Rescheduled",\r
+    "أُعيدت جدولته"\r
+  ],\r
+  [\r
+    "No Show",\r
+    "لم يحضر"\r
+  ],\r
+  [\r
+    "Pending",\r
+    "قيد الانتظار"\r
+  ],\r
+  [\r
+    "In Progress",\r
+    "قيد التنفيذ"\r
+  ],\r
+  [\r
+    "Approved",\r
+    "معتمد"\r
+  ],\r
+  [\r
+    "Planned",\r
+    "مخطط"\r
+  ],\r
+  [\r
+    "Sent",\r
+    "تم الإرسال"\r
+  ],\r
+  [\r
+    "Confirmed",\r
+    "مؤكد"\r
+  ],\r
+  [\r
+    "Done",\r
+    "منجز"\r
+  ],\r
+  [\r
+    "Skipped",\r
+    "متجاوز"\r
+  ],\r
+  [\r
+    "Scheduled",\r
+    "مجدول"\r
+  ],\r
+  [\r
+    "Disabled",\r
+    "معطل"\r
+  ],\r
+  [\r
+    "Closed",\r
+    "مغلق"\r
+  ],\r
+  [\r
+    "Partially Paid",\r
+    "مدفوع جزئيًا"\r
+  ],\r
+  [\r
+    "Credit",\r
+    "رصيد دائن"\r
+  ],\r
+  [\r
+    "Overpaid",\r
+    "مدفوع بالزيادة"\r
+  ],\r
+  [\r
+    "Overdue",\r
+    "متأخر"\r
+  ],\r
+  [\r
+    "Cash",\r
+    "نقدي"\r
+  ],\r
+  [\r
+    "Bank",\r
+    "بنك"\r
+  ],\r
+  [\r
+    "Wallet",\r
+    "محفظة"\r
+  ],\r
+  [\r
+    "Bank Transfer",\r
+    "تحويل بنكي"\r
+  ],\r
+  [\r
+    "Other",\r
+    "أخرى"\r
+  ],\r
+  [\r
+    "Live",\r
+    "حصص مباشرة"\r
+  ],\r
+  [\r
+    "Recorded",\r
+    "مسجل"\r
+  ],\r
+  [\r
+    "Recorded Course",\r
+    "كورس مسجل"\r
+  ],\r
+  [\r
+    "Project",\r
+    "مشروع"\r
+  ],\r
+  [\r
+    "Live Sessions",\r
+    "الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Project Name",\r
+    "اسم المشروع"\r
+  ],\r
+  [\r
+    "Course Name",\r
+    "اسم الكورس"\r
+  ],\r
+  [\r
+    "Service Type",\r
+    "نوع الخدمة"\r
+  ],\r
+  [\r
+    "Payment Source",\r
+    "مصدر الدفعة"\r
+  ],\r
+  [\r
+    "Payment Date",\r
+    "تاريخ الدفع"\r
+  ],\r
+  [\r
+    "Start Date",\r
+    "تاريخ البداية"\r
+  ],\r
+  [\r
+    "Due Date",\r
+    "موعد التسليم"\r
+  ],\r
+  [\r
+    "Date of Birth",\r
+    "تاريخ الميلاد"\r
+  ],\r
+  [\r
+    "Start",\r
+    "البداية"\r
+  ],\r
+  [\r
+    "End",\r
+    "النهاية"\r
+  ],\r
+  [\r
+    "Location",\r
+    "المكان"\r
+  ],\r
+  [\r
+    "Duration",\r
+    "المدة"\r
+  ],\r
+  [\r
+    "High School",\r
+    "الثانوي"\r
+  ],\r
+  [\r
+    "Undergraduate",\r
+    "جامعي"\r
+  ],\r
+  [\r
+    "Postgraduate",\r
+    "دراسات عليا"\r
+  ],\r
+  [\r
+    "Student charge currency",\r
+    "عملة رسوم الطالب"\r
+  ],\r
+  [\r
+    "Teacher cost currency",\r
+    "عملة أجر المدرس"\r
+  ],\r
+  [\r
+    "Currency applies to: student charge",\r
+    "العملة تخص: رسوم الطالب"\r
+  ],\r
+  [\r
+    "Total Students",\r
+    "إجمالي الطلاب"\r
+  ],\r
+  [\r
+    "Total Teachers",\r
+    "إجمالي المدرسين"\r
+  ],\r
+  [\r
+    "Total Lessons",\r
+    "إجمالي الحصص"\r
+  ],\r
+  [\r
+    "Total Teaching Hours",\r
+    "إجمالي ساعات التدريس"\r
+  ],\r
+  [\r
+    "Total Hours",\r
+    "إجمالي الساعات"\r
+  ],\r
+  [\r
+    "Total Revenue",\r
+    "إجمالي الإيراد"\r
+  ],\r
+  [\r
+    "Total Costs",\r
+    "إجمالي التكاليف"\r
+  ],\r
+  [\r
+    "Total A+ Profit",\r
+    "إجمالي ربح الأكاديمية"\r
+  ],\r
+  [\r
+    "Live Profit",\r
+    "ربح الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Project Profit",\r
+    "ربح المشاريع"\r
+  ],\r
+  [\r
+    "Recorded Profit",\r
+    "ربح الكورسات المسجلة"\r
+  ],\r
+  [\r
+    "Avg Profit / Live Lesson",\r
+    "متوسط ربح الحصة المباشرة"\r
+  ],\r
+  [\r
+    "Student Outstanding Balances",\r
+    "الأرصدة المستحقة على الطلاب"\r
+  ],\r
+  [\r
+    "This Month's Revenue",\r
+    "إيراد هذا الشهر"\r
+  ],\r
+  [\r
+    "This Month's Costs",\r
+    "تكاليف هذا الشهر"\r
+  ],\r
+  [\r
+    "This Month's Profit",\r
+    "ربح هذا الشهر"\r
+  ],\r
+  [\r
+    "TOTAL A+ ACADEMY PROFIT",\r
+    "إجمالي ربح الأكاديمية"\r
+  ],\r
+  [\r
+    "TOTAL TEACHER PROFIT",\r
+    "إجمالي ربح أعمال المدرسين"\r
+  ],\r
+  [\r
+    "EGP Profit",\r
+    "الربح بالجنيه المصري"\r
+  ],\r
+  [\r
+    "KWD Profit",\r
+    "الربح بالدينار الكويتي"\r
+  ],\r
+  [\r
+    "Profit",\r
+    "الربح"\r
+  ],\r
+  [\r
+    "Costs / shares",\r
+    "التكاليف / النسب"\r
+  ],\r
+  [\r
+    "Revenue",\r
+    "الإيراد"\r
+  ],\r
+  [\r
+    "Mixed-currency lessons: revenue",\r
+    "حصص بعملات مختلفة: الإيراد"\r
+  ],\r
+  [\r
+    "Mixed-currency lessons: cost",\r
+    "حصص بعملات مختلفة: التكلفة"\r
+  ],\r
+  [\r
+    "Profit (same-currency)",\r
+    "الربح (بنفس العملة)"\r
+  ],\r
+  [\r
+    "Upcoming timetable",\r
+    "المواعيد القادمة"\r
+  ],\r
+  [\r
+    "Upcoming recorded-course reminders (next 7 days)",\r
+    "تذكيرات الكورسات المسجلة (السبعة أيام القادمة)"\r
+  ],\r
+  [\r
+    "Student outstanding balances (live + recorded + projects)",\r
+    "مستحقات الطلاب (حصص + كورسات مسجلة + مشاريع)"\r
+  ],\r
+  [\r
+    "Additional financial & teaching metrics",\r
+    "مؤشرات مالية وتعليمية إضافية"\r
+  ],\r
+  [\r
+    "Analytics · revenue, costs & teaching activity",\r
+    "التحليلات · الإيراد والتكلفة ونشاط التدريس"\r
+  ],\r
+  [\r
+    "Recent student & teacher payments",\r
+    "آخر دفعات الطلاب والمدرسين"\r
+  ],\r
+  [\r
+    "Person",\r
+    "الاسم"\r
+  ],\r
+  [\r
+    "Direction",\r
+    "الاتجاه"\r
+  ],\r
+  [\r
+    "Amount · original",\r
+    "المبلغ · العملة الأصلية"\r
+  ],\r
+  [\r
+    "Received",\r
+    "وارد"\r
+  ],\r
+  [\r
+    "Paid out",\r
+    "صادر"\r
+  ],\r
+  [\r
+    "Student payment",\r
+    "دفعة طالب"\r
+  ],\r
+  [\r
+    "Unassigned",\r
+    "غير موزعة"\r
+  ],\r
+  [\r
+    "General",\r
+    "عام"\r
+  ],\r
+  [\r
+    "TOTAL",\r
+    "الإجمالي"\r
+  ],\r
+  [\r
+    "Note",\r
+    "ملاحظة"\r
+  ],\r
+  [\r
+    "Accrued (EGP)",\r
+    "المستحق (EGP)"\r
+  ],\r
+  [\r
+    "Paid (EGP)",\r
+    "المدفوع (EGP)"\r
+  ],\r
+  [\r
+    "Remaining (EGP)",\r
+    "المتبقي (EGP)"\r
+  ],\r
+  [\r
+    "Excess paid",\r
+    "دفع زائد"\r
+  ],\r
+  [\r
+    "Overpaid overall",\r
+    "إجمالي مدفوع زائد"\r
+  ],\r
+  [\r
+    "Unassigned (older payments)",\r
+    "غير موزعة (دفعات قديمة)"\r
+  ],\r
+  [\r
+    "Balance by original currency",\r
+    "الرصيد حسب العملة الأصلية"\r
+  ],\r
+  [\r
+    "Cross-currency settlements",\r
+    "تسويات بين العملات"\r
+  ],\r
+  [\r
+    "Financial summary (all work types)",\r
+    "الملخص المالي (كل أنواع العمل)"\r
+  ],\r
+  [\r
+    "Weekly timetable (fixed, no dates)",\r
+    "الجدول الأسبوعي الثابت"\r
+  ],\r
+  [\r
+    "Recent & completed (last 30 days)",\r
+    "الحديث والمكتمل (آخر ٣٠ يومًا)"\r
+  ],\r
+  [\r
+    "Payments to this teacher",\r
+    "دفعات هذا المدرس"\r
+  ],\r
+  [\r
+    "Payments from this student",\r
+    "دفعات هذا الطالب"\r
+  ],\r
+  [\r
+    "Lesson history",\r
+    "سجل الحصص"\r
+  ],\r
+  [\r
+    "← All teachers",\r
+    "← كل المدرسين"\r
+  ],\r
+  [\r
+    "← All students",\r
+    "← كل الطلاب"\r
+  ],\r
+  [\r
+    "Revenue Generated",\r
+    "الإيراد الناتج"\r
+  ],\r
+  [\r
+    "Academy Profit",\r
+    "ربح الأكاديمية"\r
+  ],\r
+  [\r
+    "Total Earned (all work)",\r
+    "إجمالي المستحق (كل الأعمال)"\r
+  ],\r
+  [\r
+    "Lesson earnings only",\r
+    "مستحقات الحصص فقط"\r
+  ],\r
+  [\r
+    "Paid to Teacher",\r
+    "المدفوع للمدرس"\r
+  ],\r
+  [\r
+    "Total Paid",\r
+    "إجمالي المدفوع"\r
+  ],\r
+  [\r
+    "Total Charged",\r
+    "إجمالي الرسوم"\r
+  ],\r
+  [\r
+    "Live charges",\r
+    "رسوم الحصص"\r
+  ],\r
+  [\r
+    "Recorded course charges",\r
+    "رسوم الكورسات المسجلة"\r
+  ],\r
+  [\r
+    "Project charges",\r
+    "رسوم المشاريع"\r
+  ],\r
+  [\r
+    "Teacher Costs",\r
+    "تكاليف المدرسين"\r
+  ],\r
+  [\r
+    "Avg Revenue / hr",\r
+    "متوسط إيراد الساعة"\r
+  ],\r
+  [\r
+    "Avg Cost / hr",\r
+    "متوسط تكلفة الساعة"\r
+  ],\r
+  [\r
+    "Avg Profit / hr",\r
+    "متوسط ربح الساعة"\r
+  ],\r
+  [\r
+    "Student payments (money received)",\r
+    "دفعات الطلاب (وارد)"\r
+  ],\r
+  [\r
+    "Student balances",\r
+    "أرصدة الطلاب"\r
+  ],\r
+  [\r
+    "Teacher payments (money paid out)",\r
+    "دفعات المدرسين (صادر)"\r
+  ],\r
+  [\r
+    "Teacher balances",\r
+    "أرصدة المدرسين"\r
+  ],\r
+  [\r
+    "Earned (all work)",\r
+    "المستحق (كل الأعمال)"\r
+  ],\r
+  [\r
+    "By original currency",\r
+    "حسب العملة الأصلية"\r
+  ],\r
+  [\r
+    "Ledger checks…",\r
+    "مراجعة السجل المالي…"\r
+  ],\r
+  [\r
+    "Payment Method",\r
+    "طريقة الدفع"\r
+  ],\r
+  [\r
+    "Link to a specific lesson / course / project (optional)",\r
+    "ربط بحصة / كورس / مشروع محدد (اختياري)"\r
+  ],\r
+  [\r
+    "— None (whole category) —",\r
+    "— بدون تحديد (كل الفئة) —"\r
+  ],\r
+  [\r
+    "None",\r
+    "بدون"\r
+  ],\r
+  [\r
+    "— Select —",\r
+    "— اختر —"\r
+  ],\r
+  [\r
+    "— Select teacher —",\r
+    "— اختر مدرسًا —"\r
+  ],\r
+  [\r
+    "— Select student —",\r
+    "— اختر طالبًا —"\r
+  ],\r
+  [\r
+    "Engineer",\r
+    "المدرس / المهندس"\r
+  ],\r
+  [\r
+    "Engineer Share",\r
+    "نسبة المدرس / المهندس"\r
+  ],\r
+  [\r
+    "A+ Profit",\r
+    "ربح الأكاديمية"\r
+  ],\r
+  [\r
+    "Instructor Share",\r
+    "نسبة المدرس"\r
+  ],\r
+  [\r
+    "Price",\r
+    "السعر"\r
+  ],\r
+  [\r
+    "Cost",\r
+    "التكلفة"\r
+  ],\r
+  [\r
+    "Students (Ctrl/Cmd-click for several)",\r
+    "الطلاب (Ctrl/Cmd لاختيار أكثر من طالب)"\r
+  ],\r
+  [\r
+    "Instructor / Engineer",\r
+    "المدرس / المهندس"\r
+  ],\r
+  [\r
+    "Teacher / Engineer",\r
+    "المدرس / المهندس"\r
+  ],\r
+  [\r
+    "Teacher Currency",\r
+    "عملة المدرس"\r
+  ],\r
+  [\r
+    "Teacher Hourly Cost",\r
+    "أجر ساعة المدرس"\r
+  ],\r
+  [\r
+    "Student Currency",\r
+    "عملة الطالب"\r
+  ],\r
+  [\r
+    "Student Hourly Price",\r
+    "سعر ساعة الطالب"\r
+  ],\r
+  [\r
+    "Profit Share (%)",\r
+    "نسبة المستحق (%)"\r
+  ],\r
+  [\r
+    "Revenue / Price",\r
+    "الإيراد / السعر"\r
+  ],\r
+  [\r
+    "Paid so far",\r
+    "المدفوع حتى الآن"\r
+  ],\r
+  [\r
+    "Student price",\r
+    "سعر الطالب"\r
+  ],\r
+  [\r
+    "Total",\r
+    "الإجمالي"\r
+  ],\r
+  [\r
+    "Enrolments",\r
+    "التسجيلات"\r
+  ],\r
+  [\r
+    "Course",\r
+    "الكورس"\r
+  ],\r
+  [\r
+    "Reminder",\r
+    "التذكير"\r
+  ],\r
+  [\r
+    "Today",\r
+    "اليوم"\r
+  ],\r
+  [\r
+    "Weekly",\r
+    "أسبوعي"\r
+  ],\r
+  [\r
+    "Monthly",\r
+    "شهري"\r
+  ],\r
+  [\r
+    "weekly",\r
+    "أسبوعي"\r
+  ],\r
+  [\r
+    "monthly",\r
+    "شهري"\r
+  ],\r
+  [\r
+    "daily",\r
+    "يومي"\r
+  ],\r
+  [\r
+    "custom",\r
+    "فترة مخصصة"\r
+  ],\r
+  [\r
+    "Monday",\r
+    "الاثنين"\r
+  ],\r
+  [\r
+    "Tuesday",\r
+    "الثلاثاء"\r
+  ],\r
+  [\r
+    "Wednesday",\r
+    "الأربعاء"\r
+  ],\r
+  [\r
+    "Thursday",\r
+    "الخميس"\r
+  ],\r
+  [\r
+    "Friday",\r
+    "الجمعة"\r
+  ],\r
+  [\r
+    "Saturday",\r
+    "السبت"\r
+  ],\r
+  [\r
+    "Sunday",\r
+    "الأحد"\r
+  ],\r
+  [\r
+    "DONE",\r
+    "تم التنفيذ"\r
+  ],\r
+  [\r
+    "RESCHEDULE",\r
+    "إعادة جدولة"\r
+  ],\r
+  [\r
+    "Reschedule",\r
+    "إعادة جدولة"\r
+  ],\r
+  [\r
+    "Undo",\r
+    "تراجع"\r
+  ],\r
+  [\r
+    "From time",\r
+    "من الساعة"\r
+  ],\r
+  [\r
+    "To time",\r
+    "إلى الساعة"\r
+  ],\r
+  [\r
+    "Teacher(s)",\r
+    "المدرسون"\r
+  ],\r
+  [\r
+    "Title",\r
+    "العنوان"\r
+  ],\r
+  [\r
+    "Owner",\r
+    "المسؤول"\r
+  ],\r
+  [\r
+    "Responsible person",\r
+    "الشخص المسؤول"\r
+  ],\r
+  [\r
+    "Priority",\r
+    "الأولوية"\r
+  ],\r
+  [\r
+    "Due date",\r
+    "تاريخ الاستحقاق"\r
+  ],\r
+  [\r
+    "Follow-up date",\r
+    "تاريخ المتابعة"\r
+  ],\r
+  [\r
+    "Lesson date",\r
+    "تاريخ الحصة"\r
+  ],\r
+  [\r
+    "Task",\r
+    "المهمة"\r
+  ],\r
+  [\r
+    "Task title",\r
+    "عنوان المهمة"\r
+  ],\r
+  [\r
+    "Description",\r
+    "الوصف"\r
+  ],\r
+  [\r
+    "Contact",\r
+    "التواصل"\r
+  ],\r
+  [\r
+    "Service",\r
+    "الخدمة"\r
+  ],\r
+  [\r
+    "Service registration",\r
+    "تسجيل خدمة"\r
+  ],\r
+  [\r
+    "Attendance",\r
+    "الحضور"\r
+  ],\r
+  [\r
+    "Lesson Notes",\r
+    "ملاحظات الحصة"\r
+  ],\r
+  [\r
+    "Present",\r
+    "حاضر"\r
+  ],\r
+  [\r
+    "Absent",\r
+    "غائب"\r
+  ],\r
+  [\r
+    "Late",\r
+    "متأخر"\r
+  ],\r
+  [\r
+    "Excused",\r
+    "بعذر"\r
+  ],\r
+  [\r
+    "Scheduled date",\r
+    "التاريخ المحدد"\r
+  ],\r
+  [\r
+    "Low",\r
+    "منخفضة"\r
+  ],\r
+  [\r
+    "Normal",\r
+    "عادية"\r
+  ],\r
+  [\r
+    "High",\r
+    "مرتفعة"\r
+  ],\r
+  [\r
+    "Urgent",\r
+    "عاجلة"\r
+  ],\r
+  [\r
+    "View all lessons",\r
+    "عرض كل الحصص"\r
+  ],\r
+  [\r
+    "Scheduling & Teacher Availability",\r
+    "الجدولة وأوقات توافر المدرسين"\r
+  ],\r
+  [\r
+    "Packages, Installments & Collection",\r
+    "الباقات والأقساط والتحصيل"\r
+  ],\r
+  [\r
+    "Service Registrations",\r
+    "تسجيلات الخدمات"\r
+  ],\r
+  [\r
+    "Attendance & Lesson Notes",\r
+    "الحضور وملاحظات الحصص"\r
+  ],\r
+  [\r
+    "Projects & Recorded-course Delivery",\r
+    "تسليمات المشاريع والكورسات المسجلة"\r
+  ],\r
+  [\r
+    "Team Accounts & Permissions",\r
+    "حسابات الفريق والصلاحيات"\r
+  ],\r
+  [\r
+    "Username",\r
+    "اسم المستخدم"\r
+  ],\r
+  [\r
+    "Display name",\r
+    "اسم العرض"\r
+  ],\r
+  [\r
+    "Role",\r
+    "الصلاحية"\r
+  ],\r
+  [\r
+    "Linked teacher",\r
+    "المدرس المرتبط"\r
+  ],\r
+  [\r
+    "Account status",\r
+    "حالة الحساب"\r
+  ],\r
+  [\r
+    "Recent activity",\r
+    "آخر النشاط"\r
+  ],\r
+  [\r
+    "Who",\r
+    "المستخدم"\r
+  ],\r
+  [\r
+    "Action",\r
+    "الإجراء"\r
+  ],\r
+  [\r
+    "Record",\r
+    "السجل"\r
+  ],\r
+  [\r
+    "Detail",\r
+    "التفاصيل"\r
+  ],\r
+  [\r
+    "Academy name",\r
+    "اسم الأكاديمية"\r
+  ],\r
+  [\r
+    "Academy Base Currency",\r
+    "عملة حسابات الأكاديمية الأساسية"\r
+  ],\r
+  [\r
+    "Default teacher rate/hr",\r
+    "أجر ساعة المدرس الافتراضي"\r
+  ],\r
+  [\r
+    "Default student rate/hr",\r
+    "سعر ساعة الطالب الافتراضي"\r
+  ],\r
+  [\r
+    "Project profit is recognised",\r
+    "يُحتسب ربح المشروع"\r
+  ],\r
+  [\r
+    "Exchange rates count as out of date after (hours)",\r
+    "تعتبر أسعار الصرف قديمة بعد (ساعات)"\r
+  ],\r
+  [\r
+    "Save settings",\r
+    "حفظ الإعدادات"\r
+  ],\r
+  [\r
+    "Exchange Rates",\r
+    "أسعار الصرف"\r
+  ],\r
+  [\r
+    "Refresh rates",\r
+    "تحديث أسعار الصرف"\r
+  ],\r
+  [\r
+    "Refresh live rates",\r
+    "تحديث أسعار الصرف المباشرة"\r
+  ],\r
+  [\r
+    "Original currencies",\r
+    "العملات الأصلية"\r
+  ],\r
+  [\r
+    "Converted view",\r
+    "العرض المحول"\r
+  ],\r
+  [\r
+    "Original-currency view (default).",\r
+    "عرض العملات الأصلية (الافتراضي)."\r
+  ],\r
+  [\r
+    "Totals by original currency",\r
+    "الإجماليات حسب العملة الأصلية"\r
+  ],\r
+  [\r
+    "Open Reports",\r
+    "فتح التقارير"\r
+  ],\r
+  [\r
+    "Open Cash Flow",\r
+    "فتح التدفقات النقدية"\r
+  ],\r
+  [\r
+    "Backups (on this computer)",\r
+    "النسخ الاحتياطية (على هذا الجهاز)"\r
+  ],\r
+  [\r
+    "Create backup now",\r
+    "إنشاء نسخة احتياطية الآن"\r
+  ],\r
+  [\r
+    "Download financial JSON export",\r
+    "تنزيل التصدير المالي JSON"\r
+  ],\r
+  [\r
+    "Download administrative JSON",\r
+    "تنزيل البيانات الإدارية JSON"\r
+  ],\r
+  [\r
+    "Backup",\r
+    "النسخة الاحتياطية"\r
+  ],\r
+  [\r
+    "Created",\r
+    "تاريخ الإنشاء"\r
+  ],\r
+  [\r
+    "Records",\r
+    "السجلات"\r
+  ],\r
+  [\r
+    "Restore…",\r
+    "استعادة…"\r
+  ],\r
+  [\r
+    "Export Full Report (.xlsx)",\r
+    "تصدير التقرير الكامل (.xlsx)"\r
+  ],\r
+  [\r
+    "Work by currency",\r
+    "الأعمال حسب العملة"\r
+  ],\r
+  [\r
+    "Cash by currency",\r
+    "النقدية حسب العملة"\r
+  ],\r
+  [\r
+    "Teacher report",\r
+    "تقرير المدرسين"\r
+  ],\r
+  [\r
+    "Student report",\r
+    "تقرير الطلاب"\r
+  ],\r
+  [\r
+    "Live lessons",\r
+    "الحصص المباشرة"\r
+  ],\r
+  [\r
+    "All-work ledger",\r
+    "سجل كل الأعمال"\r
+  ],\r
+  [\r
+    "Payment report",\r
+    "تقرير الدفعات"\r
+  ],\r
+  [\r
+    "All lessons (all dates)",\r
+    "كل الحصص (كل التواريخ)"\r
+  ],\r
+  [\r
+    "Monthly Cash Flow Report",\r
+    "تقرير التدفقات النقدية الشهري"\r
+  ],\r
+  [\r
+    "Currency → KWD rate",\r
+    "سعر تحويل العملة إلى KWD"\r
+  ],\r
+  [\r
+    "Cash flow",\r
+    "التدفق النقدي"\r
+  ],\r
+  [\r
+    "Rate type",\r
+    "نوع السعر"\r
+  ],\r
+  [\r
+    "Last updated",\r
+    "آخر تحديث"\r
+  ],\r
+  [\r
+    "Rate unavailable",\r
+    "سعر التحويل غير متاح"\r
+  ],\r
+  [\r
+    "EGP rate unavailable",\r
+    "سعر الجنيه المصري غير متاح"\r
+  ],\r
+  [\r
+    "Egyptian Pound",\r
+    "جنيه مصري"\r
+  ],\r
+  [\r
+    "Kuwaiti Dinar",\r
+    "دينار كويتي"\r
+  ],\r
+  [\r
+    "Saudi Riyal",\r
+    "ريال سعودي"\r
+  ],\r
+  [\r
+    "Qatari Riyal",\r
+    "ريال قطري"\r
+  ],\r
+  [\r
+    "UAE Dirham",\r
+    "درهم إماراتي"\r
+  ],\r
+  [\r
+    "Bahraini Dinar",\r
+    "دينار بحريني"\r
+  ],\r
+  [\r
+    "Omani Rial",\r
+    "ريال عماني"\r
+  ],\r
+  [\r
+    "US Dollar",\r
+    "دولار أمريكي"\r
+  ],\r
+  [\r
+    "Page title",\r
+    "عنوان الصفحة"\r
+  ],\r
+  [\r
+    "Skip to content",\r
+    "تخطي إلى المحتوى"\r
+  ],\r
+  [\r
+    "Open dashboard reminders",\r
+    "فتح تذكيرات لوحة التحكم"\r
+  ],\r
+  [\r
+    "No rows match these table filters. Clear the search to see all records.",\r
+    "لا توجد صفوف مطابقة. امسح البحث لعرض كل السجلات."\r
+  ],\r
+  [\r
+    "Table search and pagination affect displayed rows only. Financial totals and exports keep their existing page filters.",\r
+    "البحث وتقسيم الصفحات يخصان الصفوف المعروضة فقط. الإجماليات والتصدير يحتفظان بفلاتر الصفحة الأصلية."\r
+  ],\r
+  [\r
+    "Nothing here yet — use the Add button.",\r
+    "لا توجد سجلات بعد — استخدم زر الإضافة."\r
+  ],\r
+  [\r
+    "No teachers found.",\r
+    "لا يوجد مدرسون مطابقون."\r
+  ],\r
+  [\r
+    "No students found.",\r
+    "لا يوجد طلاب مطابقون."\r
+  ],\r
+  [\r
+    "No projects yet.",\r
+    "لا توجد مشاريع بعد."\r
+  ],\r
+  [\r
+    "No lessons match.",\r
+    "لا توجد حصص مطابقة."\r
+  ],\r
+  [\r
+    "No data in this period.",\r
+    "لا توجد بيانات في هذه الفترة."\r
+  ],\r
+  [\r
+    "No classes scheduled in the next 14 days.",\r
+    "لا توجد حصص مجدولة خلال ١٤ يومًا قادمة."\r
+  ],\r
+  [\r
+    "No reminders due in the next 7 days.",\r
+    "لا توجد تذكيرات مستحقة خلال ٧ أيام قادمة."\r
+  ],\r
+  [\r
+    "No outstanding balances.",\r
+    "لا توجد أرصدة مستحقة."\r
+  ],\r
+  [\r
+    "No recorded student or teacher payments yet.",\r
+    "لا توجد دفعات طلاب أو مدرسين مسجلة بعد."\r
+  ],\r
+  [\r
+    "Your academy at a glance. People, teaching and finances in one place.",\r
+    "أكاديميتك بنظرة واحدة. الطلاب والمدرسون والحصص والمالية في مكان واحد."\r
+  ],\r
+  [\r
+    "Manage your teaching team, assigned work and financial accounts.",\r
+    "إدارة فريق التدريس والأعمال المسندة والحسابات المالية."\r
+  ],\r
+  [\r
+    "Keep student records, learning activity and balances organized.",\r
+    "تنظيم بيانات الطلاب ونشاطهم الدراسي وأرصدتهم."\r
+  ],\r
+  [\r
+    "Live lessons, recorded learning and project services.",\r
+    "الحصص المباشرة والكورسات المسجلة وخدمات المشاريع."\r
+  ],\r
+  [\r
+    "Review delivered sessions, rates and recorded lesson activity.",\r
+    "مراجعة الحصص المنفذة والأسعار ونشاط التدريس المسجل."\r
+  ],\r
+  [\r
+    "Manage project work, delivery and its recorded finances.",\r
+    "إدارة أعمال المشاريع وتسليماتها وحساباتها المسجلة."\r
+  ],\r
+  [\r
+    "Courses, enrolments and recorded learning in one workspace.",\r
+    "الكورسات والتسجيلات والتعلم المسجل في مكان واحد."\r
+  ],\r
+  [\r
+    "Recorded receipts and payouts, with original currencies preserved.",\r
+    "المقبوضات والمدفوعات المسجلة مع الاحتفاظ بالعملات الأصلية."\r
+  ],\r
+  [\r
+    "Plan your week and manage each scheduled session.",\r
+    "خطط لأسبوعك وأدر كل موعد مسجل."\r
+  ],\r
+  [\r
+    "Explore financial performance with clear currency and period controls.",\r
+    "استعرض الأداء المالي مع تحديد العملة والفترة بوضوح."\r
+  ],\r
+  [\r
+    "Follow dated receipts and payments, separated by currency.",\r
+    "متابعة المقبوضات والمدفوعات المؤرخة لكل عملة على حدة."\r
+  ],\r
+  [\r
+    "Manage academy preferences, exchange rates and verified backups.",\r
+    "إدارة إعدادات الأكاديمية وأسعار الصرف والنسخ الاحتياطية المتحققة."\r
+  ],\r
+  [\r
+    "Preview the workspace each teacher sees, with their own records only.",\r
+    "معاينة حساب كل مدرس وسجلاته الخاصة فقط."\r
+  ],\r
+  [\r
+    "Accounts, operating expenses and statement reconciliation.",\r
+    "الحسابات والمصروفات التشغيلية ومطابقة كشوف الحساب."\r
+  ],\r
+  [\r
+    "Review eligible hours and record one consolidated teacher payment.",\r
+    "مراجعة الساعات المستحقة وتسجيل دفعة مجمعة للمدرس."\r
+  ],\r
+  [\r
+    "Revenue, costs and service profit use the existing saved-rate converted figures. Service profit is before operating expenses. Existing page filters still apply; people counts cover the academy.",\r
+    "الإيرادات والتكاليف وربح الخدمات حسب الحسابات المحولة الحالية. ربح الخدمات قبل المصروفات التشغيلية. فلاتر الصفحة سارية، وأعداد الأشخاص تشمل الأكاديمية."\r
+  ],\r
+  [\r
+    "All dates · latest six recorded student and teacher payments, independent of dashboard filters. Original amounts and currencies. Other service payments remain in their existing accounts.",\r
+    "كل التواريخ · آخر ست دفعات طلاب ومدرسين، مستقلة عن فلاتر لوحة التحكم. المبالغ بعملاتها الأصلية. دفعات الخدمات الأخرى موجودة في حساباتها الحالية."\r
+  ],\r
+  [\r
+    "Development workspace",\r
+    "نسخة التطوير"\r
+  ],\r
+  [\r
+    "3005 · Independent review data",\r
+    "3005 · بيانات تجربة مستقلة"\r
+  ],\r
+  [\r
+    "REVIEW · 3005",\r
+    "تجربة · 3005"\r
+  ],\r
+  [\r
+    "Review version — 3005 — Changes here do not affect the working version on 3000",\r
+    "نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000"\r
+  ],\r
+  [\r
+    "DONE on a Live session opens a form to record the actual lesson (saved in Lessons; no payment is recorded); other session types are simply marked completed. Either way only that one session is affected and it stays in the history. DELETE lets you move that one session to a new date/time — it never removes the weekly schedule.",\r
+    "تنفيذ الحصة المباشرة يفتح نموذجًا لتسجيلها في الحصص دون تسجيل أي دفعة. الأنواع الأخرى تُعلّم كمكتملة فقط. التغيير يخص هذا الموعد وحده مع الاحتفاظ بسجله، ونقل موعده لا يحذف الجدول الأسبوعي."\r
+  ],\r
+  [\r
+    "Each row foots: Revenue − Costs = Profit + (mixed-currency revenue − mixed-currency cost). Services whose student charge and teacher cost are in different currencies are left out of Profit (their profit exists only in the converted view) but their revenue and cost are shown here so nothing is hidden.",\r
+    "لكل صف: الإيراد − التكلفة = الربح + (إيراد العملات المختلفة − تكلفتها). الخدمات التي تختلف فيها عملة الطالب عن المدرس لا تُضاف لربح نفس العملة؛ يظهر ربحها في العرض المحول، وتظل إيراداتها وتكاليفها ظاهرة هنا."\r
+  ],\r
+  [\r
+    "The charts and cards below combine currencies using the rate saved on each record (converted view).",\r
+    "الرسوم والمؤشرات التالية تجمع العملات باستخدام سعر الصرف المحفوظ بكل سجل (العرض المحول)."\r
+  ],\r
+  [\r
+    "+ Follow-up task",\r
+    "+ مهمة متابعة"\r
+  ],\r
+  [\r
+    "+ Service registration",\r
+    "+ تسجيل خدمة"\r
+  ],\r
+  [\r
+    "Record attendance / lesson notes",\r
+    "تسجيل الحضور / ملاحظات الحصة"\r
+  ],\r
+  [\r
+    "Open timetable",\r
+    "فتح جدول المواعيد"\r
+  ],\r
+  [\r
+    "Tasks due today or overdue",\r
+    "مهام اليوم والمهام المتأخرة"\r
+  ],\r
+  [\r
+    "No tasks in this selection.",\r
+    "لا توجد مهام ضمن الاختيارات."\r
+  ],\r
+  [\r
+    "Today’s scheduled sessions",\r
+    "المواعيد المجدولة اليوم"\r
+  ],\r
+  [\r
+    "Today’s lesson records",\r
+    "سجلات حصص اليوم"\r
+  ],\r
+  [\r
+    "No lesson records dated today. Scheduled sessions appear above until recorded in Lessons.",\r
+    "لا توجد حصص مسجلة بتاريخ اليوم. تظل المواعيد بالأعلى حتى تسجيلها في الحصص."\r
+  ],\r
+  [\r
+    "Unexcused absences · last 7 days",\r
+    "غياب دون عذر · آخر ٧ أيام"\r
+  ],\r
+  [\r
+    "No recorded unexcused absences in the last 7 days.",\r
+    "لا يوجد غياب دون عذر مسجل خلال آخر ٧ أيام."\r
+  ],\r
+  [\r
+    "Record an outcome when you complete a follow-up. Full SQLite backups include registrations, attendance, lesson notes and tasks. The administrative JSON export is a reference copy; use verified database backups for recovery.",\r
+    "سجل نتيجة المتابعة عند إتمامها. النسخ الكاملة لقاعدة SQLite تشمل التسجيلات والحضور وملاحظات الحصص والمهام. التصدير الإداري JSON نسخة مرجعية؛ استخدم النسخ المتحققة لقاعدة البيانات للاستعادة."\r
+  ],\r
+  [\r
+    "Completed sessions (history)",\r
+    "المواعيد المكتملة (السجل)"\r
+  ],\r
+  [\r
+    "Bookings and confirmations",\r
+    "الحجوزات والتأكيدات"\r
+  ],\r
+  [\r
+    "Weekly availability",\r
+    "أوقات التوافر الأسبوعية"\r
+  ],\r
+  [\r
+    "Waiting list",\r
+    "قائمة الانتظار"\r
+  ],\r
+  [\r
+    "No managed bookings yet. Existing timetable records remain on Timetable.",\r
+    "لا توجد حجوزات جديدة بعد. المواعيد القديمة ما زالت في جدول المواعيد."\r
+  ],\r
+  [\r
+    "No availability recorded. Add a window before creating a booking.",\r
+    "لم تُسجل أوقات توافر. أضف فترة توافر قبل إنشاء الحجز."\r
+  ],\r
+  [\r
+    "No waiting-list requests.",\r
+    "لا توجد طلبات في قائمة الانتظار."\r
+  ],\r
+  [\r
+    "Bookings are checked against teacher availability, the existing timetable, other bookings and timed completed lessons. Booking a slot creates no charge. Changes to date, time, student or teacher clear recorded confirmations.",\r
+    "يفحص الحجز أوقات توافر المدرس والجدول والحجوزات الأخرى والحصص المنفذة ذات التوقيت. الحجز لا ينشئ رسومًا. تغيير التاريخ أو التوقيت أو الطالب أو المدرس يلغي التأكيدات المسجلة."\r
+  ],\r
+  [\r
+    "One list for Live subjects, Recorded Courses and Projects. Recorded courses and projects are also managed in their own pages; they are the same records.",\r
+    "قائمة موحدة للمواد المباشرة والكورسات المسجلة والمشاريع. إدارة الكورسات والمشاريع من صفحاتها تستخدم نفس السجلات دون تكرار."\r
+  ],\r
+  [\r
+    "Course Cost",\r
+    "تكلفة الكورس"\r
+  ],\r
+  [\r
+    "Reminders (e.g. Send Recorded Lectures)",\r
+    "التذكيرات (مثل إرسال المحاضرات المسجلة)"\r
+  ],\r
+  [\r
+    "What reminders do:",\r
+    "وظيفة التذكيرات:"\r
+  ],\r
+  [\r
+    "a reminder appears on this screen while A+ Hub is open in your browser (checked about once a minute, using the Africa/Cairo time and date). Nothing is sent by e-mail, SMS or phone notification, and nothing is delivered while the app or the computer is closed; a reminder that came due within the last 7 days while the app was closed is shown once when you next open it. For alerts outside the app, import the calendar file",\r
+    "يظهر التذكير أثناء فتح النظام في المتصفح، ويُفحص تقريبًا كل دقيقة بتوقيت القاهرة. لا تُرسل رسائل بريد أو SMS أو إشعارات هاتف، ولا يعمل أثناء إغلاق التطبيق أو الجهاز. يظهر التذكير المستحق خلال آخر ٧ أيام عند فتح النظام. للتنبيه خارج النظام، استورد ملف التقويم"\r
+  ],\r
+  [\r
+    "into your own calendar application.",\r
+    "إلى تطبيق التقويم الخاص بك."\r
+  ],\r
+  [\r
+    "Days",\r
+    "الأيام"\r
+  ],\r
+  [\r
+    "Repeat",\r
+    "التكرار"\r
+  ],\r
+  [\r
+    "Coming up (next 30 days)",\r
+    "القادم (خلال ٣٠ يومًا)"\r
+  ],\r
+  [\r
+    "Nothing due in the next 30 days.",\r
+    "لا توجد استحقاقات خلال ٣٠ يومًا."\r
+  ],\r
+  [\r
+    "Original currencies (default)",\r
+    "العملات الأصلية (الافتراضي)"\r
+  ],\r
+  [\r
+    "never added together",\r
+    "لا تُجمع معًا أبدًا"\r
+  ],\r
+  [\r
+    "A. Work by original currency (revenue, cost, profit - never combined across currencies)",\r
+    "أ. الأعمال بالعملة الأصلية (الإيراد والتكلفة والربح — دون جمع العملات المختلفة)"\r
+  ],\r
+  [\r
+    "Live Revenue",\r
+    "إيراد الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Live Teacher Cost",\r
+    "أجور مدرس الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Live Profit - lessons billed and paid in the same currency",\r
+    "ربح الحصص المحصلة والمدفوعة بنفس العملة"\r
+  ],\r
+  [\r
+    "Mixed-currency Lessons: Revenue, not in profit",\r
+    "حصص بعملات مختلفة: إيراد لا يدخل في ربح نفس العملة"\r
+  ],\r
+  [\r
+    "Mixed-currency Lessons: Teacher Cost, not in profit",\r
+    "حصص بعملات مختلفة: تكلفة مدرس لا تدخل في ربح نفس العملة"\r
+  ],\r
+  [\r
+    "Project Revenue",\r
+    "إيراد المشاريع"\r
+  ],\r
+  [\r
+    "Project Teacher Share",\r
+    "نسبة مدرس المشاريع"\r
+  ],\r
+  [\r
+    "Course Revenue",\r
+    "إيراد الكورسات"\r
+  ],\r
+  [\r
+    "Course Share",\r
+    "نسبة مدرس الكورسات"\r
+  ],\r
+  [\r
+    "Course Profit",\r
+    "ربح الكورسات"\r
+  ],\r
+  [\r
+    "B. Cash by original currency (dated receipts and payments; opening balances shown separately). With a Work Type filter only the allocated part of a student receipt and teacher payments with a recorded source are counted; unallocated receipts and unassigned payments have no work type and are excluded, never given an invented one. Refunds carry no method or work type and are excluded when either filter is set",\r
+    "ب. النقدية بالعملة الأصلية (المقبوضات والمدفوعات المؤرخة، والافتتاحي منفصل). عند فلترة نوع العمل تُحسب الأجزاء المخصصة من دفعات الطلاب ودفعات المدرسين ذات المصدر المسجل فقط. غير الموزع يُستبعد دون تخمين مصدر. المبالغ المستردة لا تحمل طريقة أو نوع عمل وتُستبعد عند استخدام أي منهما."\r
+  ],\r
+  [\r
+    "Student Payments in Period",\r
+    "دفعات الطلاب خلال الفترة"\r
+  ],\r
+  [\r
+    "Project Payments in Period",\r
+    "دفعات المشاريع خلال الفترة"\r
+  ],\r
+  [\r
+    "Total Dated Receipts",\r
+    "إجمالي المقبوضات المؤرخة"\r
+  ],\r
+  [\r
+    "Teacher Payments in Period",\r
+    "دفعات المدرسين خلال الفترة"\r
+  ],\r
+  [\r
+    "Net Dated Cash",\r
+    "صافي النقدية المؤرخة"\r
+  ],\r
+  [\r
+    "NOT DATED CASH - Project Opening Paid",\r
+    "مبلغ غير مؤرخ — مدفوع افتتاحي للمشاريع"\r
+  ],\r
+  [\r
+    "NOT DATED CASH - Course Enrolment Paid, running total",\r
+    "مبلغ غير مؤرخ — إجمالي مدفوع تسجيل الكورسات"\r
+  ],\r
+  [\r
+    "C. Teachers by currency",\r
+    "ج. المدرسون حسب العملة"\r
+  ],\r
+  [\r
+    "Earned in Period",\r
+    "المستحق خلال الفترة"\r
+  ],\r
+  [\r
+    "Paid in Period",\r
+    "المدفوع خلال الفترة"\r
+  ],\r
+  [\r
+    "Balance All-Time, same currency",\r
+    "رصيد كل الفترات بنفس العملة"\r
+  ],\r
+  [\r
+    "D. Students by currency",\r
+    "د. الطلاب حسب العملة"\r
+  ],\r
+  [\r
+    "Charges in Period",\r
+    "رسوم الفترة"\r
+  ],\r
+  [\r
+    "Dated Payments in Period",\r
+    "الدفعات المؤرخة خلال الفترة"\r
+  ],\r
+  [\r
+    "D. Lesson Report (Live)",\r
+    "د. تقرير الحصص المباشرة"\r
+  ],\r
+  [\r
+    "Subject Type",\r
+    "نوع المادة"\r
+  ],\r
+  [\r
+    "Work Type",\r
+    "نوع العمل"\r
+  ],\r
+  [\r
+    "Student Charge",\r
+    "رسوم الطالب"\r
+  ],\r
+  [\r
+    "Teacher Exchange Rate",\r
+    "سعر صرف المدرس"\r
+  ],\r
+  [\r
+    "Student Exchange Rate",\r
+    "سعر صرف الطالب"\r
+  ],\r
+  [\r
+    "Rate Type",\r
+    "نوع سعر الصرف"\r
+  ],\r
+  [\r
+    "Base Currency",\r
+    "العملة الأساسية"\r
+  ],\r
+  [\r
+    "Start Time",\r
+    "وقت البداية"\r
+  ],\r
+  [\r
+    "End Time",\r
+    "وقت النهاية"\r
+  ],\r
+  [\r
+    "Project Report",\r
+    "تقرير المشاريع"\r
+  ],\r
+  [\r
+    "Recorded Course Report",\r
+    "تقرير الكورسات المسجلة"\r
+  ],\r
+  [\r
+    "All-Work Ledger (original + converted)",\r
+    "سجل كل الأعمال (الأصلي + المحول)"\r
+  ],\r
+  [\r
+    "Original Currency",\r
+    "العملة الأصلية"\r
+  ],\r
+  [\r
+    "Original Amount",\r
+    "المبلغ الأصلي"\r
+  ],\r
+  [\r
+    "Exchange Rate",\r
+    "سعر الصرف"\r
+  ],\r
+  [\r
+    "Converted Amount",\r
+    "المبلغ المحول"\r
+  ],\r
+  [\r
+    "Payment",\r
+    "الدفعة"\r
+  ],\r
+  [\r
+    "Source Detail",\r
+    "تفاصيل المصدر"\r
+  ],\r
+  [\r
+    "Work-type applicability",\r
+    "ارتباط نوع العمل"\r
+  ],\r
+  [\r
+    "Timetable in period",\r
+    "المواعيد خلال الفترة"\r
+  ],\r
+  [\r
+    "Schedule",\r
+    "الجدول"\r
+  ],\r
+  [\r
+    "Payments in period (with a student filter: that student's receipts and the teacher payments linked to that student's lessons only; with a work-type filter, receipts without an allocation and payments without a source are listed and labelled)",\r
+    "دفعات الفترة (عند فلترة طالب: مقبوضاته ودفعات المدرس المرتبطة بحصصه فقط. عند فلترة نوع العمل، تُعرض الدفعات غير الموزعة أو دون مصدر مع توضيح حالتها)."\r
+  ],\r
+  [\r
+    "kept in the currency it was paid in",\r
+    "تظل بالعملة التي دُفعت بها"\r
+  ],\r
+  [\r
+    "Month",\r
+    "الشهر"\r
+  ],\r
+  [\r
+    "Export to Excel (.xlsx)",\r
+    "تصدير إلى Excel (.xlsx)"\r
+  ],\r
+  [\r
+    "Cash movement by currency",\r
+    "حركة النقدية حسب العملة"\r
+  ],\r
+  [\r
+    "Received from students",\r
+    "المقبوض من الطلاب"\r
+  ],\r
+  [\r
+    "Paid to teachers",\r
+    "المدفوع للمدرسين"\r
+  ],\r
+  [\r
+    "Net movement (before other expenses)",\r
+    "صافي الحركة (قبل المصروفات الأخرى)"\r
+  ],\r
+  [\r
+    "1. Cash received from students",\r
+    "١. المقبوضات من الطلاب"\r
+  ],\r
+  [\r
+    "By work type",\r
+    "حسب نوع العمل"\r
+  ],\r
+  [\r
+    "None in this month.",\r
+    "لا توجد عمليات هذا الشهر."\r
+  ],\r
+  [\r
+    "By payment method",\r
+    "حسب طريقة الدفع"\r
+  ],\r
+  [\r
+    "Transactions",\r
+    "الحركات"\r
+  ],\r
+  [\r
+    "No student payments in this month.",\r
+    "لا توجد دفعات طلاب هذا الشهر."\r
+  ],\r
+  [\r
+    "2. Payments made to teachers",\r
+    "٢. المدفوعات للمدرسين"\r
+  ],\r
+  [\r
+    "By payment source",\r
+    "حسب مصدر الدفعة"\r
+  ],\r
+  [\r
+    "By teacher",\r
+    "حسب المدرس"\r
+  ],\r
+  [\r
+    "Related service",\r
+    "الخدمة المرتبطة"\r
+  ],\r
+  [\r
+    "3. Net cash movement",\r
+    "٣. صافي حركة النقدية"\r
+  ],\r
+  [\r
+    "Student receipts",\r
+    "مقبوضات الطلاب"\r
+  ],\r
+  [\r
+    "Teacher payments",\r
+    "دفعات المدرسين"\r
+  ],\r
+  [\r
+    "Net before other expenses",\r
+    "الصافي قبل المصروفات الأخرى"\r
+  ],\r
+  [\r
+    "4. Opening and closing cash balance",\r
+    "٤. رصيد النقدية الافتتاحي والختامي"\r
+  ],\r
+  [\r
+    "Cash, bank accounts and wallets are not tracked in this system, so an opening balance, other cash movements and an actual closing balance cannot be determined.",\r
+    "هذا التقرير القديم لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا أو حركات نقدية أخرى."\r
+  ],\r
+  [\r
+    "Charges minus payments",\r
+    "الرسوم ناقص المدفوعات"\r
+  ],\r
+  [\r
+    ". A negative figure means the student has paid more than was charged in that currency (credit).",\r
+    ". الرقم السالب يعني أن الطالب دفع أكثر من الرسوم بنفس العملة (رصيد دائن)."\r
+  ],\r
+  [\r
+    "Paid (incl. undated opening paid)",\r
+    "المدفوع (يشمل الافتتاحي غير المؤرخ)"\r
+  ],\r
+  [\r
+    "of which undated opening paid",\r
+    "منه مدفوع افتتاحي غير مؤرخ"\r
+  ],\r
+  [\r
+    "of which Unassigned source",\r
+    "منه مصدر غير موزع"\r
+  ],\r
+  [\r
+    "Measure",\r
+    "المؤشر"\r
+  ],\r
+  [\r
+    "Difference",\r
+    "الفرق"\r
+  ],\r
+  [\r
+    "Change",\r
+    "التغير"\r
+  ],\r
+  [\r
+    "8. Data checks",\r
+    "٨. فحوص البيانات"\r
+  ],\r
+  [\r
+    "• Other academy expenses and other cash movements are not recorded in this system, so they are not included. Net cash movement is receipts minus teacher payments only, per currency.",\r
+    "• المصروفات الأخرى والحركات الأخرى لا تدخل في هذا التقرير القديم. صافي الحركة هنا هو المقبوضات ناقص دفعات المدرسين لكل عملة."\r
+  ],\r
+  [\r
+    "• Cash, bank or wallet balances are not tracked, so an opening or closing cash balance cannot be determined.",\r
+    "• هذا التقرير لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا."\r
+  ],\r
+  [\r
+    "• Ageing of outstanding balances needs one currency to allocate payments across charges, so it is only available in the converted view.",\r
+    "• تحليل أعمار الديون يحتاج عملة واحدة لتوزيع الدفعات على الرسوم، وهو متاح في العرض المحول فقط."\r
+  ],\r
+  [\r
+    "Live packages are charged as lessons are delivered, using the agreed package price split across sessions. Collection in advance appears as student credit until delivery. Project/course agreements refer to their existing charges. No agreement creates a duplicate charge or payment.",\r
+    "تُحتسب رسوم الباقات عند تنفيذ الحصص بتوزيع السعر المتفق عليه عليها. التحصيل المسبق يظهر كرصيد دائن للطالب حتى التنفيذ. اتفاقات المشاريع والكورسات تشير لرسومها الحالية ولا تنشئ رسومًا أو دفعات مكررة."\r
+  ],\r
+  [\r
+    "Issued receipts",\r
+    "الإيصالات الصادرة"\r
+  ],\r
+  [\r
+    "No receipts issued through agreements yet.",\r
+    "لم تصدر إيصالات من الاتفاقات بعد."\r
+  ],\r
+  [\r
+    "Administrative follow-up only. These records do not create charges, payments or change teacher earnings. Existing lessons have no attendance or summary until you record one.",\r
+    "للمتابعة الإدارية فقط. هذه السجلات لا تنشئ رسومًا أو دفعات ولا تغير مستحقات المدرس. لا يُفترض حضور أو ملخص للحصص القديمة قبل تسجيله."\r
+  ],\r
+  [\r
+    "No matching registrations. Add registrations as new agreements are made; historical agreements are not guessed.",\r
+    "لا توجد تسجيلات مطابقة. أضف التسجيل عند الاتفاق الجديد؛ لا تُخمن الاتفاقات القديمة."\r
+  ],\r
+  [\r
+    "Attendance describes the student’s participation. It does not change the lesson’s financial status. To record a scheduled session first, use Timetable → DONE.",\r
+    "الحضور يصف مشاركة الطالب ولا يغير الحالة المالية للحصة. لتسجيل موعد مجدول أولًا، استخدم جدول المواعيد ← تم التنفيذ."\r
+  ],\r
+  [\r
+    "No lessons in this selection. Choose another date or view all lessons.",\r
+    "لا توجد حصص ضمن الاختيارات. اختر تاريخًا آخر أو اعرض كل الحصص."\r
+  ],\r
+  [\r
+    "Every follow-up has a responsible person, a due date and an outcome. No message is sent automatically.",\r
+    "لكل متابعة مسؤول وتاريخ استحقاق ونتيجة. لا تُرسل رسائل تلقائيًا."\r
+  ],\r
+  [\r
+    "Track deliverables, revision requests and materials sent. A Sent record does not prove viewing or understanding; no message is sent automatically. Links open externally only when you choose them.",\r
+    "تابع التسليمات وطلبات التعديل والمواد المرسلة. حالة تم الإرسال لا تعني المشاهدة أو الفهم، ولا تُرسل رسالة تلقائيًا. الروابط الخارجية تُفتح عند اختيارها فقط."\r
+  ],\r
+  [\r
+    "Project milestones",\r
+    "مراحل المشاريع"\r
+  ],\r
+  [\r
+    "No project milestones yet.",\r
+    "لا توجد مراحل مشاريع بعد."\r
+  ],\r
+  [\r
+    "Revision requests",\r
+    "طلبات التعديل"\r
+  ],\r
+  [\r
+    "No revision requests.",\r
+    "لا توجد طلبات تعديل."\r
+  ],\r
+  [\r
+    "Recorded-course materials",\r
+    "مواد الكورسات المسجلة"\r
+  ],\r
+  [\r
+    "No recorded-course deliveries planned.",\r
+    "لا توجد تسليمات كورسات مسجلة مخططة."\r
+  ],\r
+  [\r
+    "Admin: full management. Coordinator: scheduling, registrations and delivery, without financial access. Accountant: collection and financial records, without team administration. Teacher: their own students, lessons, availability and deliveries. Role changes and disabling an account end its sessions. Only administration approves project delivery.",\r
+    "المدير: إدارة كاملة. المنسق: الجدولة والتسجيلات والتسليم دون وصول مالي. المحاسب: التحصيل والسجلات المالية دون إدارة الفريق. المدرس: طلابه وحصصه وتوافره وتسليماته فقط. تغيير الصلاحية أو تعطيل الحساب ينهي جلساته. الإدارة وحدها تعتمد تسليم المشروع."\r
+  ],\r
+  [\r
+    "Defaults only pre-fill new lessons; rates can always be changed per lesson. Data is stored in the local A+ Hub database on this computer.",\r
+    "الإعدادات الافتراضية تملأ الحصص الجديدة فقط، ويمكن تغيير أسعار كل حصة. البيانات محفوظة في قاعدة النظام المحلية على هذا الجهاز."\r
+  ],\r
+  [\r
+    "SQLite backups include registrations, attendance, lesson summaries and follow-up tasks. The older financial JSON export does not include those records; administrative JSON is a reference export, not a database restore. Restore first makes a safety backup of the current data, verifies the chosen backup, and rolls everything back if a step fails.",\r
+    "نسخ SQLite تشمل التسجيلات والحضور وملخصات الحصص ومهام المتابعة. التصدير المالي JSON القديم لا يشملها، والتصدير الإداري مرجع وليس نسخة استعادة. الاستعادة تنشئ نسخة أمان أولًا وتتحقق من النسخة المختارة وتتراجع بالكامل عند فشل أي خطوة."\r
+  ],\r
+  [\r
+    "Rates are never invented: if a rate is unavailable, enter it manually. Each transaction stores the rate used when it was recorded, so changing rates later never alters old records.",\r
+    "لا يُخمن سعر الصرف: أدخله يدويًا إن لم يتوفر. تحتفظ كل عملية بسعرها عند التسجيل؛ تغيير الأسعار لاحقًا لا يغير السجلات القديمة."\r
+  ],\r
+  [\r
+    "+ Add currency",\r
+    "+ إضافة عملة"\r
+  ],\r
+  [\r
+    "Current Rate",\r
+    "سعر الصرف الحالي"\r
+  ],\r
+  [\r
+    "Last Updated",\r
+    "آخر تحديث"\r
+  ],\r
+  [\r
+    "Manual rate",\r
+    "سعر يدوي"\r
+  ],\r
+  [\r
+    "Set",\r
+    "تعيين"\r
+  ],\r
+  [\r
+    "The same all-time totals and category calculations as the existing administration Financial Summary. Only its EGP columns are exposed here. This display conversion does not change recorded payments or create a currency settlement.",\r
+    "نفس إجماليات كل الفترات وطريقة حساب الفئات في ملخص الإدارة. المعروض هنا أعمدة الجنيه المصري فقط، والتحويل للعرض لا يغير دفعات ولا ينشئ تسوية عملة."\r
+  ],\r
+  [\r
+    "Net profit after operating expenses",\r
+    "صافي الربح بعد المصروفات التشغيلية"\r
+  ],\r
+  [\r
+    "Service profit before expenses",\r
+    "ربح الخدمات قبل المصروفات"\r
+  ],\r
+  [\r
+    "Recorded operating expenses",\r
+    "المصروفات المسجلة"\r
+  ],\r
+  [\r
+    "Net profit",\r
+    "صافي الربح"\r
+  ],\r
+  [\r
+    "All-time totals under the existing service accounting rules. Each expense is counted once when recorded, whether paid or not. Other profit figures on this page are before operating expenses. Opening balances and internal transfers are not revenue.",\r
+    "إجماليات كل الفترات وفق قواعد احتساب الخدمات الحالية. المصروف يُحتسب مرة واحدة عند تسجيله، سواء سُدد أم لا. أرقام الأرباح الأخرى في الصفحة قبل المصروفات التشغيلية. الأرصدة الافتتاحية والتحويلات الداخلية لا تُعد إيرادًا."\r
+  ],\r
+  [\r
+    "Expenses, accounts & reconciliation",\r
+    "المصروفات والخزائن والمطابقة"\r
+  ],\r
+  [\r
+    "Batch Payments — student hours",\r
+    "Batch Payments — دفعة مجمّعة لساعات طالب"\r
+  ],\r
+  [\r
+    "Select teacher, student and period. Payment uses saved completed-lesson costs, not the current hourly rate. One payment is linked automatically to the lessons or portions it covers. All amounts are EGP.",\r
+    "اختر المدرس والطالب والفترة. السداد حسب تكلفة الحصص المنفذة المحفوظة، وليس سعر الساعة الحالي. دفعة واحدة مرتبطة تلقائيًا بالحصة أو أجزاء الحصص التي تغطيها. كل المبالغ بالجنيه المصري."\r
+  ],\r
+  [\r
+    "Student",\r
+    "الطالب"\r
+  ],\r
+  [\r
+    "Calculate hours & amount due",\r
+    "حساب الساعات والمستحق"\r
+  ],\r
+  [\r
+    "Previous month",\r
+    "الشهر السابق"\r
+  ],\r
+  [\r
+    "Admin and Accountant only. Linking an original payment identifies its cash account without creating another payment. Opening balances are at the start of the chosen day; link only later transactions not already included.",\r
+    "متاحة للمدير والمحاسب فقط. ربط دفعة أصلية بخزينة يحدد مكان النقد ولا ينشئ دفعة ثانية. الرصيد الافتتاحي في بداية اليوم المختار؛ اربط فقط العمليات اللاحقة غير الداخلة فيه."\r
+  ],\r
+  [\r
+    "Accounts & transactions",\r
+    "الخزائن والحركات"\r
+  ],\r
+  [\r
+    "Operating expenses",\r
+    "المصروفات"\r
+  ],\r
+  [\r
+    "Reconciliation",\r
+    "المطابقة"\r
+  ],\r
+  [\r
+    "+ Account / cashbox",\r
+    "+ خزينة / حساب"\r
+  ],\r
+  [\r
+    "Transfer between accounts",\r
+    "تحويل بين حسابين"\r
+  ],\r
+  [\r
+    "No accounts yet. Start with a known opening balance for each account.",\r
+    "لم تُنشأ خزائن بعد. ابدأ برصيد افتتاحي معلوم لكل حساب."\r
+  ],\r
+  [\r
+    "Original payments without an account",\r
+    "دفعات أصلية لم تُنسب لخزينة"\r
+  ],\r
+  [\r
+    "These amounts already exist in the financial ledger. Linking them does not repeat collection or payment.",\r
+    "الأرقام التالية موجودة بالفعل في السجل المالي. ربطها لا يعيد التحصيل أو الصرف."\r
+  ],\r
+  [\r
+    "Reference",\r
+    "المرجع"\r
+  ],\r
+  [\r
+    "Link to account",\r
+    "ربط بخزينة"\r
+  ],\r
+  [\r
+    "Transaction history",\r
+    "سجل الحركات"\r
+  ],\r
+  [\r
+    "No transactions.",\r
+    "لا توجد حركات."\r
+  ],\r
+  [\r
+    "Teacher workspace preview",\r
+    "معاينة حساب المدرس"\r
+  ],\r
+  [\r
+    "Read-only preview as seen by the teacher, without student pricing or other teachers’ records.",\r
+    "عرض للقراءة كما يظهر للمدرس، دون أسعار الطلاب أو بيانات باقي المدرسين."\r
+  ],\r
+  [\r
+    "Schedule",\r
+    "جدوله"\r
+  ],\r
+  [\r
+    "Subjects",\r
+    "مواده"\r
+  ],\r
+  [\r
+    "Projects",\r
+    "مشاريعه"\r
+  ],\r
+  [\r
+    "EGP account",\r
+    "حسابه بالجنيه"\r
+  ],\r
+  [\r
+    "My schedule & lesson times",\r
+    "جدولي ومواعيد حصصي"\r
+  ],\r
+  [\r
+    "Existing timetable, new bookings and lesson records in one place. Times are in Cairo time. A booking alone does not mean a lesson was delivered.",\r
+    "الجدول القديم والحجوزات الجديدة وسجلات الحصص في مكان واحد. المواعيد بتوقيت القاهرة. الحجز وحده لا يعني تنفيذ حصة."\r
+  ],\r
+  [\r
+    "View period",\r
+    "عرض الفترة"\r
+  ],\r
+  [\r
+    "From — to",\r
+    "من — إلى"\r
+  ],\r
+  [\r
+    "Work",\r
+    "العمل"\r
+  ],\r
+  [\r
+    "Subject / work",\r
+    "المادة / العمل"\r
+  ],\r
+  [\r
+    "My availability & booking confirmations",\r
+    "أوقات توافري وتأكيد الحجوزات"\r
+  ],\r
+  [\r
+    "Add a cashbox or account",\r
+    "إضافة خزينة أو حساب"\r
+  ],\r
+  [\r
+    "Account name",\r
+    "اسم الحساب"\r
+  ],\r
+  [\r
+    "Account type",\r
+    "نوع الحساب"\r
+  ],\r
+  [\r
+    "Balance at the start of the day",\r
+    "الرصيد في بداية يوم"\r
+  ],\r
+  [\r
+    "Opening balance",\r
+    "الرصيد الافتتاحي"\r
+  ],\r
+  [\r
+    "Allow a negative balance",\r
+    "السماح برصيد سالب"\r
+  ],\r
+  [\r
+    "Record an account transfer — not revenue",\r
+    "تسجيل تحويل بين الحسابات — لا يُعد إيرادًا"\r
+  ],\r
+  [\r
+    "From account",\r
+    "من حساب"\r
+  ],\r
+  [\r
+    "To account",\r
+    "إلى حساب"\r
+  ],\r
+  [\r
+    "Actual transfer date",\r
+    "تاريخ التحويل الفعلي"\r
+  ],\r
+  [\r
+    "Amount out in source-account currency",\r
+    "المبلغ الخارج بعملة الحساب الأول"\r
+  ],\r
+  [\r
+    "Amount in in destination-account currency",\r
+    "المبلغ الداخل بعملة الحساب الثاني"\r
+  ],\r
+  [\r
+    "Transfer reference / description",\r
+    "مرجع التحويل / البيان"\r
+  ],\r
+  [\r
+    "— Select an account —",\r
+    "— اختر حسابًا —"\r
+  ],\r
+  [\r
+    "Account",\r
+    "الحساب"\r
+  ],\r
+  [\r
+    "Type",\r
+    "النوع"\r
+  ],\r
+  [\r
+    "Currency",\r
+    "العملة"\r
+  ],\r
+  [\r
+    "From date",\r
+    "من تاريخ"\r
+  ],\r
+  [\r
+    "Balance",\r
+    "الرصيد"\r
+  ],\r
+  [\r
+    "Status",\r
+    "الحالة"\r
+  ],\r
+  [\r
+    "Active",\r
+    "نشط"\r
+  ],\r
+  [\r
+    "Suspended",\r
+    "موقوف"\r
+  ],\r
+  [\r
+    "Suspend",\r
+    "إيقاف"\r
+  ],\r
+  [\r
+    "Activate",\r
+    "تنشيط"\r
+  ],\r
+  [\r
+    "Amount",\r
+    "المبلغ"\r
+  ],\r
+  [\r
+    "Direction",\r
+    "الاتجاه"\r
+  ],\r
+  [\r
+    "Currency not established",\r
+    "عملة غير مثبتة"\r
+  ],\r
+  [\r
+    "In",\r
+    "داخل"\r
+  ],\r
+  [\r
+    "Out",\r
+    "خارج"\r
+  ],\r
+  [\r
+    "All payments are assigned to accounts.",\r
+    "كل الدفعات منسوبة لحسابات."\r
+  ],\r
+  [\r
+    "Account / currency",\r
+    "الحساب / العملة"\r
+  ],\r
+  [\r
+    "Type / reference",\r
+    "النوع / المرجع"\r
+  ],\r
+  [\r
+    "Signed amount",\r
+    "المبلغ الموقّع"\r
+  ],\r
+  [\r
+    "Description",\r
+    "البيان"\r
+  ],\r
+  [\r
+    "Cash",\r
+    "نقدي"\r
+  ],\r
+  [\r
+    "Bank",\r
+    "بنك"\r
+  ],\r
+  [\r
+    "Wallet",\r
+    "محفظة"\r
+  ],\r
+  [\r
+    "No",\r
+    "لا"\r
+  ],\r
+  [\r
+    "Yes — overdraft account",\r
+    "نعم — حساب بسحب على المكشوف"\r
+  ],\r
+  [\r
+    "Activate account",\r
+    "تنشيط الحساب"\r
+  ],\r
+  [\r
+    "Suspend zero-balance account",\r
+    "إيقاف حساب رصيده صفر"\r
+  ],\r
+  [\r
+    "Account in the payment currency",\r
+    "الحساب بنفس عملة الدفعة"\r
+  ],\r
+  [\r
+    "Correct a payment account — correction history retained",\r
+    "تصحيح خزينة الدفعة — مع الاحتفاظ بتاريخ التصحيح"\r
+  ],\r
+  [\r
+    "Correct account",\r
+    "الحساب الصحيح"\r
+  ],\r
+  [\r
+    "Reason for correction",\r
+    "سبب التصحيح"\r
+  ],\r
+  [\r
+    "Reverse an erroneous entry — not a transfer or refund request",\r
+    "إلغاء حركة سُجلت بالخطأ — ليس طلب تحويل أو رد أموال"\r
+  ],\r
+  [\r
+    "Document / date",\r
+    "المستند / التاريخ"\r
+  ],\r
+  [\r
+    "Category / supplier",\r
+    "الفئة / المورد"\r
+  ],\r
+  [\r
+    "Paid",\r
+    "المدفوع"\r
+  ],\r
+  [\r
+    "Remaining",\r
+    "المتبقي"\r
+  ],\r
+  [\r
+    "No recorded expenses.",\r
+    "لا توجد مصروفات مسجلة."\r
+  ],\r
+  [\r
+    "Record an operating expense — no automatic cash payout",\r
+    "تسجيل مصروف تشغيلي — دون صرف نقدي تلقائي"\r
+  ],\r
+  [\r
+    "Expense date",\r
+    "تاريخ المصروف"\r
+  ],\r
+  [\r
+    "Category",\r
+    "الفئة"\r
+  ],\r
+  [\r
+    "Advertising",\r
+    "إعلانات"\r
+  ],\r
+  [\r
+    "Software & subscriptions",\r
+    "برامج واشتراكات"\r
+  ],\r
+  [\r
+    "Transfer fees",\r
+    "عمولات تحويل"\r
+  ],\r
+  [\r
+    "Rent",\r
+    "إيجار"\r
+  ],\r
+  [\r
+    "Internet & communications",\r
+    "إنترنت واتصالات"\r
+  ],\r
+  [\r
+    "Other",\r
+    "أخرى"\r
+  ],\r
+  [\r
+    "Supplier / payee",\r
+    "المورد / الجهة"\r
+  ],\r
+  [\r
+    "Supplier invoice number — optional",\r
+    "رقم فاتورة المورد — اختياري"\r
+  ],\r
+  [\r
+    "Expense description",\r
+    "وصف المصروف"\r
+  ],\r
+  [\r
+    "Expense currency",\r
+    "عملة المصروف"\r
+  ],\r
+  [\r
+    "Total expense amount",\r
+    "إجمالي قيمة المصروف"\r
+  ],\r
+  [\r
+    "Payment account",\r
+    "حساب الصرف"\r
+  ],\r
+  [\r
+    "Actual payout date",\r
+    "تاريخ الصرف الفعلي"\r
+  ],\r
+  [\r
+    "Payment reference",\r
+    "مرجع السداد"\r
+  ],\r
+  [\r
+    "Cancel an unpaid document, keeping its history",\r
+    "إلغاء مستند غير مسدد مع الاحتفاظ به"\r
+  ],\r
+  [\r
+    "Reason for cancellation",\r
+    "سبب الإلغاء"\r
+  ],\r
+  [\r
+    "Bank reference",\r
+    "مرجع البنك"\r
+  ],\r
+  [\r
+    "Import a local bank statement — no external service upload",\r
+    "استيراد كشف حساب محلي — لا إرسال لخدمة خارجية"\r
+  ],\r
+  [\r
+    "Period start",\r
+    "بداية الفترة"\r
+  ],\r
+  [\r
+    "Period end",\r
+    "نهاية الفترة"\r
+  ],\r
+  [\r
+    "Statement opening balance",\r
+    "رصيد أول الفترة بالكشف"\r
+  ],\r
+  [\r
+    "Statement closing balance",\r
+    "رصيد آخر الفترة بالكشف"\r
+  ],\r
+  [\r
+    "CSV contents: Date,Amount,Reference,Description",\r
+    "محتوى CSV: Date,Amount,Reference,Description"\r
+  ],\r
+  [\r
+    "Maximum 150 KB",\r
+    "الحد الأقصى 150 KB"\r
+  ],\r
+  [\r
+    "Matching transaction",\r
+    "الحركة المطابقة"\r
+  ],\r
+  [\r
+    "— Select —",\r
+    "— اختر —"\r
+  ],\r
+  [\r
+    "Unmatch in an open statement",\r
+    "فك مطابقة في كشف مفتوح"\r
+  ],\r
+  [\r
+    "Approve reconciliation — prevents new entries in the closed period",\r
+    "اعتماد المطابقة — يمنع حركات جديدة داخل الفترة المقفلة"\r
+  ],\r
+  [\r
+    "Choose teacher, student and a valid period ending no later than today",\r
+    "اختر المدرس والطالب وفترة صحيحة لا تتجاوز اليوم"\r
+  ],\r
+  [\r
+    "Saved hourly rate — EGP",\r
+    "أجر الساعة المسجل — ج.م"\r
+  ],\r
+  [\r
+    "Unpaid hours",\r
+    "الساعات غير المسددة"\r
+  ],\r
+  [\r
+    "Amount — EGP",\r
+    "المبلغ — ج.م"\r
+  ],\r
+  [\r
+    "No payable hours under these filters.",\r
+    "لا توجد ساعات مستحقة بهذه الشروط."\r
+  ],\r
+  [\r
+    "Subject",\r
+    "المادة"\r
+  ],\r
+  [\r
+    "Remaining — EGP",\r
+    "المتبقي — ج.م"\r
+  ],\r
+  [\r
+    "No lessons.",\r
+    "لا توجد حصص."\r
+  ],\r
+  [\r
+    "Payment ID",\r
+    "رقم الدفعة"\r
+  ],\r
+  [\r
+    "Unallocated amount — EGP",\r
+    "المتبقي للتوزيع — ج.م"\r
+  ],\r
+  [\r
+    "Period",\r
+    "الفترة"\r
+  ],\r
+  [\r
+    "Hours",\r
+    "الساعات"\r
+  ],\r
+  [\r
+    "New payment",\r
+    "دفعة جديدة"\r
+  ],\r
+  [\r
+    "Allocate an earlier payment",\r
+    "توزيع دفعة قديمة"\r
+  ],\r
+  [\r
+    "No batch payments for this student.",\r
+    "لا توجد دفعات مجمعة لهذا الطالب."\r
+  ],\r
+  [\r
+    "Hours to pay — allocated oldest first",\r
+    "الساعات المراد سدادها — توزع على الأقدم أولًا"\r
+  ],\r
+  [\r
+    "Actual payment date",\r
+    "تاريخ الدفع الفعلي"\r
+  ],\r
+  [\r
+    "EGP rate in the accounting currency — internal recording only",\r
+    "سعر الجنيه بعملة الحسابات — للتسجيل الداخلي فقط"\r
+  ],\r
+  [\r
+    "Payment method",\r
+    "طريقة الدفع"\r
+  ],\r
+  [\r
+    "EGP payment account — optional",\r
+    "خزينة الصرف بالجنيه — اختياري"\r
+  ],\r
+  [\r
+    "Hours exceed the payable amount",\r
+    "الساعات تتجاوز المستحق"\r
+  ],\r
+  [\r
+    "Amount from the earlier payment allocated to these lessons — EGP",\r
+    "المبلغ من الدفعة القديمة المخصص لهذه الحصص — ج.م"\r
+  ],\r
+  [\r
+    "Reason for linking the earlier payment to this student and period",\r
+    "سبب ربط الدفعة السابقة بهذا الطالب والفترة"\r
+  ],\r
+  [\r
+    "Choose a valid period",\r
+    "اختر فترة صحيحة"\r
+  ],\r
+  [\r
+    "Choose a period of no more than 63 days",\r
+    "اختر فترة لا تزيد عن 63 يومًا"\r
+  ],\r
+  [\r
+    "Not specified",\r
+    "غير محدد"\r
+  ],\r
+  [\r
+    "No sessions in the selected period.",\r
+    "لا توجد مواعيد في الفترة المختارة."\r
+  ],\r
+  [\r
+    "Service type",\r
+    "نوع الخدمة"\r
+  ],\r
+  [\r
+    "Level",\r
+    "المستوى"\r
+  ],\r
+  [\r
+    "Students in lessons & subject",\r
+    "طلاب الحصص والمادة"\r
+  ],\r
+  [\r
+    "Completed lessons",\r
+    "حصص منفذة"\r
+  ],\r
+  [\r
+    "No subjects assigned yet.",\r
+    "لا توجد مواد مسندة لك حتى الآن."\r
+  ],\r
+  [\r
+    "Project / subject",\r
+    "المشروع / المادة"\r
+  ],\r
+  [\r
+    "Start",\r
+    "البداية"\r
+  ],\r
+  [\r
+    "Due date",\r
+    "موعد التسليم"\r
+  ],\r
+  [\r
+    "No projects assigned.",\r
+    "لا توجد مشاريع مسندة لك."\r
+  ],\r
+  [\r
+    "Completed lesson",\r
+    "حصة منفذة"\r
+  ],\r
+  [\r
+    "Project earnings",\r
+    "مستحق مشروع"\r
+  ],\r
+  [\r
+    "Recorded-course earnings",\r
+    "مستحق كورس مسجل"\r
+  ],\r
+  [\r
+    "Payment received",\r
+    "دفعة مستلمة"\r
+  ],\r
+  [\r
+    "Details",\r
+    "التفاصيل"\r
+  ],\r
+  [\r
+    "Accrued / equivalent — EGP",\r
+    "مستحق / معادل — ج.م"\r
+  ],\r
+  [\r
+    "Paid / equivalent — EGP",\r
+    "مدفوع / معادل — ج.م"\r
+  ],\r
+  [\r
+    "Balance / equivalent — EGP",\r
+    "الرصيد / معادله — ج.م"\r
+  ],\r
+  [\r
+    "Undated",\r
+    "بدون تاريخ"\r
+  ],\r
+  [\r
+    "No transactions in the selected period.",\r
+    "لا توجد حركات خلال الفترة المختارة."\r
+  ],\r
+  [\r
+    "Financial Summary — EGP only",\r
+    "Financial Summary — الجنيه المصري فقط"\r
+  ],\r
+  [\r
+    "My teaching subjects",\r
+    "المواد التي أدرّسها"\r
+  ],\r
+  [\r
+    "Subjects assigned to you and those in your lessons, projects and courses.",\r
+    "المواد المسندة لك والمواد الموجودة في حصصك ومشاريعك وكورساتك."\r
+  ],\r
+  [\r
+    "My project work",\r
+    "المشاريع التي أعمل عليها"\r
+  ],\r
+  [\r
+    "Your current and previous projects only. Academy pricing and accounts are not shown here.",\r
+    "مشاريعك الحالية والسابقة فقط. الأسعار وحسابات الأكاديمية لا تظهر هنا."\r
+  ],\r
+  [\r
+    "Delivery milestones & revision requests",\r
+    "مراحل التسليم وطلبات التعديل"\r
+  ],\r
+  [\r
+    "Transaction details",\r
+    "تفصيل الحركات"\r
+  ],\r
+  [\r
+    "All transactions",\r
+    "كل الحركات"\r
+  ],\r
+  [\r
+    "The same teacher’s administration summary, showing EGP columns only. Like administration, the summary covers all dates. Stored accounting-base values are converted using the latest saved EGP rate. This is display-only: it does not change hourly pay or original payments and creates no currency settlement.",\r
+    "نفس بيانات جدول الإدارة لنفس المدرس، بأعمدة الجنيه فقط. الملخص لكل الفترات مثل جدول الإدارة. الحساب يعتمد على القيم المحفوظة بعملة حسابات الأكاديمية ثم تحويلها للجنيه بآخر سعر محفوظ؛ هذا معادل للعرض فقط، ولا يغير أجر الساعة أو أصل الدفعات ولا يسجل تسوية عملة."\r
+  ],\r
+  [\r
+    "The date filter applies to the transaction details below only; it does not change the all-time summary above. The displayed equivalent may differ from an original EGP transaction if exchange rates changed.",\r
+    "فلتر التاريخ للتفاصيل التالية فقط؛ لا يغيّر إجمالي الملخص أعلاه. المعادل المعروض قد يختلف عن مبلغ العملية الأصلي بالجنيه عند تغير سعر الصرف."\r
+  ],\r
+  [\r
+    "Rate timestamp — Cairo time:",\r
+    "تاريخ سعر التحويل — بتوقيت القاهرة:"\r
+  ],\r
+  [\r
+    "A rate is saved, but its timestamp is unavailable.",\r
+    "سعر التحويل محفوظ، لكن تاريخه غير متاح."\r
+  ],\r
+  [\r
+    "The exchange rate is missing, or records with another accounting-base currency are excluded just as in administration.",\r
+    "سعر التحويل غير متاح، أو توجد عمليات بعملة أساس مختلفة مستبعدة من الحساب مثل جدول الإدارة."\r
+  ],\r
+  [\r
+    "Subject / Course / Project Name",\r
+    "اسم المادة / الكورس / المشروع"\r
+  ],\r
+  [\r
+    "Full Course / Project Price",\r
+    "السعر الكامل للكورس / المشروع"\r
+  ],\r
+  [\r
+    "Teacher / Engineer Profit Share %",\r
+    "نسبة مستحق المدرس / المهندس %"\r
+  ],\r
+  [\r
+    "Number of Students",\r
+    "عدد الطلاب"\r
+  ],\r
+  [\r
+    "Project Status",\r
+    "حالة المشروع"\r
+  ],\r
+  [\r
+    "Amount Paid (so far)",\r
+    "المدفوع حتى الآن"\r
+  ],\r
+  [\r
+    "Subject (only subjects linked to this student and instructor)",\r
+    "المادة (المواد المرتبطة بهذا الطالب والمدرس فقط)"\r
+  ],\r
+  [\r
+    "Duration (hours)",\r
+    "المدة (بالساعات)"\r
+  ],\r
+  [\r
+    "Free / waived session (leave as normal for a paid session)",\r
+    "حصة مجانية / معفاة (اتركها عادية للحصة المدفوعة)"\r
+  ],\r
+  [\r
+    "Reason for the free / waived session (required, kept in the audit log)",\r
+    "سبب الحصة المجانية / المعفاة (مطلوب ويحفظ في سجل التدقيق)"\r
+  ],\r
+  [\r
+    "Engineer Profit Share %",\r
+    "نسبة مستحق المهندس %"\r
+  ],\r
+  [\r
+    "Course Selling Price",\r
+    "سعر بيع الكورس"\r
+  ],\r
+  [\r
+    "Instructor Share %",\r
+    "نسبة مستحق المدرس %"\r
+  ],\r
+  [\r
+    "Reminder Name (e.g. Send Recorded Lectures)",\r
+    "عنوان التذكير (مثل إرسال المحاضرات المسجلة)"\r
+  ],\r
+  [\r
+    "Related Recorded Course",\r
+    "الكورس المسجل المرتبط"\r
+  ],\r
+  [\r
+    "Day(s) — Ctrl/Cmd-click for several",\r
+    "الأيام — استخدم Ctrl/Cmd لاختيار أكثر من يوم"\r
+  ],\r
+  [\r
+    "End Date",\r
+    "تاريخ النهاية"\r
+  ],\r
+  [\r
+    "Repeat Frequency",\r
+    "معدل التكرار"\r
+  ],\r
+  [\r
+    "Other Payment Source Description",\r
+    "وصف مصدر الدفعة الأخرى"\r
+  ],\r
+  [\r
+    "Schedule Type",\r
+    "نوع الجدول"\r
+  ],\r
+  [\r
+    "Date (day is set automatically)",\r
+    "التاريخ (يُحدد اليوم تلقائيًا)"\r
+  ],\r
+  [\r
+    "Day of the week",\r
+    "يوم الأسبوع"\r
+  ],\r
+  [\r
+    "Student(s) — Ctrl/Cmd-click for several",\r
+    "الطلاب — استخدم Ctrl/Cmd لاختيار أكثر من طالب"\r
+  ],\r
+  [\r
+    "Weekday",\r
+    "يوم الأسبوع"\r
+  ],\r
+  [\r
+    "Available from",\r
+    "متاح من الساعة"\r
+  ],\r
+  [\r
+    "Available until",\r
+    "متاح حتى الساعة"\r
+  ],\r
+  [\r
+    "Availability status",\r
+    "حالة التوافر"\r
+  ],\r
+  [\r
+    "Live subject",\r
+    "مادة مباشرة"\r
+  ],\r
+  [\r
+    "Session date",\r
+    "تاريخ الحصة"\r
+  ],\r
+  [\r
+    "Booking status",\r
+    "حالة الحجز"\r
+  ],\r
+  [\r
+    "Matching completed lesson (required for completion)",\r
+    "الحصة المنفذة المطابقة (مطلوبة للإتمام)"\r
+  ],\r
+  [\r
+    "Scheduling notes",\r
+    "ملاحظات الجدولة"\r
+  ],\r
+  [\r
+    "Preferred teacher",\r
+    "المدرس المفضل"\r
+  ],\r
+  [\r
+    "Preferred days / times",\r
+    "الأيام / المواعيد المفضلة"\r
+  ],\r
+  [\r
+    "Request status",\r
+    "حالة الطلب"\r
+  ],\r
+  [\r
+    "Duration in minutes",\r
+    "المدة بالدقائق"\r
+  ],\r
+  [\r
+    "Find slots",\r
+    "البحث عن مواعيد"\r
+  ],\r
+  [\r
+    "Agreed total (original currency)",\r
+    "الإجمالي المتفق عليه (بالعملة الأصلية)"\r
+  ],\r
+  [\r
+    "Number of sessions (1 for projects/courses)",\r
+    "عدد الحصص (١ للمشاريع / الكورسات)"\r
+  ],\r
+  [\r
+    "Agreement starts",\r
+    "بداية الاتفاق"\r
+  ],\r
+  [\r
+    "Agreement ends (optional)",\r
+    "نهاية الاتفاق (اختياري)"\r
+  ],\r
+  [\r
+    "Existing service (leave blank for a new Live package)",\r
+    "خدمة موجودة (اتركها فارغة لباقة حصص جديدة)"\r
+  ],\r
+  [\r
+    "Registration / service name",\r
+    "اسم التسجيل / الخدمة"\r
+  ],\r
+  [\r
+    "Subject / service",\r
+    "المادة / الخدمة"\r
+  ],\r
+  [\r
+    "Responsible teacher",\r
+    "المدرس المسؤول"\r
+  ],\r
+  [\r
+    "End date (optional)",\r
+    "تاريخ النهاية (اختياري)"\r
+  ],\r
+  [\r
+    "Registration status",\r
+    "حالة التسجيل"\r
+  ],\r
+  [\r
+    "Agreement basis (reference only)",\r
+    "أساس الاتفاق (مرجعي فقط)"\r
+  ],\r
+  [\r
+    "Agreed price (optional; does not charge the student)",\r
+    "السعر المتفق عليه (اختياري ولا ينشئ رسومًا على الطالب)"\r
+  ],\r
+  [\r
+    "Agreement currency",\r
+    "عملة الاتفاق"\r
+  ],\r
+  [\r
+    "Planned sessions (optional whole number)",\r
+    "عدد الحصص المخططة (عدد صحيح اختياري)"\r
+  ],\r
+  [\r
+    "Learning goal / agreement notes",\r
+    "هدف التعلم / ملاحظات الاتفاق"\r
+  ],\r
+  [\r
+    "Save record",\r
+    "حفظ السجل"\r
+  ],\r
+  [\r
+    "Task / follow-up",\r
+    "المهمة / المتابعة"\r
+  ],\r
+  [\r
+    "Task status",\r
+    "حالة المهمة"\r
+  ],\r
+  [\r
+    "Related student",\r
+    "الطالب المرتبط"\r
+  ],\r
+  [\r
+    "Related teacher",\r
+    "المدرس المرتبط"\r
+  ],\r
+  [\r
+    "Related registration",\r
+    "التسجيل المرتبط"\r
+  ],\r
+  [\r
+    "Description / what needs doing",\r
+    "الوصف / المطلوب تنفيذه"\r
+  ],\r
+  [\r
+    "Result / outcome (required when Done)",\r
+    "النتيجة (مطلوبة عند الإتمام)"\r
+  ],\r
+  [\r
+    "Milestone / deliverable",\r
+    "المرحلة / المطلوب تسليمه"\r
+  ],\r
+  [\r
+    "Delivery status",\r
+    "حالة التسليم"\r
+  ],\r
+  [\r
+    "Deliverable link (optional)",\r
+    "رابط التسليم (اختياري)"\r
+  ],\r
+  [\r
+    "Delivery notes",\r
+    "ملاحظات التسليم"\r
+  ],\r
+  [\r
+    "Student / course enrolment",\r
+    "الطالب / تسجيل الكورس"\r
+  ],\r
+  [\r
+    "Material / lecture",\r
+    "المادة / المحاضرة"\r
+  ],\r
+  [\r
+    "Material link (optional)",\r
+    "رابط المادة (اختياري)"\r
+  ],\r
+  [\r
+    "Planned delivery date",\r
+    "تاريخ التسليم المخطط"\r
+  ],\r
+  [\r
+    "Actual delivery date (blank until sent)",\r
+    "تاريخ التسليم الفعلي (فارغ حتى الإرسال)"\r
+  ],\r
+  [\r
+    "Username (letters / numbers / dots)",\r
+    "اسم المستخدم (حروف / أرقام / نقاط)"\r
+  ],\r
+  [\r
+    "Linked teacher (required for Teacher)",\r
+    "المدرس المرتبط (مطلوب لحساب المدرس)"\r
+  ],\r
+  [\r
+    "Password (12+ characters)",\r
+    "كلمة المرور (١٢ حرفًا أو أكثر)"\r
+  ],\r
+  [\r
+    "New password (blank keeps existing; 12+ characters)",\r
+    "كلمة مرور جديدة (اتركها فارغة للإبقاء على الحالية؛ ١٢ حرفًا أو أكثر)"\r
+  ]\r
+]`, "/app/src/config.js": `'use strict';\r
+// Small settings file that lives NEXT TO the database (not inside it), so a restore never changes it.\r
+const fs = require('fs'), path = require('path');\r
+const DEFAULTS = { autoBackup: true, backupIntervalHours: 24, keepAutoBackups: 30, secondBackupDir: '', staleRateHours: 24, sessionMinutes: 480 };\r
+const fileFor = dbFile => dbFile + '.config.json';\r
+function load(dbFile) { let o = {}; try { o = JSON.parse(fs.readFileSync(fileFor(dbFile), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') require('./log').warn('settings file unreadable, defaults used', e); } return { ...DEFAULTS, ...o }; }\r
+function validate(c) {\r
+  const e = []; const n = (k, lo, hi) => { if (c[k] !== undefined && !(Number.isFinite(+c[k]) && +c[k] >= lo && +c[k] <= hi)) e.push(\`\${k} must be a number from \${lo} to \${hi}\`); };\r
+  n('backupIntervalHours', 1, 24 * 30); n('keepAutoBackups', 1, 1000); n('staleRateHours', 1, 24 * 365); n('sessionMinutes', 5, 60 * 24 * 30);\r
+  if (c.secondBackupDir !== undefined && (typeof c.secondBackupDir !== 'string' || c.secondBackupDir.length > 500 || /[\\0<>|"?*]/.test(c.secondBackupDir.replace(/^[A-Za-z]:/, '')))) e.push('secondBackupDir is not a valid folder path');\r
+  if (c.autoBackup !== undefined && typeof c.autoBackup !== 'boolean') e.push('autoBackup must be true or false');\r
+  return e;\r
+}\r
+function save(dbFile, patch) {\r
+  const cur = load(dbFile), next = { ...cur }; for (const k of Object.keys(DEFAULTS)) if (patch[k] !== undefined) next[k] = typeof DEFAULTS[k] === 'number' ? +patch[k] : patch[k];\r
+  const e = validate(next); if (e.length) { const x = new Error(e.join('; ')); x.problems = e; throw x; }\r
+  fs.mkdirSync(path.dirname(fileFor(dbFile)), { recursive: true }); const tmp = fileFor(dbFile) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(next, null, 1)); fs.renameSync(tmp, fileFor(dbFile)); return next;\r
+}\r
+module.exports = { load, save, validate, DEFAULTS, fileFor };\r
+`, "/app/src/db.js": `'use strict';\r
+// Database layer: opens SQLite with safe pragmas and applies forward-only migrations in order.\r
+const { DatabaseSync } = require('node:sqlite');\r
+const fs = require('fs'), path = require('path');\r
+const MIG_DIR = path.join(__dirname, '..', 'db', 'migrations');\r
+const migFiles = () => fs.readdirSync(MIG_DIR).filter(f => /^\\d+_.*\\.sql$/.test(f)).sort();\r
+const SCHEMA_VERSION = Math.max(...migFiles().map(f => parseInt(f, 10))); // highest migration file number shipped\r
+\r
+function open(file) {\r
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });\r
+  const db = new DatabaseSync(file);\r
+  db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;');\r
+  return db;\r
+}\r
+// migrations that have not been applied to this database yet (does not change anything)\r
+function pending(db) {\r
+  let done = new Set(); try { done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version)); } catch (_) {}\r
+  return migFiles().filter(f => !done.has(parseInt(f, 10)));\r
+}\r
+const hasData = db => { try { return db.prepare("SELECT count(*) c FROM settings").get().c > 0; } catch (_) { return false; } };\r
+function migrate(db) {\r
+  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');\r
+  const done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version));\r
+  const files = migFiles();\r
+  const applied = [];\r
+  for (const f of files) {\r
+    const v = parseInt(f, 10); if (done.has(v)) continue;\r
+    const sql = fs.readFileSync(path.join(MIG_DIR, f), 'utf8');\r
+    db.exec('BEGIN');\r
+    try {\r
+      db.exec(sql);\r
+      db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(v, f, new Date().toISOString());\r
+      db.exec('COMMIT'); applied.push(f);\r
+    } catch (e) { db.exec('ROLLBACK'); throw new Error('migration ' + f + ' failed and was rolled back: ' + e.message); }\r
+  }\r
+  return applied;\r
+}\r
+const tx = (db, fn) => { db.exec('BEGIN IMMEDIATE'); try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { try { db.exec('ROLLBACK'); } catch (_) {} throw e; } };\r
+module.exports = { open, migrate, pending, hasData, tx, SCHEMA_VERSION, MIG_DIR };\r
+`, "/app/src/defaults.js": `'use strict';\r
+// Factory state of a brand-new database. Used by the server (fresh DB) and by the importer (to recognise an untouched, app-seeded target).\r
+const DEFAULT = () => ({ cp: [], al: [], ad: [], ts: [], v: 5, id: 1, set: { name: 'A+ Hub Academy', tr: '0', sr: '0', base: 'KWD' }, cur: [{ c: 'KWD', n: 'Kuwaiti Dinar' }, { c: 'EGP', n: 'Egyptian Pound' }, { c: 'USD', n: 'US Dollar' }, { c: 'SAR', n: 'Saudi Riyal' }, { c: 'QAR', n: 'Qatari Riyal' }, { c: 'AED', n: 'UAE Dirham' }, { c: 'BHD', n: 'Bahraini Dinar' }, { c: 'OMR', n: 'Omani Rial' }], rates: {}, t: [], s: [], sub: [], l: [], sp: [], tp: [], tt: [], pr: [], pp: [], rc: [], re: [], rm: [], rd: {} });\r
+module.exports = { DEFAULT };\r
+`, "/app/src/dryrun.js": `'use strict';\r
+// The 21-item dry-run report required before ANY real import. Pure reading: it never writes to the active database.\r
+const fs = require('fs'), os = require('os'), path = require('path');\r
+const { DatabaseSync } = require('node:sqlite');\r
+const { analyse, unwrap, sha, migrate, planTarget } = require('./importer');\r
+const { ORDER } = require('./mapping');\r
+const { open, migrate: mig } = require('./db');\r
+const { assemble } = require('./state');\r
+const f = require('./finance');\r
+const { makeOrig } = require('./orig');\r
+\r
+const bump = (o, c, k, v) => { const r = o[c || '—'] || (o[c || '—'] = {}); r[k] = (r[k] || 0) + v; };\r
+function totalsOf(d) {\r
+  const o = makeOrig({ O: f.O, pj: p => f.pj(d, p), rcc: f.rcc }), W = o.work(f.all(d)).byCurrency, T = JSON.parse(JSON.stringify(W));\r
+  const pr = new Map((d.pr || []).map(p => [p.id, p])), rc = new Map((d.rc || []).map(c => [c.id, c]));\r
+  (d.sp || []).forEach(p => bump(T, p.cur, 'studentPaymentsReceived', p.amt));\r
+  (d.tp || []).forEach(p => bump(T, p.cur, 'teacherPaymentsMade', p.amt));\r
+  (d.pp || []).forEach(p => { const q = pr.get(p.pr); if (q) bump(T, q.cur, 'projectPaymentsReceived', p.amt); });\r
+  (d.pr || []).forEach(p => { if (p.paid0) bump(T, p.cur, 'projectOpeningPaid_undated', p.paid0); });\r
+  (d.re || []).forEach(e => { const c = rc.get(e.rc); if (c && e.paid) bump(T, c.cur, 'courseEnrolmentPaid_undated', e.paid); });\r
+  return T;\r
+}\r
+function counts(d) { return Object.fromEntries(ORDER.map(k => [k, (d[k] || []).length])); }\r
+function readActive(dbFile, planFn) {\r
+  if (!dbFile || !fs.existsSync(dbFile) || fs.statSync(dbFile).size === 0) return { exists: false, counts: Object.fromEntries(ORDER.map(k => [k, 0])), totals: {} };\r
+  // Work on a throw-away COPY (database + any -wal), so the active files are only read, never opened by SQLite: no -shm/-wal side files, no mtime change.\r
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aplus-dry-')); let h;\r
+  try { const cp = path.join(tmp, 'copy.sqlite'); fs.copyFileSync(dbFile, cp); if (fs.existsSync(dbFile + '-wal')) fs.copyFileSync(dbFile + '-wal', cp + '-wal');\r
+    h = new DatabaseSync(cp); const st = assemble(h); const r = { exists: true, counts: counts(st), totals: totalsOf(st), plan: planFn ? planFn(h) : null }; h.close(); return r; }\r
+  catch (e) { try { h && h.close(); } catch (_) {} return { exists: true, unreadable: String(e.message), counts: null, totals: null }; }\r
+  finally { fs.rmSync(tmp, { recursive: true, force: true }); }\r
+}\r
+\r
+function build(text, { sourceName = '(unnamed)', activeDb = null } = {}) {\r
+  const { data } = unwrap(text), srcSha = sha(text);\r
+  const rep = migrate(text, { mode: 'dry-run' });               // verified in-memory import; touches no file\r
+  const R = { items: {}, sourceSha256: srcSha, approvalCode: srcSha.slice(0, 12), importerStatus: rep.status };\r
+  const A = analyse(JSON.parse(JSON.stringify(unwrap(text).data)));\r
+  const base = (data.set && data.set.base) || '';\r
+  const I = R.items;\r
+  I['1_source'] = { file: sourceName, sha256: srcSha, validationStatus: rep.status, format: rep.sourceFormat, errors: rep.errors };\r
+  I['2_legacySchemaVersion'] = { version: data.v, supported: data.v === 5 };\r
+  if (rep.status === 'REJECTED' || !A.keep) { I['8_rejected'] = { fileRejected: true, reasons: rep.errors }; R.canProceed = false; R.verdict = 'The file was REJECTED; nothing can be imported from it.'; return R; }\r
+  I['3_totalsByEntity'] = Object.fromEntries(ORDER.map(k => [k, rep.counts[k].read]));\r
+  // classify every kept row: exact / transformed / has-extra-fields\r
+  let exact = 0, transformed = [], extra = 0;\r
+  for (const k of ORDER) for (const row of A.keep[k].values()) {\r
+    const t = []; if (row.__nullify) t.push(\`optional link(s) \${row.__nullify.join(',')} stored empty\`); if (row.__dropLinks) t.push(\`list link(s) \${Object.keys(row.__dropLinks).join(',')} lost missing ids\`);\r
+    if (t.length) transformed.push({ entity: k, id: row.id, changes: t }); else exact++;\r
+  }\r
+  Object.values(rep.unknownFields).forEach(m => Object.values(m).forEach(n => { extra += n; }));\r
+  I['4_eligibleForExactImport'] = { records: exact };\r
+  I['5_optionalFieldsPreservedSafely'] = { recordsWithUnknownFields: extra, where: 'extra_json (kept verbatim)', fields: rep.unknownFields };\r
+  I['6_requiringTransformation'] = { records: transformed.length, list: transformed.slice(0, 200) };\r
+  const q = rep.quarantined;\r
+  I['7_quarantined'] = { records: q.length, list: q.map(x => ({ entity: x.entity, id: x.id, reason: x.reason })) };\r
+  I['8_rejected'] = { fileRejected: false, rows: 0, note: 'Nothing is silently dropped: a row that cannot be stored exactly is quarantined (item 7) with its original JSON kept and the precise reason.' };\r
+  I['9_duplicateIds'] = q.filter(x => /is also used by/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason }));\r
+  I['10_missingOrInvalidReferences'] = { quarantinedRequiredLinks: q.filter(x => /link/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason })), optionalLinksStoredEmpty: rep.warnings.filter(w => /does not exist/.test(w)) };\r
+  I['11_unknownStatusValues'] = q.filter(x => /not one of/.test(x.reason)).map(x => ({ entity: x.entity, id: x.id, reason: x.reason }));\r
+  // rates\r
+  const miss = [], unver = [], keepAll = k => [...A.keep[k].values()];\r
+  const rateOk = (cur, rx) => cur === base || (typeof rx === 'number' && rx > 0);\r
+  const chk = (entity, r, cur, rx, amt, bamt) => { if (cur === base) return; if (!rateOk(cur, rx)) { miss.push({ entity, id: r.id, currency: cur, reason: 'no saved rate on this record' }); unver.push({ entity, id: r.id, currency: cur, reason: 'no rate, so the base-currency value cannot be verified' }); }\r
+    else if (bamt != null && f.k_(amt, rx) !== bamt) unver.push({ entity, id: r.id, currency: cur, reason: \`stored base amount \${bamt} != amount \${amt} x saved rate \${rx} = \${f.k_(amt, rx)}\` }); };\r
+  keepAll('sp').forEach(r => chk('sp', r, r.cur, r.rx, r.amt, r.bamt)); keepAll('tp').forEach(r => chk('tp', r, r.cur, r.rx, r.amt, r.bamt));\r
+  keepAll('pr').forEach(r => { if (r.cur !== base && !rateOk(r.cur, r.rx)) { miss.push({ entity: 'pr', id: r.id, currency: r.cur, reason: 'no saved rate' }); unver.push({ entity: 'pr', id: r.id, currency: r.cur, reason: 'project revenue cannot be valued' }); } });\r
+  keepAll('rc').forEach(r => { if (r.cur !== base && !rateOk(r.cur, r.rx)) { miss.push({ entity: 'rc', id: r.id, currency: r.cur, reason: 'no saved rate' }); unver.push({ entity: 'rc', id: r.id, currency: r.cur, reason: 'course revenue cannot be valued' }); } });\r
+  keepAll('l').forEach(l => { const o = f.O(l); if (l.st !== 'Completed') return; chk('l.cost', l, l.tc, l.trx, o.cost, l.bcost); chk('l.charge', l, l.sc, l.srx, o.chg, l.bchg); });\r
+  I['12_missingHistoricalExchangeRates'] = { records: miss.length, list: miss.slice(0, 200), note: 'These are never filled in with today\\'s rate or any invented value; they are listed so you can decide.' };\r
+  I['13_conversionsThatCannotBeVerified'] = { records: unver.length, list: unver.slice(0, 200) };\r
+  I['14_openingBalancesWithoutDates'] = { projects: keepAll('pr').filter(p => p.paid0 > 0).map(p => ({ id: p.id, currency: p.cur, amount: p.paid0 })), note: 'Reported separately, never shown as a dated receipt.' };\r
+  const reAll = keepAll('re'); I['15_courseEnrolmentsWithoutPaymentHistory'] = { enrolments: reAll.length, withAmountPaidButNoHistory: reAll.filter(e => e.paid > 0).length, note: 'The legacy data stores one "paid so far" number per enrolment, with no dated payments. They are imported as an undated opening amount.' };\r
+  I['16_projectPaymentsValuedFromParentRate'] = { payments: keepAll('pp').length, note: 'Project payments carry no rate of their own; they are valued with the project\\'s saved rate.' };\r
+  // before / after\r
+  const act = readActive(activeDb, h => planTarget(h, data, A)); const kept = { ...data, rates: A.rates || data.rates, cur: A.cur || data.cur }; for (const k of ORDER) kept[k] = [...A.keep[k].values()].map(r => { const o = { ...r }; delete o.__nullify; delete o.__dropLinks; return o; });\r
+  const pre = act.plan ? { wouldBeRefused: act.plan.refuse || null, existingBusinessRows: act.plan.existingBusinessRows || {}, conflicts: act.plan.conflicts, appSeededConfigThatWillBeReplaced: !!act.plan.hasSeed, previousConfigKeptIn: act.plan.hasSeed ? 'audit_log (before_json); exchange_rate_history is never deleted' : null, rules: 'see CUTOVER_PROCEDURE.md' } : { note: 'no active database yet (or it could not be read): nothing to conflict with' };\r
+  I['17_entityCountsBeforeAfter'] = { targetPreflight: pre, activeDatabase: act.exists ? (act.unreadable ? 'could not be read read-only: ' + act.unreadable : act.counts) : 'no active database yet (empty)', afterImport: counts(kept), note: 'Import is refused unless the target is empty, so "after" = the imported rows.' };\r
+  I['18_totalsByOriginalCurrencyBeforeAfter'] = { activeDatabase: act.exists ? act.totals : {}, wholeSourceFile: totalsOf(data), afterImport: totalsOf(kept), note: 'Amounts are integer thousandths of each currency; currencies are never added together.' };\r
+  const defensible = miss.length === 0 && unver.length === 0;\r
+  I['19_convertedTotals'] = defensible ? { basis: 'each record\\'s own saved rate (never today\\'s rate)', baseCurrency: base, totals: rep.reconciliation && rep.reconciliation.expected } : { withheld: true, reason: \`\${miss.length} record(s) have no saved rate and \${unver.length} conversion(s) cannot be verified, so no single converted figure is shown.\` };\r
+  const disc = []; if (rep.reconciliation && !rep.reconciliation.matches) disc.push('financial totals from SQLite differ from legacy rows: ' + rep.reconciliation.differingTotals.join(', '));\r
+  if (rep.roundTrip && !rep.roundTrip.identical) disc.push(\`round trip differs in \${rep.roundTrip.totalDifferences} place(s): \` + rep.roundTrip.differences.slice(0, 5).join(' ; '));\r
+  if (rep.integrity && (rep.integrity.integrity_check !== 'ok' || rep.integrity.foreign_key_violations)) disc.push('database integrity/foreign-key check failed');\r
+  if (q.length) disc.push(\`\${q.length} record(s) are quarantined; totals of the imported data are lower than the whole source by: \` + JSON.stringify(rep.reconciliation && rep.reconciliation.effectOfQuarantineOnTotals));\r
+  if (unver.length) disc.push(\`\${unver.length} conversion(s) cannot be verified\`); if (miss.length) disc.push(\`\${miss.length} record(s) lack a saved exchange rate\`);\r
+  I['20_unresolvedDiscrepancies'] = disc;\r
+  const exactAll = rep.status === 'OK' && !transformed.length && rep.roundTrip && rep.roundTrip.identical && !q.length;\r
+  I['21_preservesAllSupportedInformationExactly'] = { answer: exactAll ? 'YES' : 'NO', why: exactAll ? 'Every record imported unchanged and read back identical.' : [q.length && \`\${q.length} quarantined\`, transformed.length && \`\${transformed.length} transformed\`, rep.status !== 'OK' && 'status ' + rep.status].filter(Boolean).join('; ') };\r
+  R.canProceed = ['OK', 'OK_WITH_QUARANTINE'].includes(rep.status) && !(act.plan && act.plan.refuse);\r
+  if (act.plan && act.plan.refuse) disc.push('the existing target database would be refused: ' + act.plan.refuse);\r
+  R.verdict = R.canProceed ? 'Dry run finished. NOTHING has been imported. A real import needs your separate explicit approval after you and the assistant have read this report.' : 'The dry run did not verify; do not import.';\r
+  return R;\r
+}\r
+\r
+function markdown(R) {\r
+  const I = R.items, L = [\`# Migration dry-run report (21 items)\`, '', \`**\${R.verdict}**\`, '', \`Importer status: \\\`\${R.importerStatus}\\\` · Source SHA-256: \\\`\${R.sourceSha256}\\\`\`, ''];\r
+  const j = x => '\`\`\`json\\n' + JSON.stringify(x, null, 1) + '\\n\`\`\`';\r
+  for (const [k, v] of Object.entries(I)) L.push(\`## \${k.replace('_', '. ').replace(/([a-z])([A-Z])/g, '$1 $2')}\`, '', j(v), '');\r
+  L.push('---', 'This report is not permission to import. A real import requires: (1) your explicit written approval after reviewing this report, then (2) \`--apply --approve=<first 12 characters of the source SHA-256 above>\` run by you.', '');\r
+  return L.join('\\n');\r
+}\r
+module.exports = { build, markdown, totalsOf, readActive };\r
 `, "/app/src/finance.js": `'use strict';\r
 // Server-side port of the legacy financial rules (dev/index.html lines "core calculations"). Pure functions over a legacy-shaped state.\r
 // Money = integer thousandths. Rounding = Math.round (half up on doubles), applied at exactly the same points as the legacy app.\r
@@ -28092,315 +28092,315 @@ function convertedSaved(db) {\r
   return { basis: 'saved rates per record', base: db.set.base, totals: fin(db), recordsWithoutSavedRate: missing };\r
 }\r
 module.exports = { scopeBase, k_, O, C, S, pj, rcc, TS, SS, TOT, fin, stampLegacy, all, byOriginalCurrency, convertedSaved };\r
-`, "/app/src/guard.js": `'use strict';
-// Startup guard (C2). A database file is only ever CREATED when this really is a new installation.
-// A zero-byte, truncated, malformed or otherwise unreadable file is never opened for writing, never replaced and never re-initialised:
-// the program stops with a message that lists the backups it can see. The damaged file is only ever moved aside by an explicit restore.
-const fs = require('fs'), path = require('path');
-const { DatabaseSync } = require('node:sqlite');
-const NAME = /^aplus-\\d{8}-\\d{6}(-[a-z0-9_]{1,30})?\\.sqlite$/;
-class StartupRefused extends Error { constructor(code, message, info = {}) { super(message); this.code = code; this.info = info; } }
-const exists = f => { try { return fs.statSync(f); } catch (_) { return null; } };
-const WAL_MAGIC = [0x377f0682, 0x377f0683];
-
-function backupsIn(dir) {
-  const out = []; try { for (const f of fs.readdirSync(dir)) if (NAME.test(f)) { let m = {}; try { m = JSON.parse(fs.readFileSync(path.join(dir, f + '.json'), 'utf8')); } catch (e) { require('./log').warn('backup manifest unreadable: ' + f, e); } out.push({ name: f, createdAt: m.createdAt || null, verified: m.verified === true, rev: m.rev ?? null }); } } catch (_) {}
-  return out.sort((a, b) => b.name.localeCompare(a.name));
-}
-function recovery(file, backupDir, list) {
-  const lines = ['', 'Nothing was changed, deleted or replaced. Your data has NOT been reset.'];
-  if (list.length) { lines.push('Backups available in ' + backupDir + ':'); list.slice(0, 5).forEach(b => lines.push('  ' + b.name + (b.createdAt ? '   (' + b.createdAt + ')' : '') + (b.verified ? '   verified' : ''))); lines.push('To recover: stop the server, then run restore-backup.cmd <backup name>. The damaged file is moved aside (never deleted).'); }
-  else lines.push('No backups were found in ' + backupDir + '. Do not delete anything. Copy the data folder somewhere safe first. Only if you are certain nothing was ever stored (a brand-new installation), move the damaged file out of the data folder yourself and start again.');
-  return lines.join('\\n');
-}
-// Read-only look at the files. Returns { state: 'new' | 'ok' } or throws StartupRefused.
-function inspect(file, backupDir) {
-  const list = backupsIn(backupDir || path.join(path.dirname(file), '..', 'backups'));
-  const refuse = (code, msg, extra) => { throw new StartupRefused(code, msg + recovery(file, backupDir, list), { backups: list, file, ...extra }); };
-  const st = exists(file), wal = exists(file + '-wal'), marker = exists(file + '.installed');
-  if (!st) {
-    if (wal && wal.size > 0) refuse('WAL_WITHOUT_DATABASE', 'The database file is missing but a write-ahead log (' + path.basename(file) + '-wal) is still there, so recent data may only exist in that log.');
-    if (marker) refuse('DATABASE_MISSING', 'The database file ' + file + ' is missing, but this installation has been used before.');
-    if (list.length) refuse('DATABASE_MISSING_WITH_BACKUPS', 'The database file ' + file + ' is missing, but backups exist, so this is not a new installation.');
-    return { state: 'new' };
-  }
-  if (!st.isFile()) refuse('NOT_A_FILE', file + ' is not a file.');
-  if (st.size === 0) refuse('ZERO_BYTE', 'The database file ' + file + ' is empty (0 bytes). It was probably damaged; it is NOT treated as a new database.');
-  const fd = fs.openSync(file, 'r'); const head = Buffer.alloc(100); const n = fs.readSync(fd, head, 0, 100, 0); fs.closeSync(fd);
-  if (n < 100 || head.subarray(0, 16).toString('latin1') !== 'SQLite format 3\\0') refuse('NOT_SQLITE', 'The file ' + file + ' is not a readable SQLite database.');
-  let ps = head.readUInt16BE(16); if (ps === 1) ps = 65536; const pages = head.readUInt32BE(28), chg = head.readUInt32BE(24), valid = head.readUInt32BE(92);
-  if (pages > 0 && chg === valid && st.size < pages * ps) refuse('TRUNCATED', 'The database file is shorter than its own header says (' + st.size + ' bytes, expected at least ' + pages * ps + '). It looks truncated.');
-  if (st.size % ps !== 0 && !wal) refuse('TRUNCATED', 'The database file size is not a whole number of pages. It looks truncated or damaged.');
-  if (wal && wal.size > 0) {
-    if (wal.size < 32) refuse('WAL_UNREADABLE', 'The write-ahead log (' + path.basename(file) + '-wal) is too short to be valid; SQLite would silently ignore it and recent changes could be lost.');
-    const w = fs.openSync(file + '-wal', 'r'); const hb = Buffer.alloc(4); fs.readSync(w, hb, 0, 4, 0); fs.closeSync(w);
-    if (!WAL_MAGIC.includes(hb.readUInt32BE(0))) refuse('WAL_UNREADABLE', 'The write-ahead log (' + path.basename(file) + '-wal) is unreadable; SQLite would silently ignore it and recent changes could be lost.');
-  }
-  let d; try { d = new DatabaseSync(file); } catch (e) { refuse('CANNOT_OPEN', 'The database cannot be opened: ' + e.message); }
-  try {
-    let ic; try { ic = d.prepare('PRAGMA integrity_check').all().map(r => r.integrity_check); } catch (e) { refuse('INTEGRITY', 'The database failed its integrity check: ' + e.message); }
-    if (ic.join() !== 'ok') refuse('INTEGRITY', 'The database failed its integrity check: ' + ic.slice(0, 3).join('; '));
-    let fk = []; try { fk = d.prepare('PRAGMA foreign_key_check').all(); } catch (e) { refuse('INTEGRITY', 'The foreign-key check could not run: ' + e.message); }
-    if (fk.length) refuse('FOREIGN_KEYS', 'The database has ' + fk.length + ' broken link(s) between records (foreign_key_check).');
-    let hasMig = true; try { d.prepare('SELECT count(*) c FROM schema_migrations').get(); } catch (_) { hasMig = false; }
-    if (!hasMig) refuse('NOT_APLUS', 'The file is a valid SQLite database but not an A+ Hub database (no schema_migrations table).');
-  } finally { try { d.close(); } catch (_) {} }
-  return { state: 'ok' };
-}
-const markInstalled = file => { try { fs.writeFileSync(file + '.installed', JSON.stringify({ firstSeen: new Date().toISOString() }), { flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') require('./log').warn('could not write the .installed marker', e); } };
-module.exports = { inspect, markInstalled, StartupRefused, backupsIn, NAME };
-`, "/app/src/importer.js": `'use strict';
-// Legacy (localStorage v5 JSON / v8 backup file) -> SQLite. Never repairs silently: rows that cannot be stored exactly are quarantined with a reason.
-const crypto = require('crypto');
-const { E, ENUMS, ORDER, NEWKEYS, SETTINGS_KEYS, OPT_FIELDS_NULL_IF_FALSY, structProblem } = require('./mapping');
-const { open, migrate, tx } = require('./db');
-const { assemble } = require('./state');
-const fin = require('./finance');
-const store = require('./store');
-const { DEFAULT } = require('./defaults');
-const sha = s => crypto.createHash('sha256').update(s).digest('hex');
-const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
-
-function unwrap(text) {
-  let o; try { o = JSON.parse(text); } catch (e) { throw new Error('not valid JSON: ' + e.message); }
-  if (isObj(o) && /hub-backup$/.test(o.format || '') && isObj(o.data)) return { data: o.data, wrapped: o.format };
-  return { data: o, wrapped: null };
-}
-
-// JSON.parse silently keeps only the LAST of two identical keys in one object. That would lose data without a trace, so it is detected here.
-function dupKeys(text) {
-  let i = 0; const out = [], ws = () => { while (i < text.length && ' \\t\\r\\n'.includes(text[i])) i++; };
-  const str = () => { const s = i; i++; while (text[i] !== '"') { if (text[i] === '\\\\') i++; i++; } i++; return JSON.parse(text.slice(s, i)); };
-  const val = p => { ws(); const c = text[i];
-    if (c === '{') { i++; const seen = new Set(); ws(); if (text[i] === '}') { i++; return; } for (;;) { ws(); const k = str(); if (seen.has(k)) out.push(p + '.' + k); seen.add(k); ws(); i++; val(p + '.' + k); ws(); if (text[i] === ',') { i++; continue; } i++; return; } }
-    else if (c === '[') { i++; ws(); if (text[i] === ']') { i++; return; } let n = 0; for (;;) { val(p + '[' + (n++) + ']'); ws(); if (text[i] === ',') { i++; continue; } i++; return; } }
-    else if (c === '"') str(); else while (i < text.length && !',}] \\t\\r\\n'.includes(text[i])) i++; };
-  val('$'); return out;
-}
-function typeOk(t, v) { return t === 'i' ? Number.isInteger(v) : t === 'r' ? typeof v === 'number' && Number.isFinite(v) : t === 't' ? typeof v === 'string' : t === 'b' ? (v === 1 || v === true) : t === 'j' ? Array.isArray(v) : false; }
-
-// Pure analysis: decides what is imported and what is quarantined. No database involved.
-function analyse(data, opts = {}) {
-  const rep = { counts: {}, quarantined: [], warnings: [], unknownFields: {}, errors: [] };
-  if (!isObj(data)) { rep.errors.push('top level is not an object'); return { rep }; }
-  for (const k of NEWKEYS) if (data[k] === undefined) data[k] = []; // lists introduced by migration 003 are optional in older exports
-  if (data.v !== 5) rep.errors.push(\`data version is \${data.v}; open the data once in the current v8 app so it upgrades to version 5, then export a backup\`);
-  for (const k of ORDER) if (!Array.isArray(data[k])) rep.errors.push(\`"\${k}" is missing or not a list\`);
-  if (!isObj(data.set) || !Array.isArray(data.cur) || !isObj(data.rates)) rep.errors.push('settings, currencies or rates are missing');
-  if (isObj(data.set) && Array.isArray(data.cur)) {
-    const codes = new Set(data.cur.filter(isObj).map(c => c.c));
-    for (const [k, v] of Object.entries(data.set)) {
-      if (typeof v !== 'string') { rep.errors.push(\`setting "\${k}" must be text, found \${typeof v}\`); continue; }
-      if (!SETTINGS_KEYS.includes(k)) rep.warnings.push(\`setting "\${k}" is not one this version knows; it is kept unchanged\`);
-      if ((k === 'tr' || k === 'sr') && v !== '' && !(Number.isFinite(+v) && +v >= 0)) rep.errors.push(\`setting "\${k}" is not a non-negative number: \${JSON.stringify(v)}\`);
-      if (k === 'base' && !codes.has(v)) rep.errors.push(\`base currency "\${v}" is not in the currency list\`);
-    }
-  }
-  if (rep.errors.length) return { rep };
-  const keep = {}, bad = {}; // keep[k] = Map(id,row); bad[k] = Map(id,reason)
-  const seenIds = new Map();
-  for (const k of ORDER) { keep[k] = new Map(); bad[k] = new Map(); }
-  const quarantine = (k, row, reason) => { const id = Number.isInteger(row && row.id) ? row.id : null; rep.quarantined.push({ entity: k, id, reason, row }); if (id != null) bad[k].set(id, reason); };
-  // stage 1: shape, types, duplicate ids
-  for (const k of ORDER) {
-    const e = E[k]; rep.counts[k] = { read: data[k].length, imported: 0, quarantined: 0 };
-    for (const row of data[k]) {
-      if (!isObj(row)) { quarantine(k, row, 'record is not an object'); continue; }
-      let why = null;
-      for (const [c, spec] of Object.entries(e.cols)) {
-        const t = spec[0], req = spec.endsWith('!'), v = row[c];
-        if (v === undefined || v === null) { if (req) { why = \`required field "\${c}" is missing\`; break; } continue; }
-        if (!typeOk(t, v)) { why = \`field "\${c}" has unexpected type (\${typeof v}: \${JSON.stringify(v).slice(0, 40)})\`; break; }
-      }
-      if (!why) for (const [c, list] of Object.entries(ENUMS[k] || {})) if (row[c] != null && !list.includes(row[c])) { why = \`field "\${c}" has value "\${row[c]}" which is not one of: \${list.join(', ')}\`; break; }
-      if (!why) why = structProblem(k, row);
-      if (!why && seenIds.has(row.id)) why = \`id \${row.id} is also used by \${seenIds.get(row.id)}\`;
-      if (!why && !(row.id > 0)) why = 'id must be a positive integer';
-      if (why) { quarantine(k, row, why); continue; }
-      seenIds.set(row.id, k); keep[k].set(row.id, row);
-      const unk = Object.keys(row).filter(c => !store.isKnown(e, c));
-      unk.forEach(c => { (rep.unknownFields[k] = rep.unknownFields[k] || {})[c] = (rep.unknownFields[k][c] || 0) + 1; });
-    }
-  }
-  // stage 2: references. Mandatory missing -> quarantine (repeat until stable, so dependants follow their parent). Optional missing -> stored as empty and reported.
-  const falsy = v => v === 0 || v === '' || v === null || v === undefined;
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const k of ORDER) {
-      const e = E[k];
-      for (const [id, row] of [...keep[k]]) {
-        for (const [c, [target, optional]] of Object.entries(e.refs || {})) {
-          const v = row[c];
-          if (optional && falsy(v)) continue;
-          if (!keep[target].has(v)) {
-            if (optional) { rep.warnings.push(\`\${k} \${id}: optional link "\${c}" -> \${v} does not exist; stored empty\`); row.__nullify = (row.__nullify || []).concat(c); continue; }
-            keep[k].delete(id); quarantine(k, row, \`required link "\${c}" -> \${E[target].table} id \${v} does not exist\${bad[target].has(v) ? ' (that record was quarantined: ' + bad[target].get(v) + ')' : ''}\`); changed = true; break;
-          }
-        }
-        if (!keep[k].has(id)) continue;
-        for (const [lk, L] of Object.entries(e.links || {})) {
-          if (row[lk] === undefined) continue;
-          if (!Array.isArray(row[lk]) || row[lk].some(x => !Number.isInteger(x))) { keep[k].delete(id); quarantine(k, row, \`"\${lk}" is not a list of ids\`); changed = true; break; }
-          const miss = row[lk].filter(x => !keep[L.ref].has(x));
-          if (miss.length) { rep.warnings.push(\`\${k} \${id}: "\${lk}" lists \${miss.length} id(s) that do not exist (\${miss.join(',')}); those links are not stored\`); row.__dropLinks = { ...(row.__dropLinks || {}), [lk]: miss }; }
-        }
-      }
-    }
-  }
-  // stage 2b (migration 003 bookkeeping): older exports have no payment-level rates. Opening balances are labelled, and project payments are 'identity' (base currency) or 'missing' (never copied from the parent's current rate).
-  const k_ = (a, r) => Math.round(a * r);
-  if (!opts.save) { // a save is stamped by the save endpoint instead (it must not label new money as an opening balance)
-  for (const r of keep.sp.values()) if (r.fxs == null) r.fxs = r.rx > 0 && r.bamt != null && r.bc ? 'stored' : 'missing';
-  for (const r of keep.tp.values()) if (r.fxs == null) r.fxs = r.rx > 0 && r.bamt != null && r.bc ? 'stored' : 'missing';
-  for (const r of keep.re.values()) if (r.paid_open == null) r.paid_open = r.paid;
-  // project payments never had a rate of their own: the parent's CURRENT rate is not copied. Same currency as the base -> identity (rate 1 by definition); otherwise missing (never guessed).
-  const baseCur = (data.set && data.set.base) || 'KWD';
-  for (const r of keep.pp.values()) if (r.fxs == null) { const p = keep.pr.get(r.pr); r.cur = p.cur; if (p.cur === baseCur) { r.rx = 1; r.bc = baseCur; r.bamt = r.amt; r.fxs = 'identity'; } else { delete r.rx; delete r.bc; delete r.bamt; r.fxs = 'missing'; } }
-  }
-  // stage 3: currencies, rates, reminder completions
-  const codes = new Set(); const cur = [];
-  for (const c of data.cur) { if (isObj(c) && typeof c.c === 'string' && /^[A-Za-z]{3}$/.test(c.c) && typeof c.n === 'string' && !/[<>"\`]/.test(c.n) && !codes.has(c.c)) { codes.add(c.c); cur.push(c); } else rep.warnings.push('currency entry skipped (invalid or duplicate): ' + JSON.stringify(c)); }
-  const rates = {};
-  for (const [code, r] of Object.entries(data.rates)) {
-    if (isObj(r) && typeof r.r === 'number' && r.r > 0 && codes.has(code)) rates[code] = r;
-    else { rep.quarantined.push({ entity: 'rates', id: null, reason: !codes.has(code) ? 'currency code is not in the currency list' : 'rate is not a positive number', row: { code, ...r } }); }
-  }
-  const rd = [];
-  for (const key of Object.keys(isObj(data.rd) ? data.rd : {})) {
-    const m = /^(\\d+)\\|(\\d{4}-\\d{2}-\\d{2})$/.exec(key);
-    if (m && keep.rm.has(+m[1])) rd.push([+m[1], m[2]]); else rep.quarantined.push({ entity: 'rd', id: null, reason: m ? \`reminder \${m[1]} does not exist (or was quarantined)\` : 'malformed completion key', row: { key } });
-  }
-  for (const k of ORDER) { rep.counts[k].imported = keep[k].size; rep.counts[k].quarantined = rep.counts[k].read - keep[k].size; }
-  rep.counts.cur = { read: data.cur.length, imported: cur.length }; rep.counts.rates = { read: Object.keys(data.rates).length, imported: Object.keys(rates).length };
-  rep.counts.rd = { read: Object.keys(data.rd || {}).length, imported: rd.length };
-  return { rep, keep, cur, rates, rd };
-}
-
-const colVal = (t, v) => (v === undefined || v === null ? null : t === 'b' ? 1 : t === 'j' ? JSON.stringify(v) : v);
-function writeAll(db, data, A) {
-  const { keep, cur, rates, rd } = A; const now = new Date().toISOString();
-  const ins = (table, cols) => db.prepare(\`INSERT INTO \${table}(\${cols.join(',')}) VALUES(\${cols.map(() => '?').join(',')})\`);
-  const reg = db.prepare('INSERT INTO id_registry(id,kind) VALUES(?,?)');
-  // register all ids first so ordering between tables never matters
-  for (const k of ORDER) for (const id of keep[k].keys()) reg.run(id, E[k].kind);
-  const setS = db.prepare('INSERT INTO settings(key,value) VALUES(?,?)');
-  for (const [key, v] of Object.entries(data.set)) setS.run(key, JSON.stringify(v));
-  const ci = db.prepare('INSERT INTO currencies(code,name,seq) VALUES(?,?,?)'); cur.forEach((c, i) => ci.run(c.c, c.n, i));
-  const ri = db.prepare('INSERT INTO exchange_rates_current(code,rate,saved_at,rate_type) VALUES(?,?,?,?)'), hi0 = db.prepare('INSERT INTO exchange_rate_history(code,rate,saved_at,rate_type,recorded_at) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM exchange_rate_history WHERE code=? AND rate=? AND saved_at IS ? AND rate_type IS ?)'), hi = { run: (c, r, t, y, n) => hi0.run(c, r, t, y, n, c, r, t, y) };
-  for (const [code, r] of Object.entries(rates)) { ri.run(code, r.r, r.t ?? null, r.type ?? null); hi.run(code, r.r, r.t ?? null, r.type ?? null, now); }
-  for (const k of ORDER) { let seq = 0; for (const row of keep[k].values()) store.insertRow(db, k, row, ++seq); }
-  const rdi = db.prepare('INSERT INTO reminder_completions(reminder_id,date) VALUES(?,?)'); rd.forEach(([a, b]) => rdi.run(a, b));
-  const ids = [...ORDER.flatMap(k => [...keep[k].keys()]), ...[...(A.quarIds || [])]]; const max = Math.max(0, ...ids, ...A.rep.quarantined.map(q => q.id || 0));
-  let next = Number.isInteger(data.id) ? data.id : max + 1;
-  if (next <= max) { A.rep.warnings.push(\`legacy next-id counter (\${data.id}) was not above the highest id (\${max}); set to \${max + 1}\`); next = max + 1; }
-  const had = k => { const r = db.prepare('SELECT value FROM schema_meta WHERE key=?').get(k); return r ? +r.value : null; };
-  const prevNext = had('next_id'), prevRev = had('rev'); if (prevNext != null && prevNext > next) next = prevNext;
-  const meta = db.prepare('INSERT OR REPLACE INTO schema_meta(key,value) VALUES(?,?)'); meta.run('next_id', String(next)); meta.run('legacy_data_version', '5');
-  if (prevRev != null) meta.run('rev', String(prevRev + 1)); // an already-open browser tab must reload before it can save
-}
-
-// Reconciliation: finance computed on the (legacy rows that were kept) must equal finance computed on what comes back out of SQLite.
-function reconcile(data, A, db) {
-  const kept = { ...data, rates: A.rates, cur: A.cur };
-  for (const k of ORDER) kept[k] = data[k].filter(r => r && A.keep[k].get(r.id) === r);
-  const expected = fin.fin(kept), got = fin.fin(assemble(db)), orig = fin.fin(data);
-  const diffs = Object.keys(expected).filter(k => expected[k] !== got[k]);
-  return { expected, fromDatabase: got, ofWholeLegacyFile: orig, matches: diffs.length === 0, differingTotals: diffs, effectOfQuarantineOnTotals: Object.fromEntries(Object.keys(orig).map(k => [k, orig[k] - expected[k]]).filter(([, v]) => v !== 0)) };
-}
-
-// ---- Target preflight: what may already be in the destination database, and what happens to it ----
-// Rules (explicit, tested):
-//  1. Any business record (teachers, students, lessons, payments, ...) in the target  -> REFUSED_TARGET_NOT_EMPTY.
-//  2. Settings: absent in target -> created; equal to legacy -> unchanged; equal to the factory default (never edited) -> replaced by the legacy value;
-//     anything else (edited by the user, and different from legacy) -> REFUSED_TARGET_CONFLICT. Nothing is guessed.
-//  3. Currencies: every target currency must be a factory default or also be in the legacy list (same name); a currency the user added that legacy lacks is a conflict.
-//  4. Current exchange rates: equal to legacy -> unchanged; auto-fetched ('Live') -> superseded by the legacy rate (the old row stays in exchange_rate_history);
-//     any other differing rate (e.g. 'Manual') -> conflict.
-//  5. Replaced values are written to audit_log (before_json) in the same transaction. exchange_rate_history is never deleted.
-const BUSINESS_TABLES = () => ORDER.map(k => E[k].table);
-function planTarget(dst, data, A) {
-  const cnt = {}; for (const t of BUSINESS_TABLES()) { const c = dst.prepare(\`SELECT count(*) c FROM \${t}\`).get().c; if (c) cnt[t] = c; }
-  const reg = dst.prepare('SELECT count(*) c FROM id_registry').get().c; if (reg && !Object.keys(cnt).length) cnt.id_registry = reg; // ids that were used once are never reused, so they could collide
-  if (Object.keys(cnt).length) return { refuse: 'REFUSED_TARGET_NOT_EMPTY', existingBusinessRows: cnt, conflicts: { settings: [], currencies: [], rates: [] }, hasSeed: true };
-  const cur = assemble(dst), fac = DEFAULT(), stable = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(q => [q, x[q]])) : x));
-  const conflicts = { settings: [], currencies: [], rates: [] };
-  for (const k of Object.keys(cur.set || {})) { const tv = cur.set[k], lv = data.set[k], fv = fac.set[k]; if (tv !== lv && tv !== fv) conflicts.settings.push({ key: k, inTarget: tv, inLegacy: lv === undefined ? null : lv, factoryDefault: fv === undefined ? null : fv }); }
-  const lcur = new Map(A.cur.map(c => [c.c, c.n])), fcur = new Map(fac.cur.map(c => [c.c, c.n]));
-  for (const c of cur.cur) if (lcur.get(c.c) !== c.n && fcur.get(c.c) !== c.n) conflicts.currencies.push({ code: c.c, nameInTarget: c.n, nameInLegacy: lcur.has(c.c) ? lcur.get(c.c) : null });
-  for (const [code, r] of Object.entries(cur.rates || {})) { const l = A.rates[code]; const same = l && l.r === r.r && (l.t ?? null) === (r.t ?? null) && (l.type ?? null) === (r.type ?? null); if (!same && r.type !== 'Live') conflicts.rates.push({ code, inTarget: r, inLegacy: l || null }); }
-  const hasSeed = Object.keys(cur.set || {}).length > 0 || cur.cur.length > 0 || Object.keys(cur.rates || {}).length > 0;
-  const bad = conflicts.settings.length + conflicts.currencies.length + conflicts.rates.length > 0;
-  return { refuse: bad ? 'REFUSED_TARGET_CONFLICT' : null, conflicts, hasSeed, before: { set: cur.set, cur: cur.cur, rates: cur.rates } };
-}
-function replaceSeed(dst, plan, now) {
-  if (!plan.hasSeed) return;
-  dst.prepare('INSERT INTO audit_log(at,action,entity,entity_id,before_json,detail) VALUES(?,?,?,?,?,?)').run(now, 'import-replaced-seed', 'config', null, JSON.stringify(plan.before), 'settings, currency list and current rates of an app-seeded, business-empty database were replaced by the legacy values; exchange_rate_history kept');
-  dst.exec('DELETE FROM settings'); dst.exec('DELETE FROM exchange_rates_current'); dst.exec('DELETE FROM currencies');
-}
-
-// mode 'dry-run' never touches the target file: it imports into memory and reports. mode 'apply' writes one transaction or nothing.
-function migrate_(text, opts = {}) {
-  const { mode = 'dry-run', target = null } = opts;
-  const src = unwrap(text), srcSha = sha(text);
-  const A = analyse(src.data); const rep = A.rep; { const dk = dupKeys(text); if (dk.length) A.rep.errors.push(...dk.slice(0, 20).map(p => \`key repeated in the file: \${p} (JSON would silently keep only the last value)\`)); } rep.mode = mode; rep.sourceSha256 = srcSha; rep.sourceFormat = src.wrapped || 'raw legacy data object';
-  if (rep.errors.length) { rep.status = 'REJECTED'; return rep; }
-  const quarantinedAny = rep.quarantined.length > 0;
-  const mem = open(':memory:'); migrate(mem);
-  try { tx(mem, () => writeAll(mem, src.data, { ...A, rep })); } catch (e) { rep.status = 'FAILED'; rep.errors.push('internal write failed: ' + e.message); return rep; }
-  rep.reconciliation = reconcile(src.data, A, mem);
-  rep.integrity = { integrity_check: mem.prepare('PRAGMA integrity_check').get().integrity_check, foreign_key_violations: mem.prepare('PRAGMA foreign_key_check').all().length };
-  // round trip: what comes out equals what went in (for kept rows)
-  const out = assemble(mem), diff = roundTripDiff(src.data, out, A);
-  rep.roundTrip = { identical: diff.length === 0, differences: diff.slice(0, 50), totalDifferences: diff.length };
-  const good = rep.reconciliation.matches && rep.integrity.integrity_check === 'ok' && rep.integrity.foreign_key_violations === 0 && diff.length === 0;
-  rep.status = !good ? 'FAILED_VERIFICATION' : quarantinedAny ? 'OK_WITH_QUARANTINE' : 'OK';
-  if (mode !== 'apply' || !good) { mem.close(); if (mode === 'apply' && !good) rep.applied = false; return rep; }
-  if (!target) throw new Error('target database path required for apply');
-  const gd = require('./guard').inspect(target, opts.backupDir); // refuses a damaged, zero-byte or suspiciously missing target: nothing is created or replaced
-  const dst = open(target); migrate(dst);
-  try {
-    if (gd.state === 'ok' && opts.backupDir && require('./db').hasData(dst)) { rep.preImportBackup = require('./backup').create({ db: dst, file: target, backupDir: opts.backupDir }, 'preimport').name; } // high-risk operation: back up first
-    const have = dst.prepare("SELECT value FROM schema_meta WHERE key='imported_source_sha256'").get();
-    if (have && have.value === srcSha) { rep.status = 'ALREADY_APPLIED'; rep.applied = false; return rep; }
-    if (have) { rep.status = 'REFUSED_TARGET_NOT_EMPTY'; rep.applied = false; return rep; }
-    const plan = planTarget(dst, src.data, A); rep.targetPreflight = { conflicts: plan.conflicts, existingBusinessRows: plan.existingBusinessRows || {}, willReplaceSeed: plan.hasSeed };
-    if (plan.refuse) { rep.status = plan.refuse; rep.applied = false; return rep; }
-    try { tx(dst, () => {
-      replaceSeed(dst, plan, new Date().toISOString());
-      writeAll(dst, src.data, { ...A, rep });
-      const q = dst.prepare('INSERT INTO migration_quarantine(run_id,entity,legacy_id,reason,row_json) VALUES(?,?,?,?,?)');
-      const run = dst.prepare('INSERT INTO migration_runs(started_at,mode,source_sha256,status,report_json) VALUES(?,?,?,?,?)').run(new Date().toISOString(), 'apply', srcSha, rep.status, JSON.stringify({ ...rep, quarantined: undefined }));
-      rep.quarantined.forEach(r => q.run(run.lastInsertRowid, r.entity, r.id, r.reason, JSON.stringify(r.row)));
-      dst.prepare("INSERT INTO schema_meta(key,value) VALUES('imported_source_sha256',?)").run(srcSha);
-    }); } catch (e) { rep.status = 'FAILED_WRITE_ROLLED_BACK'; rep.applied = false; rep.errors.push(e.message); return rep; }
-    rep.applied = true;
-    const again = reconcile(src.data, A, dst); if (!again.matches) throw new Error('post-write reconciliation failed');
-  } finally { dst.close(); mem.close(); }
-  return rep;
-}
-// Compares kept legacy rows with what the database gives back. Documented, expected normalisations: optional links stored as 0/'' come back absent; empty ex{} is absent; flag value true -> 1.
-function roundTripDiff(data, out, A) {
-  const diffs = [], canon = (k, r) => { const o = JSON.parse(JSON.stringify(r)); delete o.__nullify; delete o.__dropLinks; for (const f of (OPT_FIELDS_NULL_IF_FALSY[k] || [])) if (o[f] === 0 || o[f] === '') delete o[f]; if (o.ex && !Object.keys(o.ex).length) delete o.ex;
-    for (const [f, spec] of Object.entries(E[k].cols)) if (spec[0] === 'b' && o[f] === true) o[f] = 1; for (const f of (r.__nullify || [])) delete o[f]; for (const [lk, ids] of Object.entries(r.__dropLinks || {})) o[lk] = (o[lk] || []).filter(x => !ids.includes(x));
-    if (k === 'tt' && o.ex) for (const x of Object.values(o.ex)) if (x && x.moved && typeof x.moved === 'object') { for (const q of Object.keys(x.moved)) if (x.moved[q] == null) delete x.moved[q]; } return o; };
-  const stable = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(q => [q, x[q]])) : x));
-  for (const k of ORDER) {
-    const want = data[k].filter(r => r && A.keep[k].get(r.id) === r).map(r => canon(k, r)), got = out[k];
-    if (want.length !== got.length) { diffs.push(\`\${k}: \${want.length} kept, \${got.length} returned\`); continue; }
-    want.forEach((w, i) => { if (stable(w) !== stable(got[i])) diffs.push(\`\${k} \${w.id}: \${stable(w).slice(0, 120)} != \${stable(got[i]).slice(0, 120)}\`); });
-  }
-  const wantRd = Object.keys(data.rd || {}).filter(kk => { const m = /^(\\d+)\\|/.exec(kk); return m && A.keep.rm.has(+m[1]); }).sort(); if (stable(wantRd) !== stable(Object.keys(out.rd).sort())) diffs.push('rd differs');
-  if (stable(data.set) !== stable(out.set)) diffs.push('settings differ'); if (stable(A.cur) !== stable(out.cur)) diffs.push('currencies differ');
-  const rr = Object.fromEntries(Object.entries(A.rates).map(([c, r]) => [c, { r: r.r, ...(r.t != null ? { t: r.t } : {}), ...(r.type != null ? { type: r.type } : {}) }])); if (stable(rr) !== stable(out.rates)) diffs.push('rates differ');
-  return diffs;
-}
-module.exports = { migrate: migrate_, analyse, unwrap, sha, roundTripDiff, planTarget, dupKeys };
-`, "/app/src/ledger-server.js": `'use strict';
-// Server-side binding of the shared ledger (src/ledger.js) to the existing business rules in src/finance.js.
-const { makeLedger } = require('./ledger'); const fin = require('./finance');
-const forState = st => makeLedger({ O: fin.O, pj: p => fin.pj(st, p), rcc: fin.rcc, k_: fin.k_ });
-module.exports = { forState, makeLedger };
+`, "/app/src/guard.js": `'use strict';\r
+// Startup guard (C2). A database file is only ever CREATED when this really is a new installation.\r
+// A zero-byte, truncated, malformed or otherwise unreadable file is never opened for writing, never replaced and never re-initialised:\r
+// the program stops with a message that lists the backups it can see. The damaged file is only ever moved aside by an explicit restore.\r
+const fs = require('fs'), path = require('path');\r
+const { DatabaseSync } = require('node:sqlite');\r
+const NAME = /^aplus-\\d{8}-\\d{6}(-[a-z0-9_]{1,30})?\\.sqlite$/;\r
+class StartupRefused extends Error { constructor(code, message, info = {}) { super(message); this.code = code; this.info = info; } }\r
+const exists = f => { try { return fs.statSync(f); } catch (_) { return null; } };\r
+const WAL_MAGIC = [0x377f0682, 0x377f0683];\r
+\r
+function backupsIn(dir) {\r
+  const out = []; try { for (const f of fs.readdirSync(dir)) if (NAME.test(f)) { let m = {}; try { m = JSON.parse(fs.readFileSync(path.join(dir, f + '.json'), 'utf8')); } catch (e) { require('./log').warn('backup manifest unreadable: ' + f, e); } out.push({ name: f, createdAt: m.createdAt || null, verified: m.verified === true, rev: m.rev ?? null }); } } catch (_) {}\r
+  return out.sort((a, b) => b.name.localeCompare(a.name));\r
+}\r
+function recovery(file, backupDir, list) {\r
+  const lines = ['', 'Nothing was changed, deleted or replaced. Your data has NOT been reset.'];\r
+  if (list.length) { lines.push('Backups available in ' + backupDir + ':'); list.slice(0, 5).forEach(b => lines.push('  ' + b.name + (b.createdAt ? '   (' + b.createdAt + ')' : '') + (b.verified ? '   verified' : ''))); lines.push('To recover: stop the server, then run restore-backup.cmd <backup name>. The damaged file is moved aside (never deleted).'); }\r
+  else lines.push('No backups were found in ' + backupDir + '. Do not delete anything. Copy the data folder somewhere safe first. Only if you are certain nothing was ever stored (a brand-new installation), move the damaged file out of the data folder yourself and start again.');\r
+  return lines.join('\\n');\r
+}\r
+// Read-only look at the files. Returns { state: 'new' | 'ok' } or throws StartupRefused.\r
+function inspect(file, backupDir) {\r
+  const list = backupsIn(backupDir || path.join(path.dirname(file), '..', 'backups'));\r
+  const refuse = (code, msg, extra) => { throw new StartupRefused(code, msg + recovery(file, backupDir, list), { backups: list, file, ...extra }); };\r
+  const st = exists(file), wal = exists(file + '-wal'), marker = exists(file + '.installed');\r
+  if (!st) {\r
+    if (wal && wal.size > 0) refuse('WAL_WITHOUT_DATABASE', 'The database file is missing but a write-ahead log (' + path.basename(file) + '-wal) is still there, so recent data may only exist in that log.');\r
+    if (marker) refuse('DATABASE_MISSING', 'The database file ' + file + ' is missing, but this installation has been used before.');\r
+    if (list.length) refuse('DATABASE_MISSING_WITH_BACKUPS', 'The database file ' + file + ' is missing, but backups exist, so this is not a new installation.');\r
+    return { state: 'new' };\r
+  }\r
+  if (!st.isFile()) refuse('NOT_A_FILE', file + ' is not a file.');\r
+  if (st.size === 0) refuse('ZERO_BYTE', 'The database file ' + file + ' is empty (0 bytes). It was probably damaged; it is NOT treated as a new database.');\r
+  const fd = fs.openSync(file, 'r'); const head = Buffer.alloc(100); const n = fs.readSync(fd, head, 0, 100, 0); fs.closeSync(fd);\r
+  if (n < 100 || head.subarray(0, 16).toString('latin1') !== 'SQLite format 3\\0') refuse('NOT_SQLITE', 'The file ' + file + ' is not a readable SQLite database.');\r
+  let ps = head.readUInt16BE(16); if (ps === 1) ps = 65536; const pages = head.readUInt32BE(28), chg = head.readUInt32BE(24), valid = head.readUInt32BE(92);\r
+  if (pages > 0 && chg === valid && st.size < pages * ps) refuse('TRUNCATED', 'The database file is shorter than its own header says (' + st.size + ' bytes, expected at least ' + pages * ps + '). It looks truncated.');\r
+  if (st.size % ps !== 0 && !wal) refuse('TRUNCATED', 'The database file size is not a whole number of pages. It looks truncated or damaged.');\r
+  if (wal && wal.size > 0) {\r
+    if (wal.size < 32) refuse('WAL_UNREADABLE', 'The write-ahead log (' + path.basename(file) + '-wal) is too short to be valid; SQLite would silently ignore it and recent changes could be lost.');\r
+    const w = fs.openSync(file + '-wal', 'r'); const hb = Buffer.alloc(4); fs.readSync(w, hb, 0, 4, 0); fs.closeSync(w);\r
+    if (!WAL_MAGIC.includes(hb.readUInt32BE(0))) refuse('WAL_UNREADABLE', 'The write-ahead log (' + path.basename(file) + '-wal) is unreadable; SQLite would silently ignore it and recent changes could be lost.');\r
+  }\r
+  let d; try { d = new DatabaseSync(file); } catch (e) { refuse('CANNOT_OPEN', 'The database cannot be opened: ' + e.message); }\r
+  try {\r
+    let ic; try { ic = d.prepare('PRAGMA integrity_check').all().map(r => r.integrity_check); } catch (e) { refuse('INTEGRITY', 'The database failed its integrity check: ' + e.message); }\r
+    if (ic.join() !== 'ok') refuse('INTEGRITY', 'The database failed its integrity check: ' + ic.slice(0, 3).join('; '));\r
+    let fk = []; try { fk = d.prepare('PRAGMA foreign_key_check').all(); } catch (e) { refuse('INTEGRITY', 'The foreign-key check could not run: ' + e.message); }\r
+    if (fk.length) refuse('FOREIGN_KEYS', 'The database has ' + fk.length + ' broken link(s) between records (foreign_key_check).');\r
+    let hasMig = true; try { d.prepare('SELECT count(*) c FROM schema_migrations').get(); } catch (_) { hasMig = false; }\r
+    if (!hasMig) refuse('NOT_APLUS', 'The file is a valid SQLite database but not an A+ Hub database (no schema_migrations table).');\r
+  } finally { try { d.close(); } catch (_) {} }\r
+  return { state: 'ok' };\r
+}\r
+const markInstalled = file => { try { fs.writeFileSync(file + '.installed', JSON.stringify({ firstSeen: new Date().toISOString() }), { flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') require('./log').warn('could not write the .installed marker', e); } };\r
+module.exports = { inspect, markInstalled, StartupRefused, backupsIn, NAME };\r
+`, "/app/src/importer.js": `'use strict';\r
+// Legacy (localStorage v5 JSON / v8 backup file) -> SQLite. Never repairs silently: rows that cannot be stored exactly are quarantined with a reason.\r
+const crypto = require('crypto');\r
+const { E, ENUMS, ORDER, NEWKEYS, SETTINGS_KEYS, OPT_FIELDS_NULL_IF_FALSY, structProblem } = require('./mapping');\r
+const { open, migrate, tx } = require('./db');\r
+const { assemble } = require('./state');\r
+const fin = require('./finance');\r
+const store = require('./store');\r
+const { DEFAULT } = require('./defaults');\r
+const sha = s => crypto.createHash('sha256').update(s).digest('hex');\r
+const isObj = x => x && typeof x === 'object' && !Array.isArray(x);\r
+\r
+function unwrap(text) {\r
+  let o; try { o = JSON.parse(text); } catch (e) { throw new Error('not valid JSON: ' + e.message); }\r
+  if (isObj(o) && /hub-backup$/.test(o.format || '') && isObj(o.data)) return { data: o.data, wrapped: o.format };\r
+  return { data: o, wrapped: null };\r
+}\r
+\r
+// JSON.parse silently keeps only the LAST of two identical keys in one object. That would lose data without a trace, so it is detected here.\r
+function dupKeys(text) {\r
+  let i = 0; const out = [], ws = () => { while (i < text.length && ' \\t\\r\\n'.includes(text[i])) i++; };\r
+  const str = () => { const s = i; i++; while (text[i] !== '"') { if (text[i] === '\\\\') i++; i++; } i++; return JSON.parse(text.slice(s, i)); };\r
+  const val = p => { ws(); const c = text[i];\r
+    if (c === '{') { i++; const seen = new Set(); ws(); if (text[i] === '}') { i++; return; } for (;;) { ws(); const k = str(); if (seen.has(k)) out.push(p + '.' + k); seen.add(k); ws(); i++; val(p + '.' + k); ws(); if (text[i] === ',') { i++; continue; } i++; return; } }\r
+    else if (c === '[') { i++; ws(); if (text[i] === ']') { i++; return; } let n = 0; for (;;) { val(p + '[' + (n++) + ']'); ws(); if (text[i] === ',') { i++; continue; } i++; return; } }\r
+    else if (c === '"') str(); else while (i < text.length && !',}] \\t\\r\\n'.includes(text[i])) i++; };\r
+  val('$'); return out;\r
+}\r
+function typeOk(t, v) { return t === 'i' ? Number.isInteger(v) : t === 'r' ? typeof v === 'number' && Number.isFinite(v) : t === 't' ? typeof v === 'string' : t === 'b' ? (v === 1 || v === true) : t === 'j' ? Array.isArray(v) : false; }\r
+\r
+// Pure analysis: decides what is imported and what is quarantined. No database involved.\r
+function analyse(data, opts = {}) {\r
+  const rep = { counts: {}, quarantined: [], warnings: [], unknownFields: {}, errors: [] };\r
+  if (!isObj(data)) { rep.errors.push('top level is not an object'); return { rep }; }\r
+  for (const k of NEWKEYS) if (data[k] === undefined) data[k] = []; // lists introduced by migration 003 are optional in older exports\r
+  if (data.v !== 5) rep.errors.push(\`data version is \${data.v}; open the data once in the current v8 app so it upgrades to version 5, then export a backup\`);\r
+  for (const k of ORDER) if (!Array.isArray(data[k])) rep.errors.push(\`"\${k}" is missing or not a list\`);\r
+  if (!isObj(data.set) || !Array.isArray(data.cur) || !isObj(data.rates)) rep.errors.push('settings, currencies or rates are missing');\r
+  if (isObj(data.set) && Array.isArray(data.cur)) {\r
+    const codes = new Set(data.cur.filter(isObj).map(c => c.c));\r
+    for (const [k, v] of Object.entries(data.set)) {\r
+      if (typeof v !== 'string') { rep.errors.push(\`setting "\${k}" must be text, found \${typeof v}\`); continue; }\r
+      if (!SETTINGS_KEYS.includes(k)) rep.warnings.push(\`setting "\${k}" is not one this version knows; it is kept unchanged\`);\r
+      if ((k === 'tr' || k === 'sr') && v !== '' && !(Number.isFinite(+v) && +v >= 0)) rep.errors.push(\`setting "\${k}" is not a non-negative number: \${JSON.stringify(v)}\`);\r
+      if (k === 'base' && !codes.has(v)) rep.errors.push(\`base currency "\${v}" is not in the currency list\`);\r
+    }\r
+  }\r
+  if (rep.errors.length) return { rep };\r
+  const keep = {}, bad = {}; // keep[k] = Map(id,row); bad[k] = Map(id,reason)\r
+  const seenIds = new Map();\r
+  for (const k of ORDER) { keep[k] = new Map(); bad[k] = new Map(); }\r
+  const quarantine = (k, row, reason) => { const id = Number.isInteger(row && row.id) ? row.id : null; rep.quarantined.push({ entity: k, id, reason, row }); if (id != null) bad[k].set(id, reason); };\r
+  // stage 1: shape, types, duplicate ids\r
+  for (const k of ORDER) {\r
+    const e = E[k]; rep.counts[k] = { read: data[k].length, imported: 0, quarantined: 0 };\r
+    for (const row of data[k]) {\r
+      if (!isObj(row)) { quarantine(k, row, 'record is not an object'); continue; }\r
+      let why = null;\r
+      for (const [c, spec] of Object.entries(e.cols)) {\r
+        const t = spec[0], req = spec.endsWith('!'), v = row[c];\r
+        if (v === undefined || v === null) { if (req) { why = \`required field "\${c}" is missing\`; break; } continue; }\r
+        if (!typeOk(t, v)) { why = \`field "\${c}" has unexpected type (\${typeof v}: \${JSON.stringify(v).slice(0, 40)})\`; break; }\r
+      }\r
+      if (!why) for (const [c, list] of Object.entries(ENUMS[k] || {})) if (row[c] != null && !list.includes(row[c])) { why = \`field "\${c}" has value "\${row[c]}" which is not one of: \${list.join(', ')}\`; break; }\r
+      if (!why) why = structProblem(k, row);\r
+      if (!why && seenIds.has(row.id)) why = \`id \${row.id} is also used by \${seenIds.get(row.id)}\`;\r
+      if (!why && !(row.id > 0)) why = 'id must be a positive integer';\r
+      if (why) { quarantine(k, row, why); continue; }\r
+      seenIds.set(row.id, k); keep[k].set(row.id, row);\r
+      const unk = Object.keys(row).filter(c => !store.isKnown(e, c));\r
+      unk.forEach(c => { (rep.unknownFields[k] = rep.unknownFields[k] || {})[c] = (rep.unknownFields[k][c] || 0) + 1; });\r
+    }\r
+  }\r
+  // stage 2: references. Mandatory missing -> quarantine (repeat until stable, so dependants follow their parent). Optional missing -> stored as empty and reported.\r
+  const falsy = v => v === 0 || v === '' || v === null || v === undefined;\r
+  let changed = true;\r
+  while (changed) {\r
+    changed = false;\r
+    for (const k of ORDER) {\r
+      const e = E[k];\r
+      for (const [id, row] of [...keep[k]]) {\r
+        for (const [c, [target, optional]] of Object.entries(e.refs || {})) {\r
+          const v = row[c];\r
+          if (optional && falsy(v)) continue;\r
+          if (!keep[target].has(v)) {\r
+            if (optional) { rep.warnings.push(\`\${k} \${id}: optional link "\${c}" -> \${v} does not exist; stored empty\`); row.__nullify = (row.__nullify || []).concat(c); continue; }\r
+            keep[k].delete(id); quarantine(k, row, \`required link "\${c}" -> \${E[target].table} id \${v} does not exist\${bad[target].has(v) ? ' (that record was quarantined: ' + bad[target].get(v) + ')' : ''}\`); changed = true; break;\r
+          }\r
+        }\r
+        if (!keep[k].has(id)) continue;\r
+        for (const [lk, L] of Object.entries(e.links || {})) {\r
+          if (row[lk] === undefined) continue;\r
+          if (!Array.isArray(row[lk]) || row[lk].some(x => !Number.isInteger(x))) { keep[k].delete(id); quarantine(k, row, \`"\${lk}" is not a list of ids\`); changed = true; break; }\r
+          const miss = row[lk].filter(x => !keep[L.ref].has(x));\r
+          if (miss.length) { rep.warnings.push(\`\${k} \${id}: "\${lk}" lists \${miss.length} id(s) that do not exist (\${miss.join(',')}); those links are not stored\`); row.__dropLinks = { ...(row.__dropLinks || {}), [lk]: miss }; }\r
+        }\r
+      }\r
+    }\r
+  }\r
+  // stage 2b (migration 003 bookkeeping): older exports have no payment-level rates. Opening balances are labelled, and project payments are 'identity' (base currency) or 'missing' (never copied from the parent's current rate).\r
+  const k_ = (a, r) => Math.round(a * r);\r
+  if (!opts.save) { // a save is stamped by the save endpoint instead (it must not label new money as an opening balance)\r
+  for (const r of keep.sp.values()) if (r.fxs == null) r.fxs = r.rx > 0 && r.bamt != null && r.bc ? 'stored' : 'missing';\r
+  for (const r of keep.tp.values()) if (r.fxs == null) r.fxs = r.rx > 0 && r.bamt != null && r.bc ? 'stored' : 'missing';\r
+  for (const r of keep.re.values()) if (r.paid_open == null) r.paid_open = r.paid;\r
+  // project payments never had a rate of their own: the parent's CURRENT rate is not copied. Same currency as the base -> identity (rate 1 by definition); otherwise missing (never guessed).\r
+  const baseCur = (data.set && data.set.base) || 'KWD';\r
+  for (const r of keep.pp.values()) if (r.fxs == null) { const p = keep.pr.get(r.pr); r.cur = p.cur; if (p.cur === baseCur) { r.rx = 1; r.bc = baseCur; r.bamt = r.amt; r.fxs = 'identity'; } else { delete r.rx; delete r.bc; delete r.bamt; r.fxs = 'missing'; } }\r
+  }\r
+  // stage 3: currencies, rates, reminder completions\r
+  const codes = new Set(); const cur = [];\r
+  for (const c of data.cur) { if (isObj(c) && typeof c.c === 'string' && /^[A-Za-z]{3}$/.test(c.c) && typeof c.n === 'string' && !/[<>"\`]/.test(c.n) && !codes.has(c.c)) { codes.add(c.c); cur.push(c); } else rep.warnings.push('currency entry skipped (invalid or duplicate): ' + JSON.stringify(c)); }\r
+  const rates = {};\r
+  for (const [code, r] of Object.entries(data.rates)) {\r
+    if (isObj(r) && typeof r.r === 'number' && r.r > 0 && codes.has(code)) rates[code] = r;\r
+    else { rep.quarantined.push({ entity: 'rates', id: null, reason: !codes.has(code) ? 'currency code is not in the currency list' : 'rate is not a positive number', row: { code, ...r } }); }\r
+  }\r
+  const rd = [];\r
+  for (const key of Object.keys(isObj(data.rd) ? data.rd : {})) {\r
+    const m = /^(\\d+)\\|(\\d{4}-\\d{2}-\\d{2})$/.exec(key);\r
+    if (m && keep.rm.has(+m[1])) rd.push([+m[1], m[2]]); else rep.quarantined.push({ entity: 'rd', id: null, reason: m ? \`reminder \${m[1]} does not exist (or was quarantined)\` : 'malformed completion key', row: { key } });\r
+  }\r
+  for (const k of ORDER) { rep.counts[k].imported = keep[k].size; rep.counts[k].quarantined = rep.counts[k].read - keep[k].size; }\r
+  rep.counts.cur = { read: data.cur.length, imported: cur.length }; rep.counts.rates = { read: Object.keys(data.rates).length, imported: Object.keys(rates).length };\r
+  rep.counts.rd = { read: Object.keys(data.rd || {}).length, imported: rd.length };\r
+  return { rep, keep, cur, rates, rd };\r
+}\r
+\r
+const colVal = (t, v) => (v === undefined || v === null ? null : t === 'b' ? 1 : t === 'j' ? JSON.stringify(v) : v);\r
+function writeAll(db, data, A) {\r
+  const { keep, cur, rates, rd } = A; const now = new Date().toISOString();\r
+  const ins = (table, cols) => db.prepare(\`INSERT INTO \${table}(\${cols.join(',')}) VALUES(\${cols.map(() => '?').join(',')})\`);\r
+  const reg = db.prepare('INSERT INTO id_registry(id,kind) VALUES(?,?)');\r
+  // register all ids first so ordering between tables never matters\r
+  for (const k of ORDER) for (const id of keep[k].keys()) reg.run(id, E[k].kind);\r
+  const setS = db.prepare('INSERT INTO settings(key,value) VALUES(?,?)');\r
+  for (const [key, v] of Object.entries(data.set)) setS.run(key, JSON.stringify(v));\r
+  const ci = db.prepare('INSERT INTO currencies(code,name,seq) VALUES(?,?,?)'); cur.forEach((c, i) => ci.run(c.c, c.n, i));\r
+  const ri = db.prepare('INSERT INTO exchange_rates_current(code,rate,saved_at,rate_type) VALUES(?,?,?,?)'), hi0 = db.prepare('INSERT INTO exchange_rate_history(code,rate,saved_at,rate_type,recorded_at) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM exchange_rate_history WHERE code=? AND rate=? AND saved_at IS ? AND rate_type IS ?)'), hi = { run: (c, r, t, y, n) => hi0.run(c, r, t, y, n, c, r, t, y) };\r
+  for (const [code, r] of Object.entries(rates)) { ri.run(code, r.r, r.t ?? null, r.type ?? null); hi.run(code, r.r, r.t ?? null, r.type ?? null, now); }\r
+  for (const k of ORDER) { let seq = 0; for (const row of keep[k].values()) store.insertRow(db, k, row, ++seq); }\r
+  const rdi = db.prepare('INSERT INTO reminder_completions(reminder_id,date) VALUES(?,?)'); rd.forEach(([a, b]) => rdi.run(a, b));\r
+  const ids = [...ORDER.flatMap(k => [...keep[k].keys()]), ...[...(A.quarIds || [])]]; const max = Math.max(0, ...ids, ...A.rep.quarantined.map(q => q.id || 0));\r
+  let next = Number.isInteger(data.id) ? data.id : max + 1;\r
+  if (next <= max) { A.rep.warnings.push(\`legacy next-id counter (\${data.id}) was not above the highest id (\${max}); set to \${max + 1}\`); next = max + 1; }\r
+  const had = k => { const r = db.prepare('SELECT value FROM schema_meta WHERE key=?').get(k); return r ? +r.value : null; };\r
+  const prevNext = had('next_id'), prevRev = had('rev'); if (prevNext != null && prevNext > next) next = prevNext;\r
+  const meta = db.prepare('INSERT OR REPLACE INTO schema_meta(key,value) VALUES(?,?)'); meta.run('next_id', String(next)); meta.run('legacy_data_version', '5');\r
+  if (prevRev != null) meta.run('rev', String(prevRev + 1)); // an already-open browser tab must reload before it can save\r
+}\r
+\r
+// Reconciliation: finance computed on the (legacy rows that were kept) must equal finance computed on what comes back out of SQLite.\r
+function reconcile(data, A, db) {\r
+  const kept = { ...data, rates: A.rates, cur: A.cur };\r
+  for (const k of ORDER) kept[k] = data[k].filter(r => r && A.keep[k].get(r.id) === r);\r
+  const expected = fin.fin(kept), got = fin.fin(assemble(db)), orig = fin.fin(data);\r
+  const diffs = Object.keys(expected).filter(k => expected[k] !== got[k]);\r
+  return { expected, fromDatabase: got, ofWholeLegacyFile: orig, matches: diffs.length === 0, differingTotals: diffs, effectOfQuarantineOnTotals: Object.fromEntries(Object.keys(orig).map(k => [k, orig[k] - expected[k]]).filter(([, v]) => v !== 0)) };\r
+}\r
+\r
+// ---- Target preflight: what may already be in the destination database, and what happens to it ----\r
+// Rules (explicit, tested):\r
+//  1. Any business record (teachers, students, lessons, payments, ...) in the target  -> REFUSED_TARGET_NOT_EMPTY.\r
+//  2. Settings: absent in target -> created; equal to legacy -> unchanged; equal to the factory default (never edited) -> replaced by the legacy value;\r
+//     anything else (edited by the user, and different from legacy) -> REFUSED_TARGET_CONFLICT. Nothing is guessed.\r
+//  3. Currencies: every target currency must be a factory default or also be in the legacy list (same name); a currency the user added that legacy lacks is a conflict.\r
+//  4. Current exchange rates: equal to legacy -> unchanged; auto-fetched ('Live') -> superseded by the legacy rate (the old row stays in exchange_rate_history);\r
+//     any other differing rate (e.g. 'Manual') -> conflict.\r
+//  5. Replaced values are written to audit_log (before_json) in the same transaction. exchange_rate_history is never deleted.\r
+const BUSINESS_TABLES = () => ORDER.map(k => E[k].table);\r
+function planTarget(dst, data, A) {\r
+  const cnt = {}; for (const t of BUSINESS_TABLES()) { const c = dst.prepare(\`SELECT count(*) c FROM \${t}\`).get().c; if (c) cnt[t] = c; }\r
+  const reg = dst.prepare('SELECT count(*) c FROM id_registry').get().c; if (reg && !Object.keys(cnt).length) cnt.id_registry = reg; // ids that were used once are never reused, so they could collide\r
+  if (Object.keys(cnt).length) return { refuse: 'REFUSED_TARGET_NOT_EMPTY', existingBusinessRows: cnt, conflicts: { settings: [], currencies: [], rates: [] }, hasSeed: true };\r
+  const cur = assemble(dst), fac = DEFAULT(), stable = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(q => [q, x[q]])) : x));\r
+  const conflicts = { settings: [], currencies: [], rates: [] };\r
+  for (const k of Object.keys(cur.set || {})) { const tv = cur.set[k], lv = data.set[k], fv = fac.set[k]; if (tv !== lv && tv !== fv) conflicts.settings.push({ key: k, inTarget: tv, inLegacy: lv === undefined ? null : lv, factoryDefault: fv === undefined ? null : fv }); }\r
+  const lcur = new Map(A.cur.map(c => [c.c, c.n])), fcur = new Map(fac.cur.map(c => [c.c, c.n]));\r
+  for (const c of cur.cur) if (lcur.get(c.c) !== c.n && fcur.get(c.c) !== c.n) conflicts.currencies.push({ code: c.c, nameInTarget: c.n, nameInLegacy: lcur.has(c.c) ? lcur.get(c.c) : null });\r
+  for (const [code, r] of Object.entries(cur.rates || {})) { const l = A.rates[code]; const same = l && l.r === r.r && (l.t ?? null) === (r.t ?? null) && (l.type ?? null) === (r.type ?? null); if (!same && r.type !== 'Live') conflicts.rates.push({ code, inTarget: r, inLegacy: l || null }); }\r
+  const hasSeed = Object.keys(cur.set || {}).length > 0 || cur.cur.length > 0 || Object.keys(cur.rates || {}).length > 0;\r
+  const bad = conflicts.settings.length + conflicts.currencies.length + conflicts.rates.length > 0;\r
+  return { refuse: bad ? 'REFUSED_TARGET_CONFLICT' : null, conflicts, hasSeed, before: { set: cur.set, cur: cur.cur, rates: cur.rates } };\r
+}\r
+function replaceSeed(dst, plan, now) {\r
+  if (!plan.hasSeed) return;\r
+  dst.prepare('INSERT INTO audit_log(at,action,entity,entity_id,before_json,detail) VALUES(?,?,?,?,?,?)').run(now, 'import-replaced-seed', 'config', null, JSON.stringify(plan.before), 'settings, currency list and current rates of an app-seeded, business-empty database were replaced by the legacy values; exchange_rate_history kept');\r
+  dst.exec('DELETE FROM settings'); dst.exec('DELETE FROM exchange_rates_current'); dst.exec('DELETE FROM currencies');\r
+}\r
+\r
+// mode 'dry-run' never touches the target file: it imports into memory and reports. mode 'apply' writes one transaction or nothing.\r
+function migrate_(text, opts = {}) {\r
+  const { mode = 'dry-run', target = null } = opts;\r
+  const src = unwrap(text), srcSha = sha(text);\r
+  const A = analyse(src.data); const rep = A.rep; { const dk = dupKeys(text); if (dk.length) A.rep.errors.push(...dk.slice(0, 20).map(p => \`key repeated in the file: \${p} (JSON would silently keep only the last value)\`)); } rep.mode = mode; rep.sourceSha256 = srcSha; rep.sourceFormat = src.wrapped || 'raw legacy data object';\r
+  if (rep.errors.length) { rep.status = 'REJECTED'; return rep; }\r
+  const quarantinedAny = rep.quarantined.length > 0;\r
+  const mem = open(':memory:'); migrate(mem);\r
+  try { tx(mem, () => writeAll(mem, src.data, { ...A, rep })); } catch (e) { rep.status = 'FAILED'; rep.errors.push('internal write failed: ' + e.message); return rep; }\r
+  rep.reconciliation = reconcile(src.data, A, mem);\r
+  rep.integrity = { integrity_check: mem.prepare('PRAGMA integrity_check').get().integrity_check, foreign_key_violations: mem.prepare('PRAGMA foreign_key_check').all().length };\r
+  // round trip: what comes out equals what went in (for kept rows)\r
+  const out = assemble(mem), diff = roundTripDiff(src.data, out, A);\r
+  rep.roundTrip = { identical: diff.length === 0, differences: diff.slice(0, 50), totalDifferences: diff.length };\r
+  const good = rep.reconciliation.matches && rep.integrity.integrity_check === 'ok' && rep.integrity.foreign_key_violations === 0 && diff.length === 0;\r
+  rep.status = !good ? 'FAILED_VERIFICATION' : quarantinedAny ? 'OK_WITH_QUARANTINE' : 'OK';\r
+  if (mode !== 'apply' || !good) { mem.close(); if (mode === 'apply' && !good) rep.applied = false; return rep; }\r
+  if (!target) throw new Error('target database path required for apply');\r
+  const gd = require('./guard').inspect(target, opts.backupDir); // refuses a damaged, zero-byte or suspiciously missing target: nothing is created or replaced\r
+  const dst = open(target); migrate(dst);\r
+  try {\r
+    if (gd.state === 'ok' && opts.backupDir && require('./db').hasData(dst)) { rep.preImportBackup = require('./backup').create({ db: dst, file: target, backupDir: opts.backupDir }, 'preimport').name; } // high-risk operation: back up first\r
+    const have = dst.prepare("SELECT value FROM schema_meta WHERE key='imported_source_sha256'").get();\r
+    if (have && have.value === srcSha) { rep.status = 'ALREADY_APPLIED'; rep.applied = false; return rep; }\r
+    if (have) { rep.status = 'REFUSED_TARGET_NOT_EMPTY'; rep.applied = false; return rep; }\r
+    const plan = planTarget(dst, src.data, A); rep.targetPreflight = { conflicts: plan.conflicts, existingBusinessRows: plan.existingBusinessRows || {}, willReplaceSeed: plan.hasSeed };\r
+    if (plan.refuse) { rep.status = plan.refuse; rep.applied = false; return rep; }\r
+    try { tx(dst, () => {\r
+      replaceSeed(dst, plan, new Date().toISOString());\r
+      writeAll(dst, src.data, { ...A, rep });\r
+      const q = dst.prepare('INSERT INTO migration_quarantine(run_id,entity,legacy_id,reason,row_json) VALUES(?,?,?,?,?)');\r
+      const run = dst.prepare('INSERT INTO migration_runs(started_at,mode,source_sha256,status,report_json) VALUES(?,?,?,?,?)').run(new Date().toISOString(), 'apply', srcSha, rep.status, JSON.stringify({ ...rep, quarantined: undefined }));\r
+      rep.quarantined.forEach(r => q.run(run.lastInsertRowid, r.entity, r.id, r.reason, JSON.stringify(r.row)));\r
+      dst.prepare("INSERT INTO schema_meta(key,value) VALUES('imported_source_sha256',?)").run(srcSha);\r
+    }); } catch (e) { rep.status = 'FAILED_WRITE_ROLLED_BACK'; rep.applied = false; rep.errors.push(e.message); return rep; }\r
+    rep.applied = true;\r
+    const again = reconcile(src.data, A, dst); if (!again.matches) throw new Error('post-write reconciliation failed');\r
+  } finally { dst.close(); mem.close(); }\r
+  return rep;\r
+}\r
+// Compares kept legacy rows with what the database gives back. Documented, expected normalisations: optional links stored as 0/'' come back absent; empty ex{} is absent; flag value true -> 1.\r
+function roundTripDiff(data, out, A) {\r
+  const diffs = [], canon = (k, r) => { const o = JSON.parse(JSON.stringify(r)); delete o.__nullify; delete o.__dropLinks; for (const f of (OPT_FIELDS_NULL_IF_FALSY[k] || [])) if (o[f] === 0 || o[f] === '') delete o[f]; if (o.ex && !Object.keys(o.ex).length) delete o.ex;\r
+    for (const [f, spec] of Object.entries(E[k].cols)) if (spec[0] === 'b' && o[f] === true) o[f] = 1; for (const f of (r.__nullify || [])) delete o[f]; for (const [lk, ids] of Object.entries(r.__dropLinks || {})) o[lk] = (o[lk] || []).filter(x => !ids.includes(x));\r
+    if (k === 'tt' && o.ex) for (const x of Object.values(o.ex)) if (x && x.moved && typeof x.moved === 'object') { for (const q of Object.keys(x.moved)) if (x.moved[q] == null) delete x.moved[q]; } return o; };\r
+  const stable = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(q => [q, x[q]])) : x));\r
+  for (const k of ORDER) {\r
+    const want = data[k].filter(r => r && A.keep[k].get(r.id) === r).map(r => canon(k, r)), got = out[k];\r
+    if (want.length !== got.length) { diffs.push(\`\${k}: \${want.length} kept, \${got.length} returned\`); continue; }\r
+    want.forEach((w, i) => { if (stable(w) !== stable(got[i])) diffs.push(\`\${k} \${w.id}: \${stable(w).slice(0, 120)} != \${stable(got[i]).slice(0, 120)}\`); });\r
+  }\r
+  const wantRd = Object.keys(data.rd || {}).filter(kk => { const m = /^(\\d+)\\|/.exec(kk); return m && A.keep.rm.has(+m[1]); }).sort(); if (stable(wantRd) !== stable(Object.keys(out.rd).sort())) diffs.push('rd differs');\r
+  if (stable(data.set) !== stable(out.set)) diffs.push('settings differ'); if (stable(A.cur) !== stable(out.cur)) diffs.push('currencies differ');\r
+  const rr = Object.fromEntries(Object.entries(A.rates).map(([c, r]) => [c, { r: r.r, ...(r.t != null ? { t: r.t } : {}), ...(r.type != null ? { type: r.type } : {}) }])); if (stable(rr) !== stable(out.rates)) diffs.push('rates differ');\r
+  return diffs;\r
+}\r
+module.exports = { migrate: migrate_, analyse, unwrap, sha, roundTripDiff, planTarget, dupKeys };\r
+`, "/app/src/ledger-server.js": `'use strict';\r
+// Server-side binding of the shared ledger (src/ledger.js) to the existing business rules in src/finance.js.\r
+const { makeLedger } = require('./ledger'); const fin = require('./finance');\r
+const forState = st => makeLedger({ O: fin.O, pj: p => fin.pj(st, p), rcc: fin.rcc, k_: fin.k_ });\r
+module.exports = { forState, makeLedger };\r
 `, "/app/src/ledger.js": `'use strict';\r
 // THE financial calculation service (Phase 2: H1, M1, M2, H3, H5).\r
 // Pure functions over the legacy-shaped state. The SAME source text runs on the server (API, reports, tests) and inside the page (injected by tools/make-public.js),\r
@@ -28654,12 +28654,12 @@ function makeLedger(deps) {\r
   return { teacherRows, teacherBase, teacherBalance, teacherBalances, studentRows, projectResolution, allocationProblems, adjustmentProblems, coursePayProblems, settlementProblems, crossCurrencyUnresolved, courseCountProblems, obligation, fxReport, projectRows, courseRows, fxs };\r
 }\r
 module.exports = { makeLedger };\r
-`, "/app/src/log.js": `'use strict';
-// M11: one place for diagnostics. Never prints request bodies, tokens or record contents - only a short code, the message and the stack's first lines.
-let sink = (...a) => console.error(...a);
-const safe = e => { const m = String(e && e.message || e).replace(/[A-Za-z]:\\\\[^\\s'"]*/g, '<path>').replace(/\\/[^\\s'"]*\\.sqlite[^\\s'"]*/g, '<path>').slice(0, 300); return m; };
-function warn(where, e) { try { sink('[aplus] ' + where + ': ' + safe(e)); } catch (_) { /* logging itself must never throw */ } }
-module.exports = { warn, safe, setSink: f => { sink = f; } };
+`, "/app/src/log.js": `'use strict';\r
+// M11: one place for diagnostics. Never prints request bodies, tokens or record contents - only a short code, the message and the stack's first lines.\r
+let sink = (...a) => console.error(...a);\r
+const safe = e => { const m = String(e && e.message || e).replace(/[A-Za-z]:\\\\[^\\s'"]*/g, '<path>').replace(/\\/[^\\s'"]*\\.sqlite[^\\s'"]*/g, '<path>').slice(0, 300); return m; };\r
+function warn(where, e) { try { sink('[aplus] ' + where + ': ' + safe(e)); } catch (_) { /* logging itself must never throw */ } }\r
+module.exports = { warn, safe, setSink: f => { sink = f; } };\r
 `, "/app/src/management.js": `'use strict';\r
 const {tx}=require('./db'),{assemble}=require('./state'),rules=require('./rules'),audit=require('./audit'),store=require('./store'),cairo=require('./cairo');\r
 class ManagementError extends Error{constructor(code,message){super(message);this.code=code;}}\r
@@ -28765,113 +28765,113 @@ function write(db,input,actor,now=new Date()){\r
  });\r
 }\r
 module.exports={read,write,suggestions,conflicts,available,ManagementError,isFinance,isCoord};\r
-`, "/app/src/mapping.js": `'use strict';
-// Single source of truth: legacy key -> table/column. Used by the importer, the state assembler and the schema test.
-// type: i=integer, r=real, t=text, b=flag(1/absent), j=json array. req=required. ref=[entityKey, optional?]
-const E = {
-  t:  { table: 'teachers', kind: 'teacher', cols: { id:'i!', name:'t!', phone:'t', email:'t', spec:'t', cur:'t', rate:'i', status:'t!', notes:'t' } },
-  s:  { table: 'students', kind: 'student', cols: { id:'i!', name:'t!', uni:'t', country:'t', major:'t', lv:'t', cur:'t', phone:'t', email:'t', status:'t!', notes:'t' } },
-  sub:{ table: 'subjects', kind: 'subject', cols: { id:'i!', name:'t!', type:'t!', uni:'t', inst:'i', lv:'t', tc:'t', tr:'i', sc:'t', sr:'i' }, refs: { inst: ['t', 1] }, links: { studs: { table:'subject_students', owner:'subject_id', other:'student_id', ref:'s' } } },
-  tt: { table: 'timetable_entries', kind: 'timetable', cols: { id:'i!', sched:'t!', wt:'t', date:'t', day:'t', dw:'i', a:'t', b:'t', st:'t', en:'t', t:'i', lv:'t', sub:'t', subj:'i', notes:'t', done:'b', hist:'t', rs:'b' }, refs: { t: ['t', 1], subj: ['sub', 1] }, links: { s: { table:'timetable_students', owner:'tt', other:'student_id', ref:'s' } }, special: 'ex' },
-  l:  { table: 'lessons', kind: 'lesson', cols: { id:'i!', date:'t!', t:'i!', s:'i!', sub:'i!', lv:'t', d:'r!', tr:'i', sr:'i', st:'t!', tc:'t', sc:'t', trx:'r', srx:'r', bc:'t', bcost:'i!', bchg:'i!', rt:'t', oc:'i', og:'i', ts:'t', te:'t', notes:'t', tt:'i', od:'t' }, refs: { t:['t'], s:['s'], sub:['sub'], tt:['tt',1] } },
-  sp: { table: 'student_payments', kind: 'student_payment', cols: { id:'i!', p:'i!', date:'t!', cur:'t', amt:'i!', rx:'r', rt:'t', bamt:'i!', bc:'t', meth:'t', notes:'t', fxs:'t' }, refs: { p:['s'] } },
-  tp: { table: 'teacher_payments', kind: 'teacher_payment', cols: { id:'i!', p:'i!', date:'t!', cur:'t', amt:'i!', rx:'r', rt:'t', bamt:'i!', bc:'t', meth:'t', notes:'t', src:'t', srcd:'t', lk:'i', fxs:'t' }, refs: { p:['t'] } },
-  pr: { table: 'projects', kind: 'project', cols: { id:'i!', name:'t!', sub:'t', subj:'i', uni:'t', t:'i', s:'i', lv:'t', status:'t!', cur:'t', rev:'i!', share:'r', rx:'r', rt:'t', bc:'t', start:'t', due:'t', paid0:'i', notes:'t' }, refs: { subj:['sub',1], t:['t',1], s:['s',1] } },
-  pp: { table: 'project_payments', kind: 'project_payment', cols: { id:'i!', pr:'i!', date:'t', amt:'i!', meth:'t', notes:'t', cur:'t', rx:'r', bamt:'i', bc:'t', fxs:'t' }, refs: { pr:['pr'] } },
-  rc: { table: 'recorded_courses', kind: 'course', cols: { id:'i!', name:'t!', sub:'t', subj:'i', uni:'t', inst:'i', lv:'t', cur:'t', rx:'r', rt:'t', bc:'t', cost:'i', price:'i!', n:'i!', share:'r', date:'t', notes:'t' }, refs: { subj:['sub',1], inst:['t',1] } },
-  re: { table: 'course_enrollments', kind: 'enrollment', cols: { id:'i!', rc:'i!', s:'i!', date:'t', price:'i!', paid:'i!', paid_open:'i' }, refs: { rc:['rc'], s:['s'] } },
-  cp: { table: 'course_payments', kind: 'course_payment', cols: { id:'i!', re:'i!', date:'t!', amt:'i!', cur:'t', rx:'r', bamt:'i', bc:'t', fxs:'t', meth:'t', notes:'t' }, refs: { re:['re'] } },
-  al: { table: 'payment_allocations', kind: 'payment_allocation', cols: { id:'i!', sp:'i!', wt:'t!', tk:'t', tid:'i', amt:'i!', date:'t!', reason:'t' }, refs: { sp:['sp'] } },
-  ad: { table: 'student_adjustments', kind: 'student_adjustment', cols: { id:'i!', s:'i!', pr:'i', kind:'t!', date:'t!', cur:'t!', amt:'i!', rx:'r', bamt:'i', bc:'t', fxs:'t', ok:'t', oid:'i', reason:'t!' }, refs: { s:['s'], pr:['pr',1] } },
-  ts: { table: 'teacher_settlements', kind: 'teacher_settlement', cols: { id:'i!', tp:'i!', ok:'t!', oid:'i!', pcur:'t!', pamt:'i!', scur:'t!', samt:'i!', rx:'r!', date:'t!', prov:'t', reason:'t' }, refs: { tp:['tp'] } },
-  rm: { table: 'course_reminders', kind: 'reminder', cols: { id:'i!', name:'t', rc:'i!', days:'j', time:'t', a:'t', b:'t', f:'t' }, refs: { rc:['rc'] } },
-};
-// import order: parents before children
-const ORDER = ['t', 's', 'sub', 'tt', 'l', 'sp', 'tp', 'pr', 'pp', 'rc', 're', 'cp', 'rm', 'al', 'ad', 'ts'];
-// record types added by migration 003: older exports do not have these lists, so a missing list means "none" rather than an error
-const NEWKEYS = ['cp', 'al', 'ad', 'ts'];
-const OPT_FIELDS_NULL_IF_FALSY = { tt:['t','subj'], sub:['inst'], pr:['subj','t','s'], rc:['subj','inst'], l:['tt'], al:['tid'], ad:['pr'] };
-// closed value lists (mirrors the CHECK constraints in 001_init.sql)
-const ENUMS = { t:{status:['Active','Inactive']}, s:{status:['Active','Inactive']}, sub:{type:['Live','Recorded','Project']}, tt:{sched:['one','rec'],wt:['Live','Project','Recorded']},
-  l:{st:['Completed','Cancelled','Rescheduled','No Show']}, pr:{status:['Not Started','In Progress','Completed','Cancelled']},
-  al:{wt:['Live','Recorded','Project','Other'],tk:['lesson','enrollment','project']}, ad:{kind:['refund','credit','credit-used','retained']}, ts:{ok:['lesson','course','project'],prov:['new','correction']} };
-// L7: short structured fields (dates, times, currency codes, levels, methods...) are rendered in many places, so they must never carry markup.
-// A row whose structured field does not have the expected shape is quarantined on import and refused on save; free text (names, notes) is allowed but is always escaped when displayed.
-const DATE = /^\\d{4}-\\d{2}-\\d{2}$/, TIME = /^\\d{1,2}:\\d{2}$/, CODE = /^[A-Za-z]{3}$/, SHORT = /^[^<>"'\`\\u0000-\\u001f]{0,80}$/;
-const STRUCT = {
-  t: { cur: CODE }, s: { cur: CODE, lv: SHORT }, sub: { lv: SHORT, tc: CODE, sc: CODE },
-  tt: { date: DATE, a: DATE, b: DATE, st: TIME, en: TIME, lv: SHORT, day: SHORT },
-  l: { date: DATE, lv: SHORT, tc: CODE, sc: CODE, bc: CODE, rt: SHORT, ts: TIME, te: TIME, od: DATE },
-  sp: { date: DATE, cur: CODE, bc: CODE, rt: SHORT, meth: SHORT, fxs: SHORT }, tp: { date: DATE, cur: CODE, bc: CODE, rt: SHORT, meth: SHORT, src: SHORT, fxs: SHORT },
-  pr: { lv: SHORT, cur: CODE, bc: CODE, rt: SHORT, start: DATE, due: DATE }, pp: { date: DATE, meth: SHORT, cur: CODE, bc: CODE, fxs: SHORT },
-  rc: { lv: SHORT, cur: CODE, bc: CODE, rt: SHORT, date: DATE }, re: { date: DATE }, cp: { date: DATE, cur: CODE, bc: CODE, meth: SHORT, fxs: SHORT }, al: { date: DATE }, ad: { date: DATE, cur: CODE, bc: CODE, ok: SHORT, fxs: SHORT }, ts: { date: DATE, pcur: CODE, scur: CODE, ok: SHORT, prov: SHORT }, rm: { time: TIME, a: DATE, b: DATE, f: SHORT },
-};
-const structProblem = (k, row) => { for (const [f, rx] of Object.entries(STRUCT[k] || {})) { const v = row[f]; if (typeof v === 'string' && v !== '' && !rx.test(v)) return \`field "\${f}" has an unexpected format (\${JSON.stringify(v).slice(0, 40)})\`; } return null; };
-const colName = (k) => k;
-const SETTINGS_KEYS = ['name', 'tr', 'sr', 'base', 'recog', 'rfh']; // rfh = exchange-rate freshness window in hours (display status only; never rewrites a saved rate)
-module.exports = { NEWKEYS, STRUCT, structProblem, ENUMS, E, ORDER, SETTINGS_KEYS, OPT_FIELDS_NULL_IF_FALSY, colName };
-`, "/app/src/operations.js": `'use strict';
-const { tx } = require('./db');
-const { isDate, plain } = require('./rules');
-const audit = require('./audit');
-const cairo = require('./cairo');
-const tables = { registration:'service_registrations', attendance:'lesson_attendance', journal:'lesson_journals', task:'followup_tasks' };
-class OperationsError extends Error { constructor(code,message){super(message);this.code=code;} }
-const bad = message => {throw new OperationsError(422,message);};
-function read(db,now=new Date()) {
- const rows=table=>db.prepare(\`SELECT * FROM \${table} ORDER BY rowid\`).all();
- const registrations=rows(tables.registration),attendance=rows(tables.attendance),journals=rows(tables.journal),tasks=rows(tables.task);
- const today=cairo.today(now),open=tasks.filter(t=>!['Done','Cancelled'].includes(t.status));
- return {rev:require('./save').getRev(db),today,timezone:cairo.TZ,registrations,attendance,journals,tasks,
- summary:{activeRegistrations:registrations.filter(r=>r.status==='Active').length,overdue:open.filter(t=>t.due_on<today).length,dueToday:open.filter(t=>t.due_on===today).length,openTasks:open.length}};
-}
-function write(db,input,now=new Date(),actor='local') {
- if(!input||!Number.isInteger(input.baseRev)||!tables[input.kind]||!input.record||typeof input.record!=='object'||Array.isArray(input.record))throw new OperationsError(400,'A valid record, kind and baseRev are required.');
- return tx(db,()=>{
-  const rev=require('./save').getRev(db);
-  if(input.baseRev!==rev)throw new OperationsError(409,'The data changed in another tab. Refresh this page before saving.');
-  const r=input.record,kind=input.kind,table=tables[kind],at=now.toISOString();
-  const text=(k,max=200,required=false)=>{const v=r[k]??'';if(typeof v!=='string'||!plain(v,max)||(required&&!v.trim()))bad(\`\${k}: enter valid plain text\${required?' (required)':''}.\`);return v.trim();};
-  const choice=(k,list)=>{if(!list.includes(r[k]))bad(\`\${k}: choose one of \${list.join(', ')}.\`);return r[k];};
-  const date=(k,required=false)=>{const v=r[k];if(!v&&!required)return null;if(!isDate(v))bad(\`\${k}: enter a valid date.\`);return v;};
-  const ref=(key,target,required=false)=>{const v=r[key];if((v===null||v===undefined||v==='')&&!required)return null;if(!Number.isInteger(v)||v<=0||!db.prepare(\`SELECT id FROM \${target} WHERE id=?\`).get(v))bad(\`\${key}: the selected record does not exist.\`);return v;};
-  const rowKey=kind==='attendance'||kind==='journal'?'lesson_id':'id';
-  let id=r[rowKey];if(id!==undefined&&(!Number.isInteger(id)||id<=0))bad('Invalid record identifier.');
-  let before=id?db.prepare(\`SELECT * FROM \${table} WHERE \${rowKey}=?\`).get(id):null;
-  if(id&&!before&&rowKey==='id')throw new OperationsError(404,'This record no longer exists.');
-  let data;
-  if(kind==='registration'){
-   data={student_id:ref('student_id','students',true),teacher_id:ref('teacher_id','teachers'),subject_id:ref('subject_id','subjects',true),title:text('title',200,true),starts_on:date('starts_on',true),ends_on:date('ends_on'),status:choice('status',['Active','Paused','Completed','Cancelled']),goal:text('goal',2000),billing_basis:choice('billing_basis',['Per lesson','Package','Course','Project']),agreed_price:r.agreed_price??null,currency:r.currency||null,planned_sessions:r.planned_sessions??null};
-   if(data.ends_on&&data.ends_on<data.starts_on)bad('End date must not be before the start date.');
-   if(data.agreed_price!==null&&(!Number.isSafeInteger(data.agreed_price)||data.agreed_price<0||data.agreed_price>1e12))bad('Agreed price must be a valid non-negative amount.');
-   if(data.currency&&!db.prepare('SELECT code FROM currencies WHERE code=?').get(data.currency))bad('Choose an existing currency.');
-   if(data.agreed_price!==null&&!data.currency)bad('Choose a currency for the agreed price.');
-   if(data.planned_sessions!==null&&(!Number.isInteger(data.planned_sessions)||data.planned_sessions<1||data.planned_sessions>10000))bad('Planned sessions must be a whole number from 1 to 10000.');
-   const sub=db.prepare('SELECT inst,type FROM subjects WHERE id=?').get(data.subject_id);
-   if(sub.inst&&data.teacher_id&&sub.inst!==data.teacher_id)bad('The teacher must match the instructor assigned to this subject.');
-   if(before&&db.prepare('SELECT id FROM billing_contracts WHERE registration_id=?').get(id)&&['student_id','teacher_id','subject_id','agreed_price','currency','planned_sessions'].some(k=>before[k]!==data[k]))bad('This registration has an activated agreement. Its student, teacher, subject and financial terms are fixed; use a new registration for a new agreement.');
-  }else if(kind==='task'){
-   data={title:text('title',200,true),owner:text('owner',100,true),due_on:date('due_on',true),priority:choice('priority',['Normal','High']),status:choice('status',['Open','In Progress','Done','Cancelled']),student_id:ref('student_id','students'),teacher_id:ref('teacher_id','teachers'),registration_id:ref('registration_id','service_registrations'),detail:text('detail',3000),result:text('result',2000)};
-   if(data.status==='Done'&&!data.result)bad('Record the result before completing the task.');
-   if(data.registration_id){const reg=db.prepare('SELECT student_id,teacher_id FROM service_registrations WHERE id=?').get(data.registration_id);if(data.student_id&&reg.student_id!==data.student_id)bad('The registration belongs to another student.');if(data.teacher_id&&reg.teacher_id&&reg.teacher_id!==data.teacher_id)bad('The registration belongs to another teacher.');}
-  }else{
-   id=ref('lesson_id','lessons',true);
-   if(kind==='attendance'){
-    data={status:choice('status',['Present','Late','Excused','Absent']),note:text('note',2000)};
-    const lesson=db.prepare('SELECT st FROM lessons WHERE id=?').get(id);
-    if(['Present','Late'].includes(data.status)&&lesson.st!=='Completed')bad('Present or Late attendance requires a Completed lesson. Review the lesson status first.');
-   }else data={taught:text('taught',3000),next_step:text('next_step',2000),homework:text('homework',2000)};
-  }
-  data.updated_at=at;
-  if(before){const keys=Object.keys(data);db.prepare(\`UPDATE \${table} SET \${keys.map(k=>k+'=?').join(',')} WHERE \${rowKey}=?\`).run(...Object.values(data),id);}
-  else{if(rowKey==='id')data.created_at=at;else data.lesson_id=id;const keys=Object.keys(data);const result=db.prepare(\`INSERT INTO \${table}(\${keys.join(',')}) VALUES(\${keys.map(()=>'?').join(',')})\`).run(...Object.values(data));if(rowKey==='id')id=Number(result.lastInsertRowid);}
-  const after=db.prepare(\`SELECT * FROM \${table} WHERE \${rowKey}=?\`).get(id);
-  audit.log(db,{at,actor,action:before?'update':'create',entity:'operations-'+kind,id,before,after,detail:'Administrative record; no financial charge or payment created.'});
-  db.prepare("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('rev',?)").run(String(rev+1));
-  return {rev:rev+1,record:after};
- });
-}
-module.exports={read,write,OperationsError};
+`, "/app/src/mapping.js": `'use strict';\r
+// Single source of truth: legacy key -> table/column. Used by the importer, the state assembler and the schema test.\r
+// type: i=integer, r=real, t=text, b=flag(1/absent), j=json array. req=required. ref=[entityKey, optional?]\r
+const E = {\r
+  t:  { table: 'teachers', kind: 'teacher', cols: { id:'i!', name:'t!', phone:'t', email:'t', spec:'t', cur:'t', rate:'i', status:'t!', notes:'t' } },\r
+  s:  { table: 'students', kind: 'student', cols: { id:'i!', name:'t!', uni:'t', country:'t', major:'t', lv:'t', cur:'t', phone:'t', email:'t', status:'t!', notes:'t' } },\r
+  sub:{ table: 'subjects', kind: 'subject', cols: { id:'i!', name:'t!', type:'t!', uni:'t', inst:'i', lv:'t', tc:'t', tr:'i', sc:'t', sr:'i' }, refs: { inst: ['t', 1] }, links: { studs: { table:'subject_students', owner:'subject_id', other:'student_id', ref:'s' } } },\r
+  tt: { table: 'timetable_entries', kind: 'timetable', cols: { id:'i!', sched:'t!', wt:'t', date:'t', day:'t', dw:'i', a:'t', b:'t', st:'t', en:'t', t:'i', lv:'t', sub:'t', subj:'i', notes:'t', done:'b', hist:'t', rs:'b' }, refs: { t: ['t', 1], subj: ['sub', 1] }, links: { s: { table:'timetable_students', owner:'tt', other:'student_id', ref:'s' } }, special: 'ex' },\r
+  l:  { table: 'lessons', kind: 'lesson', cols: { id:'i!', date:'t!', t:'i!', s:'i!', sub:'i!', lv:'t', d:'r!', tr:'i', sr:'i', st:'t!', tc:'t', sc:'t', trx:'r', srx:'r', bc:'t', bcost:'i!', bchg:'i!', rt:'t', oc:'i', og:'i', ts:'t', te:'t', notes:'t', tt:'i', od:'t' }, refs: { t:['t'], s:['s'], sub:['sub'], tt:['tt',1] } },\r
+  sp: { table: 'student_payments', kind: 'student_payment', cols: { id:'i!', p:'i!', date:'t!', cur:'t', amt:'i!', rx:'r', rt:'t', bamt:'i!', bc:'t', meth:'t', notes:'t', fxs:'t' }, refs: { p:['s'] } },\r
+  tp: { table: 'teacher_payments', kind: 'teacher_payment', cols: { id:'i!', p:'i!', date:'t!', cur:'t', amt:'i!', rx:'r', rt:'t', bamt:'i!', bc:'t', meth:'t', notes:'t', src:'t', srcd:'t', lk:'i', fxs:'t' }, refs: { p:['t'] } },\r
+  pr: { table: 'projects', kind: 'project', cols: { id:'i!', name:'t!', sub:'t', subj:'i', uni:'t', t:'i', s:'i', lv:'t', status:'t!', cur:'t', rev:'i!', share:'r', rx:'r', rt:'t', bc:'t', start:'t', due:'t', paid0:'i', notes:'t' }, refs: { subj:['sub',1], t:['t',1], s:['s',1] } },\r
+  pp: { table: 'project_payments', kind: 'project_payment', cols: { id:'i!', pr:'i!', date:'t', amt:'i!', meth:'t', notes:'t', cur:'t', rx:'r', bamt:'i', bc:'t', fxs:'t' }, refs: { pr:['pr'] } },\r
+  rc: { table: 'recorded_courses', kind: 'course', cols: { id:'i!', name:'t!', sub:'t', subj:'i', uni:'t', inst:'i', lv:'t', cur:'t', rx:'r', rt:'t', bc:'t', cost:'i', price:'i!', n:'i!', share:'r', date:'t', notes:'t' }, refs: { subj:['sub',1], inst:['t',1] } },\r
+  re: { table: 'course_enrollments', kind: 'enrollment', cols: { id:'i!', rc:'i!', s:'i!', date:'t', price:'i!', paid:'i!', paid_open:'i' }, refs: { rc:['rc'], s:['s'] } },\r
+  cp: { table: 'course_payments', kind: 'course_payment', cols: { id:'i!', re:'i!', date:'t!', amt:'i!', cur:'t', rx:'r', bamt:'i', bc:'t', fxs:'t', meth:'t', notes:'t' }, refs: { re:['re'] } },\r
+  al: { table: 'payment_allocations', kind: 'payment_allocation', cols: { id:'i!', sp:'i!', wt:'t!', tk:'t', tid:'i', amt:'i!', date:'t!', reason:'t' }, refs: { sp:['sp'] } },\r
+  ad: { table: 'student_adjustments', kind: 'student_adjustment', cols: { id:'i!', s:'i!', pr:'i', kind:'t!', date:'t!', cur:'t!', amt:'i!', rx:'r', bamt:'i', bc:'t', fxs:'t', ok:'t', oid:'i', reason:'t!' }, refs: { s:['s'], pr:['pr',1] } },\r
+  ts: { table: 'teacher_settlements', kind: 'teacher_settlement', cols: { id:'i!', tp:'i!', ok:'t!', oid:'i!', pcur:'t!', pamt:'i!', scur:'t!', samt:'i!', rx:'r!', date:'t!', prov:'t', reason:'t' }, refs: { tp:['tp'] } },\r
+  rm: { table: 'course_reminders', kind: 'reminder', cols: { id:'i!', name:'t', rc:'i!', days:'j', time:'t', a:'t', b:'t', f:'t' }, refs: { rc:['rc'] } },\r
+};\r
+// import order: parents before children\r
+const ORDER = ['t', 's', 'sub', 'tt', 'l', 'sp', 'tp', 'pr', 'pp', 'rc', 're', 'cp', 'rm', 'al', 'ad', 'ts'];\r
+// record types added by migration 003: older exports do not have these lists, so a missing list means "none" rather than an error\r
+const NEWKEYS = ['cp', 'al', 'ad', 'ts'];\r
+const OPT_FIELDS_NULL_IF_FALSY = { tt:['t','subj'], sub:['inst'], pr:['subj','t','s'], rc:['subj','inst'], l:['tt'], al:['tid'], ad:['pr'] };\r
+// closed value lists (mirrors the CHECK constraints in 001_init.sql)\r
+const ENUMS = { t:{status:['Active','Inactive']}, s:{status:['Active','Inactive']}, sub:{type:['Live','Recorded','Project']}, tt:{sched:['one','rec'],wt:['Live','Project','Recorded']},\r
+  l:{st:['Completed','Cancelled','Rescheduled','No Show']}, pr:{status:['Not Started','In Progress','Completed','Cancelled']},\r
+  al:{wt:['Live','Recorded','Project','Other'],tk:['lesson','enrollment','project']}, ad:{kind:['refund','credit','credit-used','retained']}, ts:{ok:['lesson','course','project'],prov:['new','correction']} };\r
+// L7: short structured fields (dates, times, currency codes, levels, methods...) are rendered in many places, so they must never carry markup.\r
+// A row whose structured field does not have the expected shape is quarantined on import and refused on save; free text (names, notes) is allowed but is always escaped when displayed.\r
+const DATE = /^\\d{4}-\\d{2}-\\d{2}$/, TIME = /^\\d{1,2}:\\d{2}$/, CODE = /^[A-Za-z]{3}$/, SHORT = /^[^<>"'\`\\u0000-\\u001f]{0,80}$/;\r
+const STRUCT = {\r
+  t: { cur: CODE }, s: { cur: CODE, lv: SHORT }, sub: { lv: SHORT, tc: CODE, sc: CODE },\r
+  tt: { date: DATE, a: DATE, b: DATE, st: TIME, en: TIME, lv: SHORT, day: SHORT },\r
+  l: { date: DATE, lv: SHORT, tc: CODE, sc: CODE, bc: CODE, rt: SHORT, ts: TIME, te: TIME, od: DATE },\r
+  sp: { date: DATE, cur: CODE, bc: CODE, rt: SHORT, meth: SHORT, fxs: SHORT }, tp: { date: DATE, cur: CODE, bc: CODE, rt: SHORT, meth: SHORT, src: SHORT, fxs: SHORT },\r
+  pr: { lv: SHORT, cur: CODE, bc: CODE, rt: SHORT, start: DATE, due: DATE }, pp: { date: DATE, meth: SHORT, cur: CODE, bc: CODE, fxs: SHORT },\r
+  rc: { lv: SHORT, cur: CODE, bc: CODE, rt: SHORT, date: DATE }, re: { date: DATE }, cp: { date: DATE, cur: CODE, bc: CODE, meth: SHORT, fxs: SHORT }, al: { date: DATE }, ad: { date: DATE, cur: CODE, bc: CODE, ok: SHORT, fxs: SHORT }, ts: { date: DATE, pcur: CODE, scur: CODE, ok: SHORT, prov: SHORT }, rm: { time: TIME, a: DATE, b: DATE, f: SHORT },\r
+};\r
+const structProblem = (k, row) => { for (const [f, rx] of Object.entries(STRUCT[k] || {})) { const v = row[f]; if (typeof v === 'string' && v !== '' && !rx.test(v)) return \`field "\${f}" has an unexpected format (\${JSON.stringify(v).slice(0, 40)})\`; } return null; };\r
+const colName = (k) => k;\r
+const SETTINGS_KEYS = ['name', 'tr', 'sr', 'base', 'recog', 'rfh']; // rfh = exchange-rate freshness window in hours (display status only; never rewrites a saved rate)\r
+module.exports = { NEWKEYS, STRUCT, structProblem, ENUMS, E, ORDER, SETTINGS_KEYS, OPT_FIELDS_NULL_IF_FALSY, colName };\r
+`, "/app/src/operations.js": `'use strict';\r
+const { tx } = require('./db');\r
+const { isDate, plain } = require('./rules');\r
+const audit = require('./audit');\r
+const cairo = require('./cairo');\r
+const tables = { registration:'service_registrations', attendance:'lesson_attendance', journal:'lesson_journals', task:'followup_tasks' };\r
+class OperationsError extends Error { constructor(code,message){super(message);this.code=code;} }\r
+const bad = message => {throw new OperationsError(422,message);};\r
+function read(db,now=new Date()) {\r
+ const rows=table=>db.prepare(\`SELECT * FROM \${table} ORDER BY rowid\`).all();\r
+ const registrations=rows(tables.registration),attendance=rows(tables.attendance),journals=rows(tables.journal),tasks=rows(tables.task);\r
+ const today=cairo.today(now),open=tasks.filter(t=>!['Done','Cancelled'].includes(t.status));\r
+ return {rev:require('./save').getRev(db),today,timezone:cairo.TZ,registrations,attendance,journals,tasks,\r
+ summary:{activeRegistrations:registrations.filter(r=>r.status==='Active').length,overdue:open.filter(t=>t.due_on<today).length,dueToday:open.filter(t=>t.due_on===today).length,openTasks:open.length}};\r
+}\r
+function write(db,input,now=new Date(),actor='local') {\r
+ if(!input||!Number.isInteger(input.baseRev)||!tables[input.kind]||!input.record||typeof input.record!=='object'||Array.isArray(input.record))throw new OperationsError(400,'A valid record, kind and baseRev are required.');\r
+ return tx(db,()=>{\r
+  const rev=require('./save').getRev(db);\r
+  if(input.baseRev!==rev)throw new OperationsError(409,'The data changed in another tab. Refresh this page before saving.');\r
+  const r=input.record,kind=input.kind,table=tables[kind],at=now.toISOString();\r
+  const text=(k,max=200,required=false)=>{const v=r[k]??'';if(typeof v!=='string'||!plain(v,max)||(required&&!v.trim()))bad(\`\${k}: enter valid plain text\${required?' (required)':''}.\`);return v.trim();};\r
+  const choice=(k,list)=>{if(!list.includes(r[k]))bad(\`\${k}: choose one of \${list.join(', ')}.\`);return r[k];};\r
+  const date=(k,required=false)=>{const v=r[k];if(!v&&!required)return null;if(!isDate(v))bad(\`\${k}: enter a valid date.\`);return v;};\r
+  const ref=(key,target,required=false)=>{const v=r[key];if((v===null||v===undefined||v==='')&&!required)return null;if(!Number.isInteger(v)||v<=0||!db.prepare(\`SELECT id FROM \${target} WHERE id=?\`).get(v))bad(\`\${key}: the selected record does not exist.\`);return v;};\r
+  const rowKey=kind==='attendance'||kind==='journal'?'lesson_id':'id';\r
+  let id=r[rowKey];if(id!==undefined&&(!Number.isInteger(id)||id<=0))bad('Invalid record identifier.');\r
+  let before=id?db.prepare(\`SELECT * FROM \${table} WHERE \${rowKey}=?\`).get(id):null;\r
+  if(id&&!before&&rowKey==='id')throw new OperationsError(404,'This record no longer exists.');\r
+  let data;\r
+  if(kind==='registration'){\r
+   data={student_id:ref('student_id','students',true),teacher_id:ref('teacher_id','teachers'),subject_id:ref('subject_id','subjects',true),title:text('title',200,true),starts_on:date('starts_on',true),ends_on:date('ends_on'),status:choice('status',['Active','Paused','Completed','Cancelled']),goal:text('goal',2000),billing_basis:choice('billing_basis',['Per lesson','Package','Course','Project']),agreed_price:r.agreed_price??null,currency:r.currency||null,planned_sessions:r.planned_sessions??null};\r
+   if(data.ends_on&&data.ends_on<data.starts_on)bad('End date must not be before the start date.');\r
+   if(data.agreed_price!==null&&(!Number.isSafeInteger(data.agreed_price)||data.agreed_price<0||data.agreed_price>1e12))bad('Agreed price must be a valid non-negative amount.');\r
+   if(data.currency&&!db.prepare('SELECT code FROM currencies WHERE code=?').get(data.currency))bad('Choose an existing currency.');\r
+   if(data.agreed_price!==null&&!data.currency)bad('Choose a currency for the agreed price.');\r
+   if(data.planned_sessions!==null&&(!Number.isInteger(data.planned_sessions)||data.planned_sessions<1||data.planned_sessions>10000))bad('Planned sessions must be a whole number from 1 to 10000.');\r
+   const sub=db.prepare('SELECT inst,type FROM subjects WHERE id=?').get(data.subject_id);\r
+   if(sub.inst&&data.teacher_id&&sub.inst!==data.teacher_id)bad('The teacher must match the instructor assigned to this subject.');\r
+   if(before&&db.prepare('SELECT id FROM billing_contracts WHERE registration_id=?').get(id)&&['student_id','teacher_id','subject_id','agreed_price','currency','planned_sessions'].some(k=>before[k]!==data[k]))bad('This registration has an activated agreement. Its student, teacher, subject and financial terms are fixed; use a new registration for a new agreement.');\r
+  }else if(kind==='task'){\r
+   data={title:text('title',200,true),owner:text('owner',100,true),due_on:date('due_on',true),priority:choice('priority',['Normal','High']),status:choice('status',['Open','In Progress','Done','Cancelled']),student_id:ref('student_id','students'),teacher_id:ref('teacher_id','teachers'),registration_id:ref('registration_id','service_registrations'),detail:text('detail',3000),result:text('result',2000)};\r
+   if(data.status==='Done'&&!data.result)bad('Record the result before completing the task.');\r
+   if(data.registration_id){const reg=db.prepare('SELECT student_id,teacher_id FROM service_registrations WHERE id=?').get(data.registration_id);if(data.student_id&&reg.student_id!==data.student_id)bad('The registration belongs to another student.');if(data.teacher_id&&reg.teacher_id&&reg.teacher_id!==data.teacher_id)bad('The registration belongs to another teacher.');}\r
+  }else{\r
+   id=ref('lesson_id','lessons',true);\r
+   if(kind==='attendance'){\r
+    data={status:choice('status',['Present','Late','Excused','Absent']),note:text('note',2000)};\r
+    const lesson=db.prepare('SELECT st FROM lessons WHERE id=?').get(id);\r
+    if(['Present','Late'].includes(data.status)&&lesson.st!=='Completed')bad('Present or Late attendance requires a Completed lesson. Review the lesson status first.');\r
+   }else data={taught:text('taught',3000),next_step:text('next_step',2000),homework:text('homework',2000)};\r
+  }\r
+  data.updated_at=at;\r
+  if(before){const keys=Object.keys(data);db.prepare(\`UPDATE \${table} SET \${keys.map(k=>k+'=?').join(',')} WHERE \${rowKey}=?\`).run(...Object.values(data),id);}\r
+  else{if(rowKey==='id')data.created_at=at;else data.lesson_id=id;const keys=Object.keys(data);const result=db.prepare(\`INSERT INTO \${table}(\${keys.join(',')}) VALUES(\${keys.map(()=>'?').join(',')})\`).run(...Object.values(data));if(rowKey==='id')id=Number(result.lastInsertRowid);}\r
+  const after=db.prepare(\`SELECT * FROM \${table} WHERE \${rowKey}=?\`).get(id);\r
+  audit.log(db,{at,actor,action:before?'update':'create',entity:'operations-'+kind,id,before,after,detail:'Administrative record; no financial charge or payment created.'});\r
+  db.prepare("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('rev',?)").run(String(rev+1));\r
+  return {rev:rev+1,record:after};\r
+ });\r
+}\r
+module.exports={read,write,OperationsError};\r
 `, "/app/src/orig.js": `'use strict';\r
 // ORIGINAL-CURRENCY reporting (Decision A). Pure functions; the SAME source text runs on the server (tests, /api) and inside the page (injected by tools/make-public.js).\r
 // Rule: amounts are only ever added to amounts of the SAME currency. Nothing here uses an exchange rate.\r
@@ -28934,295 +28934,295 @@ function makeOrig(deps) {\r
   return { work, cash, studentLedger, teacherLedger, crossCurrency };\r
 }\r
 module.exports = { makeOrig };\r
-`, "/app/src/phase3.js": `'use strict';
-// Phase 3 server rules used by applySave: subject references (M7), university spelling (L1), duplicate payments (M9), linked-lesson protection (B), rate labels (M5).
-const rates = require('./rates');
-const norm = s => String(s || '').toLowerCase().replace(/[.,'’"()\\-_/]+/g, ' ').replace(/\\s+/g, ' ').trim();
-
-// M7: timetable entries carry a real subject reference; the text column is always the subject's current name. Only new / changed rows are touched.
-function normaliseTimetable(A, old) {
-  const problems = [], was = new Map((old.tt || []).map(r => [r.id, r]));
-  const subs = [...A.keep.sub.values()], byName = new Map();
-  subs.forEach(z => { const k = norm(z.name); byName.set(k, (byName.get(k) || []).concat(z)); });
-  for (const [id, row] of A.keep.tt) {
-    const w = was.get(id);
-    // the text follows the referenced subject ONLY when that subject was renamed in this save, or the row itself is new / changed. An untouched row is never rewritten (AUD2-011).
-    if (row.subj && A.keep.sub.get(row.subj) && row.sub !== A.keep.sub.get(row.subj).name) {
-      const oldSub = (old.sub || []).find(z => z.id === row.subj), renamed = oldSub && oldSub.name !== A.keep.sub.get(row.subj).name, touched = !w || (w.sub ?? '') !== (row.sub ?? '') || (w.subj ?? 0) !== (row.subj ?? 0);
-      if (renamed || touched) { row.sub = A.keep.sub.get(row.subj).name; continue; }
-      continue;
-    }
-    if (w && (w.sub ?? '') === (row.sub ?? '') && (w.subj ?? 0) === (row.subj ?? 0)) continue; // untouched legacy rows are preserved exactly
-    if (row.subj) { const z = A.keep.sub.get(row.subj); if (!z) { problems.push(\`timetable \${id}: subject reference \${row.subj} does not exist\`); continue; } row.sub = z.name; continue; }
-    if (!row.sub) continue;
-    const m = byName.get(norm(row.sub)) || [];
-    if (m.length === 1) { row.subj = m[0].id; row.sub = m[0].name; }
-    else problems.push(\`timetable \${id}: subject "\${String(row.sub).slice(0, 60)}" is \${m.length ? 'ambiguous' : 'not in the subject list'}; choose a subject from the list\`);
-  }
-  return problems;
-}
-
-// L1: a new or edited record whose university differs from an existing one only by case / spacing / punctuation gets the existing spelling. Existing records are never rewritten.
-function normaliseUniversities(A, old) {
-  const count = new Map(); // normalised -> Map(spelling -> n)
-  const add = v => { if (!v) return; const k = norm(v); if (!k) return; const m = count.get(k) || new Map(); m.set(v, (m.get(v) || 0) + 1); count.set(k, m); };
-  for (const k of ['s', 'sub', 'pr', 'rc']) (old[k] || []).forEach(r => add(r.uni));
-  const best = k => { const m = count.get(k); if (!m) return null; return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0]; };
-  const changed = [];
-  for (const k of ['s', 'sub', 'pr', 'rc']) { const was = new Map((old[k] || []).map(r => [r.id, r]));
-    for (const [id, row] of A.keep[k]) { if (!row.uni) continue; const w = was.get(id); if (w && w.uni === row.uni) continue; const canon = best(norm(row.uni)); if (canon && canon !== row.uni) { changed.push({ k, id, from: row.uni, to: canon }); row.uni = canon; } } }
-  return changed;
-}
-
-// M9: the same payment (owner, date, amount, currency) entered twice needs a typed reason. Same-save duplicates count too.
-function duplicatePayments(A, old) {
-  const need = [], key = {
-    sp: r => ['sp', r.p, r.date, r.amt, r.cur], tp: r => ['tp', r.p, r.date, r.amt, r.cur], pp: r => ['pp', r.pr, r.date || '', r.amt], cp: r => ['cp', r.re, r.date, r.amt] };
-  for (const k of Object.keys(key)) {
-    const seen = new Map(); (old[k] || []).forEach(r => seen.set(JSON.stringify(key[k](r)), r.id));
-    const was = new Set((old[k] || []).map(r => r.id));
-    for (const [id, row] of A.keep[k]) { if (was.has(id)) continue; const kk = JSON.stringify(key[k](row)); if (seen.has(kk)) need.push({ k, id, label: 'possible DUPLICATE payment - an identical one (same person, date and amount) already exists (#' + seen.get(kk) + ')' }); else seen.set(kk, id); }
-  }
-  return need;
-}
-
-// B: changing who / when / what a linked lesson is changes attendance and money history; it needs a reason. Same for removing a student or changing the subject of a timetable session that already has lessons.
-function linkedEdits(A, old, upd) {
-  const need = [], wasL = new Map((old.l || []).map(r => [r.id, r]));
-  for (const id of upd.l || []) { const w = wasL.get(id), n = A.keep.l.get(id); if (!w || !w.tt) continue; if (['s', 'date', 'sub', 't', 'od', 'tt'].some(f => (w[f] ?? null) !== (n[f] ?? null))) need.push({ k: 'l', id, label: 'change of student / date / subject of a lesson recorded from the timetable' }); }
-  const wasT = new Map((old.tt || []).map(r => [r.id, r]));
-  for (const id of upd.tt || []) { const w = wasT.get(id), n = A.keep.tt.get(id); const linked = (old.l || []).filter(l => l.tt === id); if (!linked.length) continue;
-    const dropped = (w.s || []).filter(s => !(n.s || []).includes(s) && linked.some(l => l.s === s));
-    if (dropped.length || (w.subj ?? null) !== (n.subj ?? null) || (!w.subj && !n.subj && (w.sub ?? '') !== (n.sub ?? ''))) need.push({ k: 'tt', id, label: 'change of subject / students of a timetable session that already has recorded lessons' }); }
-  return need;
-}
-
-// B: an excess payment is legitimate (advance / credit) but must be confirmed explicitly with a typed reason. Only NEW or CHANGED teacher payments that make a currency balance MORE negative are listed.
-function overpayments(A, old, ins, upd, state, forState) {
-  const need = [], ids = [...(ins.tp || []), ...(upd.tp || [])]; if (!ids.length) return need;
-  const Ln = forState(state), Lo = forState(old), key = (r) => r.t + '|' + r.cur, bal = (L, st) => { const m = {}; L.teacherRows(st).forEach(r => { m[key(r)] = r.remaining.total; }); return m; };
-  const after = bal(Ln, state), before = bal(Lo, old), seen = new Set();
-  for (const id of ids) { const p = A.keep.tp.get(id); if (!p) continue; const k = p.p + '|' + (p.cur || '—'), a = after[k] ?? 0, b = before[k] ?? 0;
-    if (a < 0 && a < Math.min(0, b) && !seen.has(k)) { seen.add(k); need.push({ k: 'tp', id, label: \`EXCESS payment - after this payment the teacher would be over-paid by \${(-a / 1000).toFixed(3)} \${p.cur || ''} (advance / credit). Confirm with a reason if this is an advance.\` }); } }
-  return need;
-}
-// M5: a rate may be labelled 'Live' only if it carries a recent timestamp.
-function rateLabelProblems(newRates, oldRates, now, hours) {
-  const p = [];
-  for (const [code, r] of Object.entries(newRates || {})) { const was = (oldRates || {})[code]; if (r.type !== 'Live') continue; if (was && was.r === r.r && was.t === r.t && was.type === r.type) continue; // unchanged legacy label is left alone
-    const t = r.t ? Date.parse(r.t) : NaN; if (!Number.isFinite(t) || Math.abs(Date.parse(now) - t) > 36e5 * (hours || rates.STALE_HOURS)) p.push(\`rate \${String(code).slice(0, 5)}: labelled Live but not refreshed recently - save it as Manual or refresh it first\`); }
-  return p;
-}
-module.exports = { overpayments, normaliseTimetable, normaliseUniversities, duplicatePayments, linkedEdits, rateLabelProblems, norm };
-`, "/app/src/rates.js": `'use strict';
-// M5: what a saved exchange rate may be called. 'current' = refreshed recently, 'stale' = old (never shown as Live), 'missing' = no usable value, 'manual' = typed by hand.
-const STALE_HOURS = 36;
-function status(entry, base, code, now = Date.now(), staleHours = STALE_HOURS) {
-  if (code === base) return { state: 'base', label: 'Base currency (1)' };
-  if (!entry || !(entry.r > 0)) return { state: 'missing', label: 'No rate' };
-  const t = entry.t ? Date.parse(entry.t) : NaN;
-  if ((entry.type || '') === 'Manual') return { state: 'manual', label: 'Manual' + (Number.isFinite(t) ? ' (' + entry.t.slice(0, 10) + ')' : '') };
-  if (!Number.isFinite(t)) return { state: 'stale', label: 'Unknown age - not Live' };
-  const h = (now - t) / 36e5;
-  if (h > staleHours || h < -1) return { state: 'stale', label: 'Stale (' + entry.t.slice(0, 10) + ')', ageHours: Math.round(h) };
-  return { state: 'current', label: entry.type === 'Live' ? 'Live' : (entry.type || 'Saved'), ageHours: Math.round(h) };
-}
-const hoursOf = st => { const v = Number(st && st.set && st.set.rfh); return Number.isFinite(v) && v >= 1 && v <= 720 ? v : STALE_HOURS; }; // the owner's freshness setting, else the 36 h default
-function report(st, now = Date.now()) { const base = st.set.base, h = hoursOf(st); return Object.fromEntries((st.cur || []).map(c => [c.c, status((st.rates || {})[c.c], base, c.c, now, h)])); }
-module.exports = { status, report, hoursOf, STALE_HOURS };
-`, "/app/src/reconcile.js": `'use strict';
-// Read-only financial reconciliation (Phase 2). Compares what the application DISPLAYED before Phase 2 (legacy formulas, taken from the original state) with what the shared
-// ledger calculates (src/ledger.js, taken from the same data after migration 003). It never writes anything and never proposes to change a stored amount: every difference is
-// explained and classified as  matches | expected | unexplained | manual-review.
-const fin = require('./finance'); const { forState } = require('./ledger-server');
-const f3 = v => (v / 1000).toFixed(3);
-const sumV = a => a.reduce((q, x) => q + x, 0);
-
-function teachers(oldSt, newSt) {
-  const L = forState(newSt);
-  return newSt.t.map(t => {
-    const ts = fin.TS(oldSt, t.id), rcE = oldSt.rc.filter(c => c.inst == t.id).reduce((a, c) => a + fin.rcc(c).bshare, 0), prE = oldSt.pr.filter(p => p.t == t.id && p.status != 'Cancelled').reduce((a, p) => a + fin.pj(oldSt, p).bshare, 0);
-    const old = { liveEarned: ts.cost, recordedEarned: rcE, projectEarned: prE, paid: ts.paid, listBalance: ts.rem, cardBalance: ts.cost + rcE + prE - ts.paid };
-    const b = L.teacherBalance(newSt, t.id), nb = b.base, rows = b.rows;
-    const dList = nb.remaining.total - old.listBalance, dCard = nb.remaining.total - old.cardBalance; let cls, cause;
-    if (dList === 0 && dCard === 0) { cls = 'matches'; cause = ''; }
-    else if (dCard === 0 && dList === rcE + prE) { cls = 'expected'; cause = \`the Payments page / teacher details / reports showed lesson earnings only (\${f3(old.liveEarned)}) and left out recorded-course (\${f3(rcE)}) and project (\${f3(prE)}) earnings; the new figure equals the all-category teacher-card figure\`; }
-    else { cls = 'unexplained'; cause = 'new balance differs from both legacy formulas by an amount that is not the omitted recorded/project earnings'; }
-    const split = rows.length > 1 && rows.some(r => r.remaining.total > 0) && rows.some(r => r.remaining.total < 0);
-    return { id: t.id, name: t.name, status: t.status, old, new: { earned: nb.earned, paid: nb.paid, unassigned: nb.unassigned, outstanding: nb.remaining.total, byCurrency: rows.map(r => ({ cur: r.cur, earned: r.earned.total, paid: r.paid.total, remaining: r.remaining.total, byType: r.remaining })) },
-      diffVsListBalance: dList, diffVsCardBalance: dCard, class: cls, cause, overpaid: b.overpaid, paidInOtherCurrency: split, unassignedPayments: b.unassignedCount, baseMismatch: nb.mismatch };
-  });
-}
-function students(oldSt, newSt) {
-  const L = forState(newSt), base = newSt.set.base, all = L.studentRows(newSt);
-  return newSt.s.map(s => {
-    const o = fin.SS(oldSt, s.id), rows = all.filter(r => r.s === s.id), single = rows.length === 0 || (rows.length === 1 && rows[0].cur === base);
-    const net = rows.length ? rows[0].net : 0, newNet = single ? net : null, diff = single ? net - o.rem : null;
-    const cancelled = sumV(rows.map(r => r.cancelledReceived)); let cls, cause = '';
-    let convertedCheck = null;
-    if (!single) { const cu = [...new Set(rows.map(r => r.cur))], conv = fin.SS(newSt, s.id); convertedCheck = { legacy: o.rem, recomputed: conv.rem, equal: conv.rem === o.rem };
-      cls = 'manual-review'; cause = \`\${cu.length > 1 ? 'charges / payments in more than one currency (' + cu.join(', ') + ')' : 'the only currency is ' + cu[0] + ', not the base ' + base}: the new ledger keeps the balance in \${cu.join(' and ')}, while the legacy figure (\${base} \${f3(o.rem)}) was one number converted at the rate saved on each record. Re-converting the same records at those saved rates gives \${base} \${f3(conv.rem)}, \${conv.rem === o.rem ? 'identical to' : 'different from'} the legacy figure. The two are not forced to match; left pending your approval.\`; }
-    else if (diff === 0) cls = 'matches';
-    else if (cancelled > 0 && diff === -cancelled) { cls = 'expected'; cause = 'payments received for a cancelled project were dropped from the legacy balance and are now counted until resolved'; }
-    else { cls = 'unexplained'; cause = 'difference is not explained by cancelled-project payments; check currency of charges vs payments'; }
-    return { id: s.id, name: s.name, old: { charges: o.tot, payments: o.paid, balance: o.rem }, new: rows.map(r => ({ cur: r.cur, charged: r.charged, receivedTotal: r.received.total, studentPayments: r.received.student, allocatedPayments: r.allocated.total, unallocatedPayments: r.unallocated,
-      courseOpening: r.received.courseOpening, projectOpening: r.received.projectOpening, datedCourse: r.received.courseDated, datedProject: r.received.projectDated, refunds: r.refunded, credits: r.credited, creditUsed: r.creditUsed, retained: r.retained, balance: r.net, creditBalance: r.creditBalance, overpaid: r.overpaid, cancelledUnresolved: r.cancelledUnresolved })),
-      difference: diff, class: cls, cause, convertedCheck };
-  });
-}
-function projects(newSt) { const L = forState(newSt); return L.projectRows(newSt).map(r => ({ ...r, class: r.status === 'Cancelled' && r.unresolved > 0 ? 'manual-review' : 'matches', cause: r.status === 'Cancelled' && r.unresolved > 0 ? 'money received for a cancelled project has no refund / credit / retained resolution yet' : '' })); }
-function courses(newSt) { const L = forState(newSt); return L.courseRows(newSt).map(r => { const miss = r.declaredCount !== r.enrolments; return { ...r, class: miss ? 'manual-review' : 'matches', cause: miss ? \`the course says \${r.declaredCount} student(s) but \${r.enrolments} enrolment record(s) exist (audit H2, not changed in Phase 2)\` : '' }; }); }
-function fx(oldSt, newSt) {
-  const L = forState(newSt), rep = L.fxReport(newSt); const changed = [];
-  for (const p of newSt.pr) { const oldPaid = fin.k_(fin.pj(oldSt, oldSt.pr.find(x => x.id === p.id)).paid, p.rx), newPaid = fin.k_(p.paid0 || 0, p.rx) + sumV(newSt.pp.filter(x => x.pr === p.id).map(x => x.bamt || 0)); if (oldPaid !== newPaid) changed.push({ kind: 'project', id: p.id, old: oldPaid, new: newPaid }); }
-  const dyn = newSt.pp.filter(x => x.fxs === 'identity' || x.fxs === 'derived' || x.fxs === 'missing').map(x => ({ id: x.id, project: x.pr, amt: x.amt, cur: x.cur, rate: x.rx }));
-  return { counts: { stored: rep.stored.length, identity: rep.identity.length, derived: rep.derived.length, missing: rep.missing.length, corrected: rep.corrected.length, undatedOpening: rep.undatedOpening.length }, stored: rep.stored, identity: rep.identity, derived: rep.derived, missing: rep.missing, undatedOpening: rep.undatedOpening,
-    usedParentRateDynamically: dyn, displayedValueChanges: changed };
-}
-function build(oldSt, newSt) {
-  const T = teachers(oldSt, newSt), S = students(oldSt, newSt), P = projects(newSt), C = courses(newSt), F = fx(oldSt, newSt);
-  const tally = a => a.reduce((o, x) => { o[x.class] = (o[x.class] || 0) + 1; return o; }, {});
-  return { base: newSt.set.base, teachers: T, students: S, projects: P, courses: C, fx: F, summary: { teachers: tally(T), students: tally(S), projects: tally(P), courses: tally(C), paymentsByStudent: { count: newSt.sp.length, unallocated: newSt.sp.length - new Set(newSt.al.map(a => a.sp)).size } } };
-}
-module.exports = { build, teachers, students, projects, courses, fx };
-`, "/app/src/reminders.js": `'use strict';
-// L6: reminders. The rule is the page's own (day-of-week + repeat frequency from the start date), ported 1:1 so the server and the page agree.
-// What this can do: while the app is running the page polls /api/reminders and shows what is due; each occurrence is surfaced once (reminder_log).
-// What it cannot do: deliver anything while the app is closed. For that, /api/reminders.ics exports upcoming occurrences with stable UIDs for any calendar app (re-importing never duplicates).
-const cairo = require('./cairo'); const log = require('./log');
-const FQ = { 'Weekly': 1, 'Every 2 weeks': 2, 'Every 4 weeks': 4, 'Once (first week only)': 0 }; // identical to the page's table
-function occurrences(st, a, b) {
-  const out = [];
-  for (const r of st.rm || []) for (let d = a; d <= b; d = cairo.addDays(d, 1)) {
-    if (!r.a || d < r.a || (r.b && d > r.b)) continue;
-    if (!(r.days || []).includes(new Date(d + 'T00:00:00Z').getUTCDay())) continue;
-    const wk = Math.floor((new Date(d) - new Date(r.a)) / 864e5 / 7), k = FQ[r.f] ?? 1; if (k ? wk % k : wk) continue;
-    out.push({ id: r.id, name: r.name, rc: r.rc, date: d, time: r.time || '' });
-  }
-  return out.sort((x, y) => (x.date + x.time).localeCompare(y.date + y.time));
-}
-// due now = date/time already reached in Cairo, within the look-back window, not marked Done, not yet surfaced
-function due(db, st, now = new Date(), lookbackDays = 7) {
-  const today = cairo.today(now), t = cairo.nowTime(now);
-  const seen = new Set(db.prepare('SELECT reminder_id||\\'|\\'||due_date k FROM reminder_log').all().map(r => r.k));
-  return occurrences(st, cairo.addDays(today, -lookbackDays), today).filter(o => (o.date < today || o.time <= t) && !(st.rd || {})[o.id + '|' + o.date] && !seen.has(o.id + '|' + o.date));
-}
-function ack(db, id, date, now = new Date()) {
-  if (!Number.isInteger(id) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date || '')) { const e = new Error('bad reminder reference'); e.code = 400; throw e; }
-  if (!db.prepare('SELECT 1 x FROM course_reminders WHERE id=?').get(id)) { const e = new Error('no such reminder'); e.code = 404; throw e; }
-  const r = db.prepare('INSERT OR IGNORE INTO reminder_log(reminder_id,due_date,surfaced_at) VALUES(?,?,?)').run(id, date, now.toISOString()); return { acknowledged: true, first: r.changes === 1 };
-}
-const esc = s => String(s || '').replace(/[\\;,]/g, m => '\\\\' + m).replace(/\\r?\\n/g, '\\\\n');
-function ics(st, courses, now = new Date(), days = 60) {
-  const a = cairo.today(now), b = cairo.addDays(a, days), nm = new Map((courses || []).map(c => [c.id, c.name]));
-  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//A+ Hub//reminders//EN', 'CALSCALE:GREGORIAN'];
-  for (const o of occurrences(st, a, b)) { if ((st.rd || {})[o.id + '|' + o.date]) continue; const d = o.date.replace(/-/g, ''), t = (o.time || '09:00').padStart(5, '0').replace(':', '') + '00';
-    L.push('BEGIN:VEVENT', \`UID:aplus-rm-\${o.id}-\${o.date}@localhost\`, \`DTSTAMP:\${now.toISOString().replace(/[-:]/g, '').slice(0, 15)}Z\`, \`DTSTART;TZID=Africa/Cairo:\${d}T\${t}\`, \`SUMMARY:\${esc(o.name || 'Reminder')}\`, \`DESCRIPTION:\${esc(nm.get(o.rc) || '')}\`, 'END:VEVENT'); }
-  L.push('END:VCALENDAR'); return L.join('\\r\\n') + '\\r\\n';
-}
-module.exports = { occurrences, due, ack, ics, FQ };
-`, "/app/src/rules.js": `'use strict';
-// Server-side business validation (M6) for rows that are NEW or CHANGED in a save. Rows that are unchanged are never re-judged, so legacy data
-// (for example completed lessons with a zero charge) is preserved exactly until the owner reviews it. Money is integer thousandths.
-const MAX_MONEY = 1e12, MAX_RATE = 1e7, MAX_HOURS = 24;
-const isDate = s => { if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false; const d = new Date(s + 'T00:00:00Z'); return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s && +s.slice(0, 4) >= 2000 && +s.slice(0, 4) <= 2100; };
-const isMoney = v => Number.isInteger(v) && Math.abs(v) <= MAX_MONEY;
-const plain = (s, max) => typeof s === 'string' && s.length <= max && !/[<>\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/.test(s);
-const FREE = r => r && (r.free === 1 || r.free === true) && typeof r.freeReason === 'string' && r.freeReason.trim().length >= 3; // explicit, auditable free / waived work
-
-// ctx: { codes:Set of currency codes, base, rates }
-function checkRow(k, r, ctx) {
-  const e = []; { const sp = require('./mapping').structProblem(k, r); if (sp) e.push(sp); } const need = (c, m) => { if (!c) e.push(m); };
-  const cur = c => c == null || c === '' || ctx.codes.has(c);
-  const pct = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
-  const rate = v => typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= MAX_RATE;
-  for (const f of ['name', 'sub', 'uni', 'notes', 'spec', 'country', 'major', 'srcd', 'meth', 'freeReason', 'reason']) if (r[f] !== undefined && r[f] !== null && !plain(String(r[f]), f === 'notes' ? 4000 : 300)) e.push(\`\${f}: text contains characters that are not allowed or is too long\`);
-  if (k === 'l') {
-    need(isDate(r.date), 'lesson date is not a valid date (YYYY-MM-DD)');
-    need(typeof r.d === 'number' && Number.isFinite(r.d) && r.d > 0 && r.d <= MAX_HOURS, \`duration must be greater than 0 and at most \${MAX_HOURS} hours\`);
-    need(isMoney(r.tr) && r.tr >= 0 && isMoney(r.sr) && r.sr >= 0, 'hourly rates must be zero or positive amounts');
-    need(isMoney(r.bcost) && r.bcost >= 0 && isMoney(r.bchg) && r.bchg >= 0, 'lesson amounts must be zero or positive');
-    need(cur(r.tc) && cur(r.sc) && cur(r.bc), 'lesson currency is not in the currency list');
-    for (const f of ['trx', 'srx']) if (r[f] != null) need(rate(r[f]), \`\${f}: exchange rate must be a positive number\`);
-    if (r.st === 'Completed') {
-      if (!(r.bchg > 0) && !FREE(r)) e.push('a completed lesson with a zero student charge needs the free-session flag and a reason');
-      if (!(r.bcost > 0) && !FREE(r) && !(r.waived === 1 && typeof r.freeReason === 'string' && r.freeReason.trim().length >= 3)) e.push('a completed lesson with a zero teacher cost needs the free/waived flag and a reason');
-    }
-  } else if (k === 'sp' || k === 'tp') {
-    need(isDate(r.date), 'payment date is not a valid date (YYYY-MM-DD)');
-    need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');
-    need(cur(r.cur) && r.cur, 'payment currency is not in the currency list');
-    need(rate(r.rx), 'payment exchange rate must be a positive number');
-    need(isMoney(r.bamt) && r.bamt > 0, 'the base-currency amount must be greater than zero');
-    // B: amount, currency, saved rate and base amount must agree. Legacy rows are never re-judged for things the edit did not touch: when only notes / method / description change,
-    // the financial snapshot (owner, date, currency, amounts, rate, source, link) is left exactly as stored and its historical rounding is reported separately.
-    const finSame = !!ctx.was && ['p', 'date', 'cur', 'amt', 'rx', 'bamt', 'bc', 'src', 'lk'].every(f => (ctx.was[f] ?? null) === (r[f] ?? null));
-    if (!finSame && isMoney(r.amt) && isMoney(r.bamt) && rate(r.rx) && r.cur) {
-      if (ctx.base && r.cur === ctx.base) need(r.rx === 1 && r.bamt === r.amt, \`a \${ctx.base} payment must have rate 1 and a base amount equal to the amount\`);
-      else if (!(ctx.base && r.bc && r.bc !== ctx.base)) need(Math.abs(Math.round(r.amt * r.rx) - r.bamt) <= 1, \`base amount \${r.bamt / 1000} does not equal amount \${r.amt / 1000} x rate \${r.rx} (rounded to 0.001)\`);
-    }
-    if (k === 'tp' && !finSame) {
-      need(r.src == null || r.src === '' || ['Live', 'Recorded', 'Project', 'Other'].includes(r.src), \`payment source "\${String(r.src).slice(0, 20)}" is not one of Live, Recorded, Project, Other\`);
-      if (r.src === 'Other') need(typeof r.srcd === 'string' && r.srcd.trim().length >= 3, 'a payment with source Other needs a description');
-      if (r.lk) { // the link points at a lesson (source Live), a recorded course (Recorded) or a project (Project); it must exist, belong to this teacher and be in the payment's currency
-        const K = ctx.keep, tgt = r.src === 'Live' ? K && K.l && K.l.get(r.lk) : r.src === 'Recorded' ? K && K.rc && K.rc.get(r.lk) : r.src === 'Project' ? K && K.pr && K.pr.get(r.lk) : null, what = { Live: 'lesson', Recorded: 'course', Project: 'project' }[r.src];
-        if (!what) e.push(\`a payment with source \${r.src || '(none)'} cannot be linked to a lesson, course or project\`);
-        else if (K) {
-          if (!tgt) e.push(\`linked \${what} \${r.lk} does not exist\`);
-          else { const owner = r.src === 'Recorded' ? tgt.inst : tgt.t, cu = r.src === 'Live' ? tgt.tc : tgt.cur;
-            if (owner !== r.p) e.push(\`linked \${what} \${r.lk} belongs to a different teacher\`);
-            if ((cu || '') !== (r.cur || '')) e.push(\`linked \${what} \${r.lk} is in \${cu}; a \${r.cur} payment cannot be linked to it - record the payment without a link and add a cross-currency settlement\`); }
-        }
-      }
-    }
-  } else if (k === 'ts') {
-    need(isDate(r.date), 'settlement date is required and must be a valid date'); need(isMoney(r.pamt) && r.pamt > 0 && isMoney(r.samt) && r.samt > 0, 'paid and settled amounts must be greater than zero');
-    need(rate(r.rx), 'settlement rate must be a positive number'); need(cur(r.pcur) && r.pcur && cur(r.scur) && r.scur && r.pcur !== r.scur, 'a settlement needs two different currencies from the currency list');
-    need(r.prov !== 'correction' || (typeof r.reason === 'string' && r.reason.trim().length >= 3), 'a correction settlement needs a reason (at least 3 characters)');
-  } else if (k === 'pp') {
-    need(isDate(r.date), 'project payment date is required and must be a valid date (YYYY-MM-DD)');
-    need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');
-    if (r.rx != null) need(rate(r.rx), 'payment exchange rate must be a positive number');
-  } else if (k === 'cp') {
-    need(isDate(r.date), 'course payment date is required and must be a valid date (YYYY-MM-DD)'); need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');
-  } else if (k === 'al') {
-    need(isDate(r.date), 'allocation date is required and must be a valid date'); need(isMoney(r.amt) && r.amt > 0, 'an allocated amount must be greater than zero');
-  } else if (k === 'ad') {
-    need(isDate(r.date), 'the date is required and must be a valid date'); need(isMoney(r.amt) && r.amt > 0, 'the amount must be greater than zero');
-    need(typeof r.reason === 'string' && r.reason.trim().length >= 3, 'a reason (at least 3 characters) is required for every refund, credit or resolution'); need(cur(r.cur) && r.cur, 'currency is not in the currency list');
-    if (r.rx != null) need(rate(r.rx), 'exchange rate must be a positive number');
-  } else if (k === 'pr') {
-    need(isMoney(r.rev) && (r.rev > 0 || FREE(r)), 'project revenue must be greater than zero (or marked free with a reason)');
-    need(pct(r.share), 'profit share must be between 0 and 100');
-    need(cur(r.cur) && r.cur, 'project currency is not in the currency list'); need(rate(r.rx), 'project exchange rate must be a positive number');
-    if (r.start) need(isDate(r.start), 'start date is not a valid date'); if (r.due) need(isDate(r.due), 'due date is not a valid date');
-    if (r.start && r.due && isDate(r.start) && isDate(r.due)) need(r.due >= r.start, 'due date is before the start date');
-    need(isMoney(r.paid0) || r.paid0 == null, 'opening paid amount is not valid'); if (r.paid0 != null) need(r.paid0 >= 0, 'opening paid amount cannot be negative');
-  } else if (k === 'rc') {
-    need(isMoney(r.price) && (r.price > 0 || FREE(r)), 'course price must be greater than zero (or marked free with a reason)');
-    need(Number.isInteger(r.n) && r.n >= 0 && r.n <= 100000, 'student count must be a whole number, zero or more');
-    need(pct(r.share), 'profit share must be between 0 and 100'); need(r.cost == null || (isMoney(r.cost) && r.cost >= 0), 'course cost cannot be negative');
-    need(cur(r.cur) && r.cur, 'course currency is not in the currency list'); need(rate(r.rx), 'course exchange rate must be a positive number');
-    if (r.date) need(isDate(r.date), 'course date is not a valid date');
-  } else if (k === 're') {
-    need(isMoney(r.price) && (r.price > 0 || FREE(r)), 'enrolment price must be greater than zero (or marked free with a reason)');
-    need(isMoney(r.paid) && r.paid >= 0, 'paid amount cannot be negative'); need(r.paid_open == null || (isMoney(r.paid_open) && r.paid_open >= 0), 'opening paid amount cannot be negative'); if (r.date) need(isDate(r.date), 'enrolment date is not a valid date');
-  } else if (k === 'sub') {
-    need(r.tr == null || (isMoney(r.tr) && r.tr >= 0), 'teacher rate cannot be negative'); need(r.sr == null || (isMoney(r.sr) && r.sr >= 0), 'student rate cannot be negative');
-  } else if (k === 't') { need(r.rate == null || (isMoney(r.rate) && r.rate >= 0), 'hourly rate cannot be negative'); }
-  else if (k === 'tt') { for (const f of ['date', 'a', 'b']) if (r[f]) need(isDate(r[f]), \`\${f}: not a valid date\`); for (const f of ['st', 'en']) if (r[f]) need(/^([01]\\d|2[0-3]):[0-5]\\d$/.test(r[f]), \`\${f}: not a valid time (HH:MM)\`); }
-  return e;
-}
-function checkSettings(state) {
-  const e = [], s = state.set || {}; for (const f of ['tr', 'sr']) if (s[f] !== undefined && s[f] !== '' && !(Number.isFinite(+s[f]) && +s[f] >= 0 && +s[f] <= MAX_MONEY / 1000)) e.push(\`setting \${f} must be zero or a positive number\`);
-  if (s.rfh !== undefined && s.rfh !== '' && s.rfh !== null && !(Number.isInteger(+s.rfh) && +s.rfh >= 1 && +s.rfh <= 720)) e.push('setting rfh (rate freshness in hours) must be a whole number from 1 to 720');
-  if (s.recog !== undefined && !['booking', 'delivered'].includes(s.recog)) e.push('setting recog must be "booking" or "delivered"');
-  if (s.name !== undefined && !plain(String(s.name), 120)) e.push('academy name contains characters that are not allowed');
-  const seen = new Set(); for (const c of state.cur || []) { if (!c || !/^[A-Z]{3}$/.test(c.c || '')) e.push(\`currency code "\${String(c && c.c).slice(0, 12)}" must be three capital letters\`); else if (seen.has(c.c)) e.push(\`currency \${c.c} is listed twice\`); else seen.add(c.c); if (!c || !plain(String(c.n), 60) || !String(c.n).trim()) e.push(\`currency name for \${String(c && c.c).slice(0, 5)} must be plain text up to 60 characters\`); }
-  for (const [code, r] of Object.entries(state.rates || {})) if (!(r && typeof r.r === 'number' && Number.isFinite(r.r) && r.r > 0 && r.r <= MAX_RATE)) e.push(\`exchange rate for \${code.slice(0, 5)} must be a positive number\`);
-  return e;
-}
-module.exports = { checkRow, checkSettings, isDate, isMoney, plain, FREE, MAX_MONEY };
+`, "/app/src/phase3.js": `'use strict';\r
+// Phase 3 server rules used by applySave: subject references (M7), university spelling (L1), duplicate payments (M9), linked-lesson protection (B), rate labels (M5).\r
+const rates = require('./rates');\r
+const norm = s => String(s || '').toLowerCase().replace(/[.,'’"()\\-_/]+/g, ' ').replace(/\\s+/g, ' ').trim();\r
+\r
+// M7: timetable entries carry a real subject reference; the text column is always the subject's current name. Only new / changed rows are touched.\r
+function normaliseTimetable(A, old) {\r
+  const problems = [], was = new Map((old.tt || []).map(r => [r.id, r]));\r
+  const subs = [...A.keep.sub.values()], byName = new Map();\r
+  subs.forEach(z => { const k = norm(z.name); byName.set(k, (byName.get(k) || []).concat(z)); });\r
+  for (const [id, row] of A.keep.tt) {\r
+    const w = was.get(id);\r
+    // the text follows the referenced subject ONLY when that subject was renamed in this save, or the row itself is new / changed. An untouched row is never rewritten (AUD2-011).\r
+    if (row.subj && A.keep.sub.get(row.subj) && row.sub !== A.keep.sub.get(row.subj).name) {\r
+      const oldSub = (old.sub || []).find(z => z.id === row.subj), renamed = oldSub && oldSub.name !== A.keep.sub.get(row.subj).name, touched = !w || (w.sub ?? '') !== (row.sub ?? '') || (w.subj ?? 0) !== (row.subj ?? 0);\r
+      if (renamed || touched) { row.sub = A.keep.sub.get(row.subj).name; continue; }\r
+      continue;\r
+    }\r
+    if (w && (w.sub ?? '') === (row.sub ?? '') && (w.subj ?? 0) === (row.subj ?? 0)) continue; // untouched legacy rows are preserved exactly\r
+    if (row.subj) { const z = A.keep.sub.get(row.subj); if (!z) { problems.push(\`timetable \${id}: subject reference \${row.subj} does not exist\`); continue; } row.sub = z.name; continue; }\r
+    if (!row.sub) continue;\r
+    const m = byName.get(norm(row.sub)) || [];\r
+    if (m.length === 1) { row.subj = m[0].id; row.sub = m[0].name; }\r
+    else problems.push(\`timetable \${id}: subject "\${String(row.sub).slice(0, 60)}" is \${m.length ? 'ambiguous' : 'not in the subject list'}; choose a subject from the list\`);\r
+  }\r
+  return problems;\r
+}\r
+\r
+// L1: a new or edited record whose university differs from an existing one only by case / spacing / punctuation gets the existing spelling. Existing records are never rewritten.\r
+function normaliseUniversities(A, old) {\r
+  const count = new Map(); // normalised -> Map(spelling -> n)\r
+  const add = v => { if (!v) return; const k = norm(v); if (!k) return; const m = count.get(k) || new Map(); m.set(v, (m.get(v) || 0) + 1); count.set(k, m); };\r
+  for (const k of ['s', 'sub', 'pr', 'rc']) (old[k] || []).forEach(r => add(r.uni));\r
+  const best = k => { const m = count.get(k); if (!m) return null; return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0]; };\r
+  const changed = [];\r
+  for (const k of ['s', 'sub', 'pr', 'rc']) { const was = new Map((old[k] || []).map(r => [r.id, r]));\r
+    for (const [id, row] of A.keep[k]) { if (!row.uni) continue; const w = was.get(id); if (w && w.uni === row.uni) continue; const canon = best(norm(row.uni)); if (canon && canon !== row.uni) { changed.push({ k, id, from: row.uni, to: canon }); row.uni = canon; } } }\r
+  return changed;\r
+}\r
+\r
+// M9: the same payment (owner, date, amount, currency) entered twice needs a typed reason. Same-save duplicates count too.\r
+function duplicatePayments(A, old) {\r
+  const need = [], key = {\r
+    sp: r => ['sp', r.p, r.date, r.amt, r.cur], tp: r => ['tp', r.p, r.date, r.amt, r.cur], pp: r => ['pp', r.pr, r.date || '', r.amt], cp: r => ['cp', r.re, r.date, r.amt] };\r
+  for (const k of Object.keys(key)) {\r
+    const seen = new Map(); (old[k] || []).forEach(r => seen.set(JSON.stringify(key[k](r)), r.id));\r
+    const was = new Set((old[k] || []).map(r => r.id));\r
+    for (const [id, row] of A.keep[k]) { if (was.has(id)) continue; const kk = JSON.stringify(key[k](row)); if (seen.has(kk)) need.push({ k, id, label: 'possible DUPLICATE payment - an identical one (same person, date and amount) already exists (#' + seen.get(kk) + ')' }); else seen.set(kk, id); }\r
+  }\r
+  return need;\r
+}\r
+\r
+// B: changing who / when / what a linked lesson is changes attendance and money history; it needs a reason. Same for removing a student or changing the subject of a timetable session that already has lessons.\r
+function linkedEdits(A, old, upd) {\r
+  const need = [], wasL = new Map((old.l || []).map(r => [r.id, r]));\r
+  for (const id of upd.l || []) { const w = wasL.get(id), n = A.keep.l.get(id); if (!w || !w.tt) continue; if (['s', 'date', 'sub', 't', 'od', 'tt'].some(f => (w[f] ?? null) !== (n[f] ?? null))) need.push({ k: 'l', id, label: 'change of student / date / subject of a lesson recorded from the timetable' }); }\r
+  const wasT = new Map((old.tt || []).map(r => [r.id, r]));\r
+  for (const id of upd.tt || []) { const w = wasT.get(id), n = A.keep.tt.get(id); const linked = (old.l || []).filter(l => l.tt === id); if (!linked.length) continue;\r
+    const dropped = (w.s || []).filter(s => !(n.s || []).includes(s) && linked.some(l => l.s === s));\r
+    if (dropped.length || (w.subj ?? null) !== (n.subj ?? null) || (!w.subj && !n.subj && (w.sub ?? '') !== (n.sub ?? ''))) need.push({ k: 'tt', id, label: 'change of subject / students of a timetable session that already has recorded lessons' }); }\r
+  return need;\r
+}\r
+\r
+// B: an excess payment is legitimate (advance / credit) but must be confirmed explicitly with a typed reason. Only NEW or CHANGED teacher payments that make a currency balance MORE negative are listed.\r
+function overpayments(A, old, ins, upd, state, forState) {\r
+  const need = [], ids = [...(ins.tp || []), ...(upd.tp || [])]; if (!ids.length) return need;\r
+  const Ln = forState(state), Lo = forState(old), key = (r) => r.t + '|' + r.cur, bal = (L, st) => { const m = {}; L.teacherRows(st).forEach(r => { m[key(r)] = r.remaining.total; }); return m; };\r
+  const after = bal(Ln, state), before = bal(Lo, old), seen = new Set();\r
+  for (const id of ids) { const p = A.keep.tp.get(id); if (!p) continue; const k = p.p + '|' + (p.cur || '—'), a = after[k] ?? 0, b = before[k] ?? 0;\r
+    if (a < 0 && a < Math.min(0, b) && !seen.has(k)) { seen.add(k); need.push({ k: 'tp', id, label: \`EXCESS payment - after this payment the teacher would be over-paid by \${(-a / 1000).toFixed(3)} \${p.cur || ''} (advance / credit). Confirm with a reason if this is an advance.\` }); } }\r
+  return need;\r
+}\r
+// M5: a rate may be labelled 'Live' only if it carries a recent timestamp.\r
+function rateLabelProblems(newRates, oldRates, now, hours) {\r
+  const p = [];\r
+  for (const [code, r] of Object.entries(newRates || {})) { const was = (oldRates || {})[code]; if (r.type !== 'Live') continue; if (was && was.r === r.r && was.t === r.t && was.type === r.type) continue; // unchanged legacy label is left alone\r
+    const t = r.t ? Date.parse(r.t) : NaN; if (!Number.isFinite(t) || Math.abs(Date.parse(now) - t) > 36e5 * (hours || rates.STALE_HOURS)) p.push(\`rate \${String(code).slice(0, 5)}: labelled Live but not refreshed recently - save it as Manual or refresh it first\`); }\r
+  return p;\r
+}\r
+module.exports = { overpayments, normaliseTimetable, normaliseUniversities, duplicatePayments, linkedEdits, rateLabelProblems, norm };\r
+`, "/app/src/rates.js": `'use strict';\r
+// M5: what a saved exchange rate may be called. 'current' = refreshed recently, 'stale' = old (never shown as Live), 'missing' = no usable value, 'manual' = typed by hand.\r
+const STALE_HOURS = 36;\r
+function status(entry, base, code, now = Date.now(), staleHours = STALE_HOURS) {\r
+  if (code === base) return { state: 'base', label: 'Base currency (1)' };\r
+  if (!entry || !(entry.r > 0)) return { state: 'missing', label: 'No rate' };\r
+  const t = entry.t ? Date.parse(entry.t) : NaN;\r
+  if ((entry.type || '') === 'Manual') return { state: 'manual', label: 'Manual' + (Number.isFinite(t) ? ' (' + entry.t.slice(0, 10) + ')' : '') };\r
+  if (!Number.isFinite(t)) return { state: 'stale', label: 'Unknown age - not Live' };\r
+  const h = (now - t) / 36e5;\r
+  if (h > staleHours || h < -1) return { state: 'stale', label: 'Stale (' + entry.t.slice(0, 10) + ')', ageHours: Math.round(h) };\r
+  return { state: 'current', label: entry.type === 'Live' ? 'Live' : (entry.type || 'Saved'), ageHours: Math.round(h) };\r
+}\r
+const hoursOf = st => { const v = Number(st && st.set && st.set.rfh); return Number.isFinite(v) && v >= 1 && v <= 720 ? v : STALE_HOURS; }; // the owner's freshness setting, else the 36 h default\r
+function report(st, now = Date.now()) { const base = st.set.base, h = hoursOf(st); return Object.fromEntries((st.cur || []).map(c => [c.c, status((st.rates || {})[c.c], base, c.c, now, h)])); }\r
+module.exports = { status, report, hoursOf, STALE_HOURS };\r
+`, "/app/src/reconcile.js": `'use strict';\r
+// Read-only financial reconciliation (Phase 2). Compares what the application DISPLAYED before Phase 2 (legacy formulas, taken from the original state) with what the shared\r
+// ledger calculates (src/ledger.js, taken from the same data after migration 003). It never writes anything and never proposes to change a stored amount: every difference is\r
+// explained and classified as  matches | expected | unexplained | manual-review.\r
+const fin = require('./finance'); const { forState } = require('./ledger-server');\r
+const f3 = v => (v / 1000).toFixed(3);\r
+const sumV = a => a.reduce((q, x) => q + x, 0);\r
+\r
+function teachers(oldSt, newSt) {\r
+  const L = forState(newSt);\r
+  return newSt.t.map(t => {\r
+    const ts = fin.TS(oldSt, t.id), rcE = oldSt.rc.filter(c => c.inst == t.id).reduce((a, c) => a + fin.rcc(c).bshare, 0), prE = oldSt.pr.filter(p => p.t == t.id && p.status != 'Cancelled').reduce((a, p) => a + fin.pj(oldSt, p).bshare, 0);\r
+    const old = { liveEarned: ts.cost, recordedEarned: rcE, projectEarned: prE, paid: ts.paid, listBalance: ts.rem, cardBalance: ts.cost + rcE + prE - ts.paid };\r
+    const b = L.teacherBalance(newSt, t.id), nb = b.base, rows = b.rows;\r
+    const dList = nb.remaining.total - old.listBalance, dCard = nb.remaining.total - old.cardBalance; let cls, cause;\r
+    if (dList === 0 && dCard === 0) { cls = 'matches'; cause = ''; }\r
+    else if (dCard === 0 && dList === rcE + prE) { cls = 'expected'; cause = \`the Payments page / teacher details / reports showed lesson earnings only (\${f3(old.liveEarned)}) and left out recorded-course (\${f3(rcE)}) and project (\${f3(prE)}) earnings; the new figure equals the all-category teacher-card figure\`; }\r
+    else { cls = 'unexplained'; cause = 'new balance differs from both legacy formulas by an amount that is not the omitted recorded/project earnings'; }\r
+    const split = rows.length > 1 && rows.some(r => r.remaining.total > 0) && rows.some(r => r.remaining.total < 0);\r
+    return { id: t.id, name: t.name, status: t.status, old, new: { earned: nb.earned, paid: nb.paid, unassigned: nb.unassigned, outstanding: nb.remaining.total, byCurrency: rows.map(r => ({ cur: r.cur, earned: r.earned.total, paid: r.paid.total, remaining: r.remaining.total, byType: r.remaining })) },\r
+      diffVsListBalance: dList, diffVsCardBalance: dCard, class: cls, cause, overpaid: b.overpaid, paidInOtherCurrency: split, unassignedPayments: b.unassignedCount, baseMismatch: nb.mismatch };\r
+  });\r
+}\r
+function students(oldSt, newSt) {\r
+  const L = forState(newSt), base = newSt.set.base, all = L.studentRows(newSt);\r
+  return newSt.s.map(s => {\r
+    const o = fin.SS(oldSt, s.id), rows = all.filter(r => r.s === s.id), single = rows.length === 0 || (rows.length === 1 && rows[0].cur === base);\r
+    const net = rows.length ? rows[0].net : 0, newNet = single ? net : null, diff = single ? net - o.rem : null;\r
+    const cancelled = sumV(rows.map(r => r.cancelledReceived)); let cls, cause = '';\r
+    let convertedCheck = null;\r
+    if (!single) { const cu = [...new Set(rows.map(r => r.cur))], conv = fin.SS(newSt, s.id); convertedCheck = { legacy: o.rem, recomputed: conv.rem, equal: conv.rem === o.rem };\r
+      cls = 'manual-review'; cause = \`\${cu.length > 1 ? 'charges / payments in more than one currency (' + cu.join(', ') + ')' : 'the only currency is ' + cu[0] + ', not the base ' + base}: the new ledger keeps the balance in \${cu.join(' and ')}, while the legacy figure (\${base} \${f3(o.rem)}) was one number converted at the rate saved on each record. Re-converting the same records at those saved rates gives \${base} \${f3(conv.rem)}, \${conv.rem === o.rem ? 'identical to' : 'different from'} the legacy figure. The two are not forced to match; left pending your approval.\`; }\r
+    else if (diff === 0) cls = 'matches';\r
+    else if (cancelled > 0 && diff === -cancelled) { cls = 'expected'; cause = 'payments received for a cancelled project were dropped from the legacy balance and are now counted until resolved'; }\r
+    else { cls = 'unexplained'; cause = 'difference is not explained by cancelled-project payments; check currency of charges vs payments'; }\r
+    return { id: s.id, name: s.name, old: { charges: o.tot, payments: o.paid, balance: o.rem }, new: rows.map(r => ({ cur: r.cur, charged: r.charged, receivedTotal: r.received.total, studentPayments: r.received.student, allocatedPayments: r.allocated.total, unallocatedPayments: r.unallocated,\r
+      courseOpening: r.received.courseOpening, projectOpening: r.received.projectOpening, datedCourse: r.received.courseDated, datedProject: r.received.projectDated, refunds: r.refunded, credits: r.credited, creditUsed: r.creditUsed, retained: r.retained, balance: r.net, creditBalance: r.creditBalance, overpaid: r.overpaid, cancelledUnresolved: r.cancelledUnresolved })),\r
+      difference: diff, class: cls, cause, convertedCheck };\r
+  });\r
+}\r
+function projects(newSt) { const L = forState(newSt); return L.projectRows(newSt).map(r => ({ ...r, class: r.status === 'Cancelled' && r.unresolved > 0 ? 'manual-review' : 'matches', cause: r.status === 'Cancelled' && r.unresolved > 0 ? 'money received for a cancelled project has no refund / credit / retained resolution yet' : '' })); }\r
+function courses(newSt) { const L = forState(newSt); return L.courseRows(newSt).map(r => { const miss = r.declaredCount !== r.enrolments; return { ...r, class: miss ? 'manual-review' : 'matches', cause: miss ? \`the course says \${r.declaredCount} student(s) but \${r.enrolments} enrolment record(s) exist (audit H2, not changed in Phase 2)\` : '' }; }); }\r
+function fx(oldSt, newSt) {\r
+  const L = forState(newSt), rep = L.fxReport(newSt); const changed = [];\r
+  for (const p of newSt.pr) { const oldPaid = fin.k_(fin.pj(oldSt, oldSt.pr.find(x => x.id === p.id)).paid, p.rx), newPaid = fin.k_(p.paid0 || 0, p.rx) + sumV(newSt.pp.filter(x => x.pr === p.id).map(x => x.bamt || 0)); if (oldPaid !== newPaid) changed.push({ kind: 'project', id: p.id, old: oldPaid, new: newPaid }); }\r
+  const dyn = newSt.pp.filter(x => x.fxs === 'identity' || x.fxs === 'derived' || x.fxs === 'missing').map(x => ({ id: x.id, project: x.pr, amt: x.amt, cur: x.cur, rate: x.rx }));\r
+  return { counts: { stored: rep.stored.length, identity: rep.identity.length, derived: rep.derived.length, missing: rep.missing.length, corrected: rep.corrected.length, undatedOpening: rep.undatedOpening.length }, stored: rep.stored, identity: rep.identity, derived: rep.derived, missing: rep.missing, undatedOpening: rep.undatedOpening,\r
+    usedParentRateDynamically: dyn, displayedValueChanges: changed };\r
+}\r
+function build(oldSt, newSt) {\r
+  const T = teachers(oldSt, newSt), S = students(oldSt, newSt), P = projects(newSt), C = courses(newSt), F = fx(oldSt, newSt);\r
+  const tally = a => a.reduce((o, x) => { o[x.class] = (o[x.class] || 0) + 1; return o; }, {});\r
+  return { base: newSt.set.base, teachers: T, students: S, projects: P, courses: C, fx: F, summary: { teachers: tally(T), students: tally(S), projects: tally(P), courses: tally(C), paymentsByStudent: { count: newSt.sp.length, unallocated: newSt.sp.length - new Set(newSt.al.map(a => a.sp)).size } } };\r
+}\r
+module.exports = { build, teachers, students, projects, courses, fx };\r
+`, "/app/src/reminders.js": `'use strict';\r
+// L6: reminders. The rule is the page's own (day-of-week + repeat frequency from the start date), ported 1:1 so the server and the page agree.\r
+// What this can do: while the app is running the page polls /api/reminders and shows what is due; each occurrence is surfaced once (reminder_log).\r
+// What it cannot do: deliver anything while the app is closed. For that, /api/reminders.ics exports upcoming occurrences with stable UIDs for any calendar app (re-importing never duplicates).\r
+const cairo = require('./cairo'); const log = require('./log');\r
+const FQ = { 'Weekly': 1, 'Every 2 weeks': 2, 'Every 4 weeks': 4, 'Once (first week only)': 0 }; // identical to the page's table\r
+function occurrences(st, a, b) {\r
+  const out = [];\r
+  for (const r of st.rm || []) for (let d = a; d <= b; d = cairo.addDays(d, 1)) {\r
+    if (!r.a || d < r.a || (r.b && d > r.b)) continue;\r
+    if (!(r.days || []).includes(new Date(d + 'T00:00:00Z').getUTCDay())) continue;\r
+    const wk = Math.floor((new Date(d) - new Date(r.a)) / 864e5 / 7), k = FQ[r.f] ?? 1; if (k ? wk % k : wk) continue;\r
+    out.push({ id: r.id, name: r.name, rc: r.rc, date: d, time: r.time || '' });\r
+  }\r
+  return out.sort((x, y) => (x.date + x.time).localeCompare(y.date + y.time));\r
+}\r
+// due now = date/time already reached in Cairo, within the look-back window, not marked Done, not yet surfaced\r
+function due(db, st, now = new Date(), lookbackDays = 7) {\r
+  const today = cairo.today(now), t = cairo.nowTime(now);\r
+  const seen = new Set(db.prepare('SELECT reminder_id||\\'|\\'||due_date k FROM reminder_log').all().map(r => r.k));\r
+  return occurrences(st, cairo.addDays(today, -lookbackDays), today).filter(o => (o.date < today || o.time <= t) && !(st.rd || {})[o.id + '|' + o.date] && !seen.has(o.id + '|' + o.date));\r
+}\r
+function ack(db, id, date, now = new Date()) {\r
+  if (!Number.isInteger(id) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date || '')) { const e = new Error('bad reminder reference'); e.code = 400; throw e; }\r
+  if (!db.prepare('SELECT 1 x FROM course_reminders WHERE id=?').get(id)) { const e = new Error('no such reminder'); e.code = 404; throw e; }\r
+  const r = db.prepare('INSERT OR IGNORE INTO reminder_log(reminder_id,due_date,surfaced_at) VALUES(?,?,?)').run(id, date, now.toISOString()); return { acknowledged: true, first: r.changes === 1 };\r
+}\r
+const esc = s => String(s || '').replace(/[\\;,]/g, m => '\\\\' + m).replace(/\\r?\\n/g, '\\\\n');\r
+function ics(st, courses, now = new Date(), days = 60) {\r
+  const a = cairo.today(now), b = cairo.addDays(a, days), nm = new Map((courses || []).map(c => [c.id, c.name]));\r
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//A+ Hub//reminders//EN', 'CALSCALE:GREGORIAN'];\r
+  for (const o of occurrences(st, a, b)) { if ((st.rd || {})[o.id + '|' + o.date]) continue; const d = o.date.replace(/-/g, ''), t = (o.time || '09:00').padStart(5, '0').replace(':', '') + '00';\r
+    L.push('BEGIN:VEVENT', \`UID:aplus-rm-\${o.id}-\${o.date}@localhost\`, \`DTSTAMP:\${now.toISOString().replace(/[-:]/g, '').slice(0, 15)}Z\`, \`DTSTART;TZID=Africa/Cairo:\${d}T\${t}\`, \`SUMMARY:\${esc(o.name || 'Reminder')}\`, \`DESCRIPTION:\${esc(nm.get(o.rc) || '')}\`, 'END:VEVENT'); }\r
+  L.push('END:VCALENDAR'); return L.join('\\r\\n') + '\\r\\n';\r
+}\r
+module.exports = { occurrences, due, ack, ics, FQ };\r
+`, "/app/src/rules.js": `'use strict';\r
+// Server-side business validation (M6) for rows that are NEW or CHANGED in a save. Rows that are unchanged are never re-judged, so legacy data\r
+// (for example completed lessons with a zero charge) is preserved exactly until the owner reviews it. Money is integer thousandths.\r
+const MAX_MONEY = 1e12, MAX_RATE = 1e7, MAX_HOURS = 24;\r
+const isDate = s => { if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false; const d = new Date(s + 'T00:00:00Z'); return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s && +s.slice(0, 4) >= 2000 && +s.slice(0, 4) <= 2100; };\r
+const isMoney = v => Number.isInteger(v) && Math.abs(v) <= MAX_MONEY;\r
+const plain = (s, max) => typeof s === 'string' && s.length <= max && !/[<>\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/.test(s);\r
+const FREE = r => r && (r.free === 1 || r.free === true) && typeof r.freeReason === 'string' && r.freeReason.trim().length >= 3; // explicit, auditable free / waived work\r
+\r
+// ctx: { codes:Set of currency codes, base, rates }\r
+function checkRow(k, r, ctx) {\r
+  const e = []; { const sp = require('./mapping').structProblem(k, r); if (sp) e.push(sp); } const need = (c, m) => { if (!c) e.push(m); };\r
+  const cur = c => c == null || c === '' || ctx.codes.has(c);\r
+  const pct = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;\r
+  const rate = v => typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= MAX_RATE;\r
+  for (const f of ['name', 'sub', 'uni', 'notes', 'spec', 'country', 'major', 'srcd', 'meth', 'freeReason', 'reason']) if (r[f] !== undefined && r[f] !== null && !plain(String(r[f]), f === 'notes' ? 4000 : 300)) e.push(\`\${f}: text contains characters that are not allowed or is too long\`);\r
+  if (k === 'l') {\r
+    need(isDate(r.date), 'lesson date is not a valid date (YYYY-MM-DD)');\r
+    need(typeof r.d === 'number' && Number.isFinite(r.d) && r.d > 0 && r.d <= MAX_HOURS, \`duration must be greater than 0 and at most \${MAX_HOURS} hours\`);\r
+    need(isMoney(r.tr) && r.tr >= 0 && isMoney(r.sr) && r.sr >= 0, 'hourly rates must be zero or positive amounts');\r
+    need(isMoney(r.bcost) && r.bcost >= 0 && isMoney(r.bchg) && r.bchg >= 0, 'lesson amounts must be zero or positive');\r
+    need(cur(r.tc) && cur(r.sc) && cur(r.bc), 'lesson currency is not in the currency list');\r
+    for (const f of ['trx', 'srx']) if (r[f] != null) need(rate(r[f]), \`\${f}: exchange rate must be a positive number\`);\r
+    if (r.st === 'Completed') {\r
+      if (!(r.bchg > 0) && !FREE(r)) e.push('a completed lesson with a zero student charge needs the free-session flag and a reason');\r
+      if (!(r.bcost > 0) && !FREE(r) && !(r.waived === 1 && typeof r.freeReason === 'string' && r.freeReason.trim().length >= 3)) e.push('a completed lesson with a zero teacher cost needs the free/waived flag and a reason');\r
+    }\r
+  } else if (k === 'sp' || k === 'tp') {\r
+    need(isDate(r.date), 'payment date is not a valid date (YYYY-MM-DD)');\r
+    need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');\r
+    need(cur(r.cur) && r.cur, 'payment currency is not in the currency list');\r
+    need(rate(r.rx), 'payment exchange rate must be a positive number');\r
+    need(isMoney(r.bamt) && r.bamt > 0, 'the base-currency amount must be greater than zero');\r
+    // B: amount, currency, saved rate and base amount must agree. Legacy rows are never re-judged for things the edit did not touch: when only notes / method / description change,\r
+    // the financial snapshot (owner, date, currency, amounts, rate, source, link) is left exactly as stored and its historical rounding is reported separately.\r
+    const finSame = !!ctx.was && ['p', 'date', 'cur', 'amt', 'rx', 'bamt', 'bc', 'src', 'lk'].every(f => (ctx.was[f] ?? null) === (r[f] ?? null));\r
+    if (!finSame && isMoney(r.amt) && isMoney(r.bamt) && rate(r.rx) && r.cur) {\r
+      if (ctx.base && r.cur === ctx.base) need(r.rx === 1 && r.bamt === r.amt, \`a \${ctx.base} payment must have rate 1 and a base amount equal to the amount\`);\r
+      else if (!(ctx.base && r.bc && r.bc !== ctx.base)) need(Math.abs(Math.round(r.amt * r.rx) - r.bamt) <= 1, \`base amount \${r.bamt / 1000} does not equal amount \${r.amt / 1000} x rate \${r.rx} (rounded to 0.001)\`);\r
+    }\r
+    if (k === 'tp' && !finSame) {\r
+      need(r.src == null || r.src === '' || ['Live', 'Recorded', 'Project', 'Other'].includes(r.src), \`payment source "\${String(r.src).slice(0, 20)}" is not one of Live, Recorded, Project, Other\`);\r
+      if (r.src === 'Other') need(typeof r.srcd === 'string' && r.srcd.trim().length >= 3, 'a payment with source Other needs a description');\r
+      if (r.lk) { // the link points at a lesson (source Live), a recorded course (Recorded) or a project (Project); it must exist, belong to this teacher and be in the payment's currency\r
+        const K = ctx.keep, tgt = r.src === 'Live' ? K && K.l && K.l.get(r.lk) : r.src === 'Recorded' ? K && K.rc && K.rc.get(r.lk) : r.src === 'Project' ? K && K.pr && K.pr.get(r.lk) : null, what = { Live: 'lesson', Recorded: 'course', Project: 'project' }[r.src];\r
+        if (!what) e.push(\`a payment with source \${r.src || '(none)'} cannot be linked to a lesson, course or project\`);\r
+        else if (K) {\r
+          if (!tgt) e.push(\`linked \${what} \${r.lk} does not exist\`);\r
+          else { const owner = r.src === 'Recorded' ? tgt.inst : tgt.t, cu = r.src === 'Live' ? tgt.tc : tgt.cur;\r
+            if (owner !== r.p) e.push(\`linked \${what} \${r.lk} belongs to a different teacher\`);\r
+            if ((cu || '') !== (r.cur || '')) e.push(\`linked \${what} \${r.lk} is in \${cu}; a \${r.cur} payment cannot be linked to it - record the payment without a link and add a cross-currency settlement\`); }\r
+        }\r
+      }\r
+    }\r
+  } else if (k === 'ts') {\r
+    need(isDate(r.date), 'settlement date is required and must be a valid date'); need(isMoney(r.pamt) && r.pamt > 0 && isMoney(r.samt) && r.samt > 0, 'paid and settled amounts must be greater than zero');\r
+    need(rate(r.rx), 'settlement rate must be a positive number'); need(cur(r.pcur) && r.pcur && cur(r.scur) && r.scur && r.pcur !== r.scur, 'a settlement needs two different currencies from the currency list');\r
+    need(r.prov !== 'correction' || (typeof r.reason === 'string' && r.reason.trim().length >= 3), 'a correction settlement needs a reason (at least 3 characters)');\r
+  } else if (k === 'pp') {\r
+    need(isDate(r.date), 'project payment date is required and must be a valid date (YYYY-MM-DD)');\r
+    need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');\r
+    if (r.rx != null) need(rate(r.rx), 'payment exchange rate must be a positive number');\r
+  } else if (k === 'cp') {\r
+    need(isDate(r.date), 'course payment date is required and must be a valid date (YYYY-MM-DD)'); need(isMoney(r.amt) && r.amt > 0, 'a payment amount must be greater than zero');\r
+  } else if (k === 'al') {\r
+    need(isDate(r.date), 'allocation date is required and must be a valid date'); need(isMoney(r.amt) && r.amt > 0, 'an allocated amount must be greater than zero');\r
+  } else if (k === 'ad') {\r
+    need(isDate(r.date), 'the date is required and must be a valid date'); need(isMoney(r.amt) && r.amt > 0, 'the amount must be greater than zero');\r
+    need(typeof r.reason === 'string' && r.reason.trim().length >= 3, 'a reason (at least 3 characters) is required for every refund, credit or resolution'); need(cur(r.cur) && r.cur, 'currency is not in the currency list');\r
+    if (r.rx != null) need(rate(r.rx), 'exchange rate must be a positive number');\r
+  } else if (k === 'pr') {\r
+    need(isMoney(r.rev) && (r.rev > 0 || FREE(r)), 'project revenue must be greater than zero (or marked free with a reason)');\r
+    need(pct(r.share), 'profit share must be between 0 and 100');\r
+    need(cur(r.cur) && r.cur, 'project currency is not in the currency list'); need(rate(r.rx), 'project exchange rate must be a positive number');\r
+    if (r.start) need(isDate(r.start), 'start date is not a valid date'); if (r.due) need(isDate(r.due), 'due date is not a valid date');\r
+    if (r.start && r.due && isDate(r.start) && isDate(r.due)) need(r.due >= r.start, 'due date is before the start date');\r
+    need(isMoney(r.paid0) || r.paid0 == null, 'opening paid amount is not valid'); if (r.paid0 != null) need(r.paid0 >= 0, 'opening paid amount cannot be negative');\r
+  } else if (k === 'rc') {\r
+    need(isMoney(r.price) && (r.price > 0 || FREE(r)), 'course price must be greater than zero (or marked free with a reason)');\r
+    need(Number.isInteger(r.n) && r.n >= 0 && r.n <= 100000, 'student count must be a whole number, zero or more');\r
+    need(pct(r.share), 'profit share must be between 0 and 100'); need(r.cost == null || (isMoney(r.cost) && r.cost >= 0), 'course cost cannot be negative');\r
+    need(cur(r.cur) && r.cur, 'course currency is not in the currency list'); need(rate(r.rx), 'course exchange rate must be a positive number');\r
+    if (r.date) need(isDate(r.date), 'course date is not a valid date');\r
+  } else if (k === 're') {\r
+    need(isMoney(r.price) && (r.price > 0 || FREE(r)), 'enrolment price must be greater than zero (or marked free with a reason)');\r
+    need(isMoney(r.paid) && r.paid >= 0, 'paid amount cannot be negative'); need(r.paid_open == null || (isMoney(r.paid_open) && r.paid_open >= 0), 'opening paid amount cannot be negative'); if (r.date) need(isDate(r.date), 'enrolment date is not a valid date');\r
+  } else if (k === 'sub') {\r
+    need(r.tr == null || (isMoney(r.tr) && r.tr >= 0), 'teacher rate cannot be negative'); need(r.sr == null || (isMoney(r.sr) && r.sr >= 0), 'student rate cannot be negative');\r
+  } else if (k === 't') { need(r.rate == null || (isMoney(r.rate) && r.rate >= 0), 'hourly rate cannot be negative'); }\r
+  else if (k === 'tt') { for (const f of ['date', 'a', 'b']) if (r[f]) need(isDate(r[f]), \`\${f}: not a valid date\`); for (const f of ['st', 'en']) if (r[f]) need(/^([01]\\d|2[0-3]):[0-5]\\d$/.test(r[f]), \`\${f}: not a valid time (HH:MM)\`); }\r
+  return e;\r
+}\r
+function checkSettings(state) {\r
+  const e = [], s = state.set || {}; for (const f of ['tr', 'sr']) if (s[f] !== undefined && s[f] !== '' && !(Number.isFinite(+s[f]) && +s[f] >= 0 && +s[f] <= MAX_MONEY / 1000)) e.push(\`setting \${f} must be zero or a positive number\`);\r
+  if (s.rfh !== undefined && s.rfh !== '' && s.rfh !== null && !(Number.isInteger(+s.rfh) && +s.rfh >= 1 && +s.rfh <= 720)) e.push('setting rfh (rate freshness in hours) must be a whole number from 1 to 720');\r
+  if (s.recog !== undefined && !['booking', 'delivered'].includes(s.recog)) e.push('setting recog must be "booking" or "delivered"');\r
+  if (s.name !== undefined && !plain(String(s.name), 120)) e.push('academy name contains characters that are not allowed');\r
+  const seen = new Set(); for (const c of state.cur || []) { if (!c || !/^[A-Z]{3}$/.test(c.c || '')) e.push(\`currency code "\${String(c && c.c).slice(0, 12)}" must be three capital letters\`); else if (seen.has(c.c)) e.push(\`currency \${c.c} is listed twice\`); else seen.add(c.c); if (!c || !plain(String(c.n), 60) || !String(c.n).trim()) e.push(\`currency name for \${String(c && c.c).slice(0, 5)} must be plain text up to 60 characters\`); }\r
+  for (const [code, r] of Object.entries(state.rates || {})) if (!(r && typeof r.r === 'number' && Number.isFinite(r.r) && r.r > 0 && r.r <= MAX_RATE)) e.push(\`exchange rate for \${code.slice(0, 5)} must be a positive number\`);\r
+  return e;\r
+}\r
+module.exports = { checkRow, checkSettings, isDate, isMoney, plain, FREE, MAX_MONEY };\r
 `, "/app/src/save.js": `'use strict';\r
 // POST /api/save: the client sends its whole new state; the server validates it, diffs it against the database and applies the difference in ONE transaction.\r
 const { E, ORDER } = require('./mapping');\r
@@ -29428,31 +29428,31 @@ function applySave_(db, { baseRev, state, confirm = [], now = new Date().toISOSt
 // normalise an incoming row the way the database returns it, so unchanged rows are not rewritten\r
 function canon(k, r) { const o = JSON.parse(JSON.stringify(r)); delete o.__nullify; delete o.__dropLinks; const nf = { tt: ['t', 'subj'], sub: ['inst'], pr: ['subj', 't', 's'], rc: ['subj', 'inst'], l: ['tt'] }[k] || []; for (const f of nf) if (o[f] === 0 || o[f] === '') delete o[f]; if (o.ex && !Object.keys(o.ex).length) delete o.ex; for (const [f, sp] of Object.entries(E[k].cols)) if (sp[0] === 'b' && o[f] === true) o[f] = 1; return o; }\r
 module.exports = { applySave, getState, impact, SaveError, getRev, DEFAULT, hasHistory };\r
-`, "/app/src/scheduler.js": `'use strict';
-// Automatic backups (C1): at start-up if the newest automatic backup is older than the interval, then re-checked every 15 minutes.
-// A failure is never silent: it is kept in \`status\`, shown in the backup panel, and logged. A second-location copy is verified by checksum.
-const B = require('./backup'); const config = require('./config'); const audit = require('./audit');
-function makeScheduler(ctx, log = () => {}) {
-  const status = { lastAutoAt: null, lastAutoName: null, lastError: null, lastErrorAt: null, second: { dir: '', lastOkAt: null, lastError: null }, running: false };
-  function newestAuto() { return B.list(ctx).find(b => /^aplus-.*-auto\\d*\\.sqlite$/.test(b.name) || b.kind === 'auto'); }
-  function copySecond(name) {
-    const c = config.load(ctx.file); status.second.dir = c.secondBackupDir || '';
-    if (!c.secondBackupDir) return null;
-    try { const p = B.copyTo(ctx, name, c.secondBackupDir); status.second.lastOkAt = new Date().toISOString(); status.second.lastError = null; return p; }
-    catch (e) { status.second.lastError = e.message; log('second backup location failed', e.message); try { audit.log(ctx.db, { action: 'backup-copy-failed', entity: 'db', detail: e.message }); } catch (e_) { require('./log').warn('audit entry could not be written (scheduler)', e_); } return null; }
-  }
-  function runNow(label = 'auto') {
-    status.running = true;
-    try { const m = B.create(ctx, label); status.lastAutoAt = m.createdAt; status.lastAutoName = m.name; status.lastError = null; copySecond(m.name); const c = config.load(ctx.file); if (label === 'auto') B.prune(ctx.backupDir, c.keepAutoBackups); return m; }
-    catch (e) { status.lastError = e.message; status.lastErrorAt = new Date().toISOString(); log('automatic backup failed', e.message); throw e; }
-    finally { status.running = false; }
-  }
-  function due() { const c = config.load(ctx.file); if (!c.autoBackup) return false; const n = newestAuto(); if (!n || !n.createdAt) return true; return Date.now() - Date.parse(n.createdAt) >= c.backupIntervalHours * 3600e3; }
-  function tick() { try { if (due()) runNow('auto'); } catch (_) { /* already recorded in status */ } }
-  let timer = null;
-  return { status, runNow, tick, copySecond, start() { tick(); timer = setInterval(tick, 15 * 60e3); timer.unref(); }, stop() { if (timer) clearInterval(timer); } };
-}
-module.exports = { makeScheduler };
+`, "/app/src/scheduler.js": `'use strict';\r
+// Automatic backups (C1): at start-up if the newest automatic backup is older than the interval, then re-checked every 15 minutes.\r
+// A failure is never silent: it is kept in \`status\`, shown in the backup panel, and logged. A second-location copy is verified by checksum.\r
+const B = require('./backup'); const config = require('./config'); const audit = require('./audit');\r
+function makeScheduler(ctx, log = () => {}) {\r
+  const status = { lastAutoAt: null, lastAutoName: null, lastError: null, lastErrorAt: null, second: { dir: '', lastOkAt: null, lastError: null }, running: false };\r
+  function newestAuto() { return B.list(ctx).find(b => /^aplus-.*-auto\\d*\\.sqlite$/.test(b.name) || b.kind === 'auto'); }\r
+  function copySecond(name) {\r
+    const c = config.load(ctx.file); status.second.dir = c.secondBackupDir || '';\r
+    if (!c.secondBackupDir) return null;\r
+    try { const p = B.copyTo(ctx, name, c.secondBackupDir); status.second.lastOkAt = new Date().toISOString(); status.second.lastError = null; return p; }\r
+    catch (e) { status.second.lastError = e.message; log('second backup location failed', e.message); try { audit.log(ctx.db, { action: 'backup-copy-failed', entity: 'db', detail: e.message }); } catch (e_) { require('./log').warn('audit entry could not be written (scheduler)', e_); } return null; }\r
+  }\r
+  function runNow(label = 'auto') {\r
+    status.running = true;\r
+    try { const m = B.create(ctx, label); status.lastAutoAt = m.createdAt; status.lastAutoName = m.name; status.lastError = null; copySecond(m.name); const c = config.load(ctx.file); if (label === 'auto') B.prune(ctx.backupDir, c.keepAutoBackups); return m; }\r
+    catch (e) { status.lastError = e.message; status.lastErrorAt = new Date().toISOString(); log('automatic backup failed', e.message); throw e; }\r
+    finally { status.running = false; }\r
+  }\r
+  function due() { const c = config.load(ctx.file); if (!c.autoBackup) return false; const n = newestAuto(); if (!n || !n.createdAt) return true; return Date.now() - Date.parse(n.createdAt) >= c.backupIntervalHours * 3600e3; }\r
+  function tick() { try { if (due()) runNow('auto'); } catch (_) { /* already recorded in status */ } }\r
+  let timer = null;\r
+  return { status, runNow, tick, copySecond, start() { tick(); timer = setInterval(tick, 15 * 60e3); timer.unref(); }, stop() { if (timer) clearInterval(timer); } };\r
+}\r
+module.exports = { makeScheduler };\r
 `, "/app/src/server.js": `'use strict';\r
 // A+ Hub local server. Binds to the loopback interface only. No dependencies.\r
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');\r
@@ -29596,117 +29596,117 @@ if (require.main === module) {\r
   start({ port, dbFile, backupDir, scheduler: true, log: (...a) => console.error(...a) }).then(s => { console.log('A+ Hub is running at ' + s.url + '  (this computer only; press Ctrl+C to stop)'); console.log('Database: ' + s.ctx.file); for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => s.close().then(() => process.exit(0))); })\r
     .catch(e => { if (e instanceof StartupRefused) { console.error('A+ Hub did not start (' + e.code + '):\\n' + e.message); process.exit(13); } console.error(e.code === 'EADDRINUSE' ? \`Port \${port} is already in use. Set APLUS_PORT to another number, or close the other program.\` : 'Could not start: ' + e.message); process.exit(1); });\r
 }\r
-`, "/app/src/state.js": `'use strict';
-// Builds the legacy-shaped state object ({v,id,set,cur,rates,t,s,sub,l,...,rd}) from the relational tables so the existing UI logic keeps working unchanged.
-const { E, ORDER, STRUCT, NEWKEYS } = require('./mapping');
-// L7 (read side): structured fields (codes, dates, times, enumerations) are interpolated into the page as-is by the legacy code, because valid values can never contain markup.
-// If a stored value does not have the expected shape (damaged file, hand-edited database, old import), the page receives a harmless version of it. The database row is not touched.
-const SAFE = v => String(v).replace(/[^A-Za-z0-9 _.:\\/+\\-]/g, '').slice(0, 40);
-const CODE_RX = /^[A-Z]{3}$/;
-function neutralize(st) {
-  for (const [k, spec] of Object.entries(STRUCT)) for (const row of st[k] || []) for (const [f, rx] of Object.entries(spec)) { const v = row[f]; if (typeof v === 'string' && v !== '' && !rx.test(v)) row[f] = SAFE(v); }
-  if (st.set && typeof st.set.base === 'string' && !CODE_RX.test(st.set.base)) st.set.base = SAFE(st.set.base);
-  for (const c of st.cur || []) { if (typeof c.c === 'string' && !CODE_RX.test(c.c)) c.c = SAFE(c.c); }
-  for (const r of Object.values(st.rates || {})) if (r && typeof r.type === 'string' && !/^[A-Za-z-]{1,20}$/.test(r.type)) r.type = SAFE(r.type);
-  for (const code of Object.keys(st.rates || {})) if (!CODE_RX.test(code)) { st.rates[SAFE(code)] = st.rates[code]; delete st.rates[code]; }
-  return st;
-}
-const parseCol = (t, v) => (t === 'j' ? JSON.parse(v) : v);
-function assemble(db) {
-  const st = {};
-  const meta = Object.fromEntries(db.prepare('SELECT key,value FROM schema_meta').all().map(r => [r.key, r.value]));
-  st.v = meta.legacy_data_version ? +meta.legacy_data_version : 5; st.id = meta.next_id ? +meta.next_id : 1;
-  st.set = {}; db.prepare('SELECT key,value FROM settings').all().forEach(r => { st.set[r.key] = JSON.parse(r.value); });
-  st.cur = db.prepare('SELECT code c,name n FROM currencies ORDER BY seq').all().map(r => ({ c: r.c, n: r.n }));
-  st.rates = {}; db.prepare('SELECT code,rate,saved_at,rate_type FROM exchange_rates_current').all().forEach(r => { const o = { r: r.rate }; if (r.saved_at != null) o.t = r.saved_at; if (r.rate_type != null) o.type = r.rate_type; st.rates[r.code] = o; });
-  for (const k of ORDER) {
-    const e = E[k]; let rows; try { rows = db.prepare(\`SELECT * FROM \${e.table} ORDER BY seq\`).all(); } catch (err) { if (NEWKEYS.includes(k) && /no such table/.test(err.message)) { st[k] = []; continue; } throw err; } // a database from before migration 003 simply has none of the newer record types
-    st[k] = rows.map(row => {
-      const o = {};
-      for (const [c, spec] of Object.entries(e.cols)) { const v = row[c]; if (v === null || v === undefined) continue; o[c] = parseCol(spec[0], v); }
-      if (row.extra_json) Object.assign(o, JSON.parse(row.extra_json));
-      if (row.archived_at && e.cols.status) { /* archived rows are reported through their status field */ }
-      for (const [lk, L] of Object.entries(e.links || {})) {
-        const arr = db.prepare(\`SELECT \${L.other} v FROM \${L.table} WHERE \${L.owner}=? ORDER BY pos\`).all(row.id).map(r => r.v);
-        if (lk === 's' || e.table === 'subjects' && row.type === 'Live' || arr.length) o[lk] = arr;
-      }
-      return o;
-    });
-  }
-  for (const e of st.tt) {
-    if (e.sched !== 'rec') continue;
-    const occ = db.prepare('SELECT * FROM timetable_occurrences WHERE tt=? ORDER BY od').all(e.id); if (!occ.length) continue;
-    e.ex = {};
-    for (const r of occ) {
-      const x = r.extra_json ? JSON.parse(r.extra_json) : {};
-      for (const f of ['done', 'cancelled', 'skipped', 'deleted']) if (r[f]) x[f] = 1;
-      if (r.moved_date != null) { x.moved = { date: r.moved_date }; if (r.moved_st != null) x.moved.st = r.moved_st; if (r.moved_en != null) x.moved.en = r.moved_en; }
-      if (r.hist != null) x.hist = r.hist; e.ex[r.od] = x;
-    }
-  }
-  st.rd = {}; db.prepare('SELECT reminder_id,date FROM reminder_completions').all().forEach(r => { st.rd[r.reminder_id + '|' + r.date] = 1; });
-  return st;
-}
-module.exports = { assemble, neutralize };
-`, "/app/src/store.js": `'use strict';
-// Row-level writes shared by the importer and the save endpoint. All callers run inside a transaction.
-const { E, ORDER, OPT_FIELDS_NULL_IF_FALSY } = require('./mapping');
-const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
-const colVal = (t, v) => (v === undefined || v === null ? null : t === 'b' ? 1 : t === 'j' ? JSON.stringify(v) : v);
-const SKIP = new Set(['__nullify', '__dropLinks']);
-const isKnown = (e, c) => c in e.cols || (e.links && c in e.links) || (e.special === 'ex' && c === 'ex') || SKIP.has(c);
-const cache = new WeakMap();
-function stmt(db, sql) { let m = cache.get(db); if (!m) cache.set(db, m = new Map()); let s = m.get(sql); if (!s) m.set(sql, s = db.prepare(sql)); return s; }
-
-function values(k, row) {
-  const e = E[k], nul = new Set(row.__nullify || []), nf = OPT_FIELDS_NULL_IF_FALSY[k] || [];
-  const vals = Object.keys(e.cols).map(c => (nul.has(c) || (nf.includes(c) && (row[c] === 0 || row[c] === ''))) ? null : colVal(e.cols[c][0], row[c]));
-  const extra = {}; Object.keys(row).forEach(c => { if (!isKnown(e, c)) extra[c] = row[c]; });
-  return { vals, extra: Object.keys(extra).length ? JSON.stringify(extra) : null };
-}
-function writeSides(db, k, row) {
-  const e = E[k];
-  for (const [lk, L] of Object.entries(e.links || {})) {
-    stmt(db, \`DELETE FROM \${L.table} WHERE \${L.owner}=?\`).run(row.id);
-    if (!Array.isArray(row[lk])) continue; const drop = new Set((row.__dropLinks || {})[lk] || []); let pos = 0;
-    row[lk].filter(x => !drop.has(x)).forEach(x => stmt(db, \`INSERT OR IGNORE INTO \${L.table}(\${L.owner},\${L.other},pos) VALUES(?,?,?)\`).run(row.id, x, pos++));
-  }
-  if (e.special === 'ex') {
-    stmt(db, 'DELETE FROM timetable_occurrences WHERE tt=?').run(row.id);
-    if (isObj(row.ex)) for (const [od, x] of Object.entries(row.ex)) {
-      const o = isObj(x) ? x : {}, ex2 = {}; Object.keys(o).forEach(c => { if (!['done', 'cancelled', 'skipped', 'deleted', 'moved', 'hist'].includes(c)) ex2[c] = o[c]; });
-      stmt(db, 'INSERT INTO timetable_occurrences(tt,od,done,cancelled,skipped,deleted,moved_date,moved_st,moved_en,hist,extra_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
-        .run(row.id, od, o.done ? 1 : null, o.cancelled ? 1 : null, o.skipped ? 1 : null, o.deleted ? 1 : null, o.moved ? o.moved.date ?? null : null, o.moved ? o.moved.st ?? null : null, o.moved ? o.moved.en ?? null : null, o.hist ?? null, Object.keys(ex2).length ? JSON.stringify(ex2) : null);
-    }
-  }
-}
-function insertRow(db, k, row, seq) {
-  const e = E[k], cols = Object.keys(e.cols), { vals, extra } = values(k, row);
-  stmt(db, \`INSERT INTO \${e.table}(seq,\${cols.join(',')},extra_json) VALUES(\${['?', ...cols.map(() => '?'), '?'].join(',')})\`).run(seq, ...vals, extra);
-  writeSides(db, k, row);
-}
-function updateRow(db, k, row) {
-  const e = E[k], cols = Object.keys(e.cols).filter(c => c !== 'id'), { vals, extra } = values(k, row);
-  const all = Object.keys(e.cols), idv = vals[all.indexOf('id')], rest = all.map((c, i) => [c, vals[i]]).filter(([c]) => c !== 'id');
-  stmt(db, \`UPDATE \${e.table} SET \${cols.map(c => c + '=?').join(',')},extra_json=? WHERE id=?\`).run(...rest.map(x => x[1]), extra, idv);
-  writeSides(db, k, row);
-}
-function deleteRow(db, k, id) { const e = E[k]; for (const L of Object.values(e.links || {})) stmt(db, \`DELETE FROM \${L.table} WHERE \${L.owner}=?\`).run(id); if (e.special === 'ex') stmt(db, 'DELETE FROM timetable_occurrences WHERE tt=?').run(id); stmt(db, \`DELETE FROM \${e.table} WHERE id=?\`).run(id); }
-const nextSeq = (db, k) => stmt(db, \`SELECT COALESCE(MAX(seq),0)+1 s FROM \${E[k].table}\`).get().s;
-module.exports = { insertRow, updateRow, deleteRow, nextSeq, isKnown, stmt };
-`, "/app/src/student-account.js": `'use strict';
-// Shared saved-rate student account. Receipt rows are counted once; refunds reverse money held.
-function studentAccount(db,id){
- const s={n:0,h:0,rev:0,cost:0};for(const l of db.l||[])if(l.s==id&&l.st==='Completed'){s.n++;s.h+=l.d;s.rev+=l.bchg;s.cost+=l.bcost}s.p=s.rev-s.cost;
- const base=(row,rate)=>row.bamt==null?(row.fxs?0:Math.round(row.amt*(rate||0))):row.bamt;
- const paidL=(db.sp||[]).filter(p=>p.p==id).reduce((q,p)=>q+p.bamt,0);let rcC=0,rcP=0,prC=0,prP=0;
- for(const en of db.re||[]){if(en.s!=id)continue;const course=(db.rc||[]).find(c=>c.id==en.rc);if(!course)continue;const receipts=(db.cp||[]).filter(p=>p.re==en.id),opening=en.paid-receipts.reduce((q,p)=>q+p.amt,0);rcC+=Math.round(en.price*course.rx);rcP+=Math.round(opening*course.rx)+receipts.reduce((q,p)=>q+base(p,course.rx),0);}
- for(const project of db.pr||[]){if(project.s!=id)continue;const receipts=(db.pp||[]).filter(p=>p.pr==project.id);if(project.status!=='Cancelled')prC+=Math.round(project.rev*project.rx);prP+=Math.round((project.paid0||0)*project.rx)+receipts.reduce((q,p)=>q+base(p,project.rx),0);}
- let reversals=0,creditUsed=0;for(const a of db.ad||[]){if(a.s!=id)continue;if(a.kind==='refund'||a.kind==='retained')reversals+=a.bamt||0;else if(a.kind==='credit-used')creditUsed+=a.bamt||0;}
- const tot=s.rev+rcC+prC,paid=paidL+rcP+prP-reversals+creditUsed;
- return{...s,tot,paid,rem:tot-paid,paidL,rcC,rcP,prC,prP};
-}
-module.exports={studentAccount};
+`, "/app/src/state.js": `'use strict';\r
+// Builds the legacy-shaped state object ({v,id,set,cur,rates,t,s,sub,l,...,rd}) from the relational tables so the existing UI logic keeps working unchanged.\r
+const { E, ORDER, STRUCT, NEWKEYS } = require('./mapping');\r
+// L7 (read side): structured fields (codes, dates, times, enumerations) are interpolated into the page as-is by the legacy code, because valid values can never contain markup.\r
+// If a stored value does not have the expected shape (damaged file, hand-edited database, old import), the page receives a harmless version of it. The database row is not touched.\r
+const SAFE = v => String(v).replace(/[^A-Za-z0-9 _.:\\/+\\-]/g, '').slice(0, 40);\r
+const CODE_RX = /^[A-Z]{3}$/;\r
+function neutralize(st) {\r
+  for (const [k, spec] of Object.entries(STRUCT)) for (const row of st[k] || []) for (const [f, rx] of Object.entries(spec)) { const v = row[f]; if (typeof v === 'string' && v !== '' && !rx.test(v)) row[f] = SAFE(v); }\r
+  if (st.set && typeof st.set.base === 'string' && !CODE_RX.test(st.set.base)) st.set.base = SAFE(st.set.base);\r
+  for (const c of st.cur || []) { if (typeof c.c === 'string' && !CODE_RX.test(c.c)) c.c = SAFE(c.c); }\r
+  for (const r of Object.values(st.rates || {})) if (r && typeof r.type === 'string' && !/^[A-Za-z-]{1,20}$/.test(r.type)) r.type = SAFE(r.type);\r
+  for (const code of Object.keys(st.rates || {})) if (!CODE_RX.test(code)) { st.rates[SAFE(code)] = st.rates[code]; delete st.rates[code]; }\r
+  return st;\r
+}\r
+const parseCol = (t, v) => (t === 'j' ? JSON.parse(v) : v);\r
+function assemble(db) {\r
+  const st = {};\r
+  const meta = Object.fromEntries(db.prepare('SELECT key,value FROM schema_meta').all().map(r => [r.key, r.value]));\r
+  st.v = meta.legacy_data_version ? +meta.legacy_data_version : 5; st.id = meta.next_id ? +meta.next_id : 1;\r
+  st.set = {}; db.prepare('SELECT key,value FROM settings').all().forEach(r => { st.set[r.key] = JSON.parse(r.value); });\r
+  st.cur = db.prepare('SELECT code c,name n FROM currencies ORDER BY seq').all().map(r => ({ c: r.c, n: r.n }));\r
+  st.rates = {}; db.prepare('SELECT code,rate,saved_at,rate_type FROM exchange_rates_current').all().forEach(r => { const o = { r: r.rate }; if (r.saved_at != null) o.t = r.saved_at; if (r.rate_type != null) o.type = r.rate_type; st.rates[r.code] = o; });\r
+  for (const k of ORDER) {\r
+    const e = E[k]; let rows; try { rows = db.prepare(\`SELECT * FROM \${e.table} ORDER BY seq\`).all(); } catch (err) { if (NEWKEYS.includes(k) && /no such table/.test(err.message)) { st[k] = []; continue; } throw err; } // a database from before migration 003 simply has none of the newer record types\r
+    st[k] = rows.map(row => {\r
+      const o = {};\r
+      for (const [c, spec] of Object.entries(e.cols)) { const v = row[c]; if (v === null || v === undefined) continue; o[c] = parseCol(spec[0], v); }\r
+      if (row.extra_json) Object.assign(o, JSON.parse(row.extra_json));\r
+      if (row.archived_at && e.cols.status) { /* archived rows are reported through their status field */ }\r
+      for (const [lk, L] of Object.entries(e.links || {})) {\r
+        const arr = db.prepare(\`SELECT \${L.other} v FROM \${L.table} WHERE \${L.owner}=? ORDER BY pos\`).all(row.id).map(r => r.v);\r
+        if (lk === 's' || e.table === 'subjects' && row.type === 'Live' || arr.length) o[lk] = arr;\r
+      }\r
+      return o;\r
+    });\r
+  }\r
+  for (const e of st.tt) {\r
+    if (e.sched !== 'rec') continue;\r
+    const occ = db.prepare('SELECT * FROM timetable_occurrences WHERE tt=? ORDER BY od').all(e.id); if (!occ.length) continue;\r
+    e.ex = {};\r
+    for (const r of occ) {\r
+      const x = r.extra_json ? JSON.parse(r.extra_json) : {};\r
+      for (const f of ['done', 'cancelled', 'skipped', 'deleted']) if (r[f]) x[f] = 1;\r
+      if (r.moved_date != null) { x.moved = { date: r.moved_date }; if (r.moved_st != null) x.moved.st = r.moved_st; if (r.moved_en != null) x.moved.en = r.moved_en; }\r
+      if (r.hist != null) x.hist = r.hist; e.ex[r.od] = x;\r
+    }\r
+  }\r
+  st.rd = {}; db.prepare('SELECT reminder_id,date FROM reminder_completions').all().forEach(r => { st.rd[r.reminder_id + '|' + r.date] = 1; });\r
+  return st;\r
+}\r
+module.exports = { assemble, neutralize };\r
+`, "/app/src/store.js": `'use strict';\r
+// Row-level writes shared by the importer and the save endpoint. All callers run inside a transaction.\r
+const { E, ORDER, OPT_FIELDS_NULL_IF_FALSY } = require('./mapping');\r
+const isObj = x => x && typeof x === 'object' && !Array.isArray(x);\r
+const colVal = (t, v) => (v === undefined || v === null ? null : t === 'b' ? 1 : t === 'j' ? JSON.stringify(v) : v);\r
+const SKIP = new Set(['__nullify', '__dropLinks']);\r
+const isKnown = (e, c) => c in e.cols || (e.links && c in e.links) || (e.special === 'ex' && c === 'ex') || SKIP.has(c);\r
+const cache = new WeakMap();\r
+function stmt(db, sql) { let m = cache.get(db); if (!m) cache.set(db, m = new Map()); let s = m.get(sql); if (!s) m.set(sql, s = db.prepare(sql)); return s; }\r
+\r
+function values(k, row) {\r
+  const e = E[k], nul = new Set(row.__nullify || []), nf = OPT_FIELDS_NULL_IF_FALSY[k] || [];\r
+  const vals = Object.keys(e.cols).map(c => (nul.has(c) || (nf.includes(c) && (row[c] === 0 || row[c] === ''))) ? null : colVal(e.cols[c][0], row[c]));\r
+  const extra = {}; Object.keys(row).forEach(c => { if (!isKnown(e, c)) extra[c] = row[c]; });\r
+  return { vals, extra: Object.keys(extra).length ? JSON.stringify(extra) : null };\r
+}\r
+function writeSides(db, k, row) {\r
+  const e = E[k];\r
+  for (const [lk, L] of Object.entries(e.links || {})) {\r
+    stmt(db, \`DELETE FROM \${L.table} WHERE \${L.owner}=?\`).run(row.id);\r
+    if (!Array.isArray(row[lk])) continue; const drop = new Set((row.__dropLinks || {})[lk] || []); let pos = 0;\r
+    row[lk].filter(x => !drop.has(x)).forEach(x => stmt(db, \`INSERT OR IGNORE INTO \${L.table}(\${L.owner},\${L.other},pos) VALUES(?,?,?)\`).run(row.id, x, pos++));\r
+  }\r
+  if (e.special === 'ex') {\r
+    stmt(db, 'DELETE FROM timetable_occurrences WHERE tt=?').run(row.id);\r
+    if (isObj(row.ex)) for (const [od, x] of Object.entries(row.ex)) {\r
+      const o = isObj(x) ? x : {}, ex2 = {}; Object.keys(o).forEach(c => { if (!['done', 'cancelled', 'skipped', 'deleted', 'moved', 'hist'].includes(c)) ex2[c] = o[c]; });\r
+      stmt(db, 'INSERT INTO timetable_occurrences(tt,od,done,cancelled,skipped,deleted,moved_date,moved_st,moved_en,hist,extra_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)')\r
+        .run(row.id, od, o.done ? 1 : null, o.cancelled ? 1 : null, o.skipped ? 1 : null, o.deleted ? 1 : null, o.moved ? o.moved.date ?? null : null, o.moved ? o.moved.st ?? null : null, o.moved ? o.moved.en ?? null : null, o.hist ?? null, Object.keys(ex2).length ? JSON.stringify(ex2) : null);\r
+    }\r
+  }\r
+}\r
+function insertRow(db, k, row, seq) {\r
+  const e = E[k], cols = Object.keys(e.cols), { vals, extra } = values(k, row);\r
+  stmt(db, \`INSERT INTO \${e.table}(seq,\${cols.join(',')},extra_json) VALUES(\${['?', ...cols.map(() => '?'), '?'].join(',')})\`).run(seq, ...vals, extra);\r
+  writeSides(db, k, row);\r
+}\r
+function updateRow(db, k, row) {\r
+  const e = E[k], cols = Object.keys(e.cols).filter(c => c !== 'id'), { vals, extra } = values(k, row);\r
+  const all = Object.keys(e.cols), idv = vals[all.indexOf('id')], rest = all.map((c, i) => [c, vals[i]]).filter(([c]) => c !== 'id');\r
+  stmt(db, \`UPDATE \${e.table} SET \${cols.map(c => c + '=?').join(',')},extra_json=? WHERE id=?\`).run(...rest.map(x => x[1]), extra, idv);\r
+  writeSides(db, k, row);\r
+}\r
+function deleteRow(db, k, id) { const e = E[k]; for (const L of Object.values(e.links || {})) stmt(db, \`DELETE FROM \${L.table} WHERE \${L.owner}=?\`).run(id); if (e.special === 'ex') stmt(db, 'DELETE FROM timetable_occurrences WHERE tt=?').run(id); stmt(db, \`DELETE FROM \${e.table} WHERE id=?\`).run(id); }\r
+const nextSeq = (db, k) => stmt(db, \`SELECT COALESCE(MAX(seq),0)+1 s FROM \${E[k].table}\`).get().s;\r
+module.exports = { insertRow, updateRow, deleteRow, nextSeq, isKnown, stmt };\r
+`, "/app/src/student-account.js": `'use strict';\r
+// Shared saved-rate student account. Receipt rows are counted once; refunds reverse money held.\r
+function studentAccount(db,id){\r
+ const s={n:0,h:0,rev:0,cost:0};for(const l of db.l||[])if(l.s==id&&l.st==='Completed'){s.n++;s.h+=l.d;s.rev+=l.bchg;s.cost+=l.bcost}s.p=s.rev-s.cost;\r
+ const base=(row,rate)=>row.bamt==null?(row.fxs?0:Math.round(row.amt*(rate||0))):row.bamt;\r
+ const paidL=(db.sp||[]).filter(p=>p.p==id).reduce((q,p)=>q+p.bamt,0);let rcC=0,rcP=0,prC=0,prP=0;\r
+ for(const en of db.re||[]){if(en.s!=id)continue;const course=(db.rc||[]).find(c=>c.id==en.rc);if(!course)continue;const receipts=(db.cp||[]).filter(p=>p.re==en.id),opening=en.paid-receipts.reduce((q,p)=>q+p.amt,0);rcC+=Math.round(en.price*course.rx);rcP+=Math.round(opening*course.rx)+receipts.reduce((q,p)=>q+base(p,course.rx),0);}\r
+ for(const project of db.pr||[]){if(project.s!=id)continue;const receipts=(db.pp||[]).filter(p=>p.pr==project.id);if(project.status!=='Cancelled')prC+=Math.round(project.rev*project.rx);prP+=Math.round((project.paid0||0)*project.rx)+receipts.reduce((q,p)=>q+base(p,project.rx),0);}\r
+ let reversals=0,creditUsed=0;for(const a of db.ad||[]){if(a.s!=id)continue;if(a.kind==='refund'||a.kind==='retained')reversals+=a.bamt||0;else if(a.kind==='credit-used')creditUsed+=a.bamt||0;}\r
+ const tot=s.rev+rcC+prC,paid=paidL+rcP+prP-reversals+creditUsed;\r
+ return{...s,tot,paid,rem:tot-paid,paidL,rcC,rcP,prC,prP};\r
+}\r
+module.exports={studentAccount};\r
 `, "/app/src/teacher-batches.js": `'use strict';\r
 const {tx}=require('./db'),{assemble}=require('./state'),F=require('./finance'),rules=require('./rules'),audit=require('./audit'),store=require('./store'),cairo=require('./cairo'),TR=require('./treasury');\r
 class BatchError extends Error{constructor(message,code=422){super(message);this.code=code;}}\r
@@ -29813,85 +29813,85 @@ function service(db,{required=true,setupCode,clock=()=>new Date(),cookieName='ap
  return{current,setup,login,logout,update,bootstrap,required,needsSetup:()=>!db.prepare('SELECT 1 FROM team_users LIMIT 1').get(),users:()=>db.prepare('SELECT id,username,display_name,role,teacher_id,active FROM team_users ORDER BY id').all()};\r
 }\r
 module.exports={service,TeamError,publicUser,createUser};\r
-`, "/app/src/timetable.js": `'use strict';
-// G: timetable integrity. READ-ONLY analysis over the legacy-shaped state (the same shape the page holds), plus the rule used when an occurrence is marked done.
-// Nothing here invents or links a lesson: unambiguous relationships are only PROPOSED (the owner decides), ambiguous ones are listed.
-const addD = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
-const dowN = iso => new Date(iso + 'T00:00:00Z').getUTCDay();
-const live = e => (e.wt || 'Live') === 'Live';
-const need = e => ((e.s || []).length ? e.s : [0]);
-// the date/time an occurrence really takes place (a moved occurrence keeps its original key \`od\`)
-const info = (e, od) => { if (e.sched !== 'rec') return { date: e.date, st: e.st, en: e.en }; const x = (e.ex || {})[od] || {}; return x.moved ? { date: x.moved.date, st: x.moved.st, en: x.moved.en } : { date: od, st: e.st, en: e.en }; };
-// a lesson QUALIFIES for (entry, occurrence, student) only if it is linked to exactly that occurrence, is for that student, was taught by the scheduled teacher and took place on the occurrence's date.
-// Cancelled / No Show lessons are linked records (they close the session) but never count as delivered; a lesson moved to another date or reassigned to another teacher/student does not qualify.
-const linked = (db, e, od, s) => { const i = info(e, od); return (db.l || []).filter(l => l.tt === e.id && l.od === od && (s ? l.s === s : true) && (!e.t || l.t === e.t) && l.date === i.date); };
-function coverage(db, e, od) {
-  const n = need(e), per = n.map(s => ({ s, lessons: linked(db, e, od, s) })).map(x => ({ ...x, completed: x.lessons.some(l => l.st === 'Completed'), recorded: x.lessons.length > 0 }));
-  const noStudent = n[0] === 0; const all = noStudent ? linked(db, e, od, 0) : null;
-  if (noStudent) { const c = all.some(l => l.st === 'Completed'); per[0] = { s: 0, lessons: all, completed: c, recorded: all.length > 0 }; }
-  const delivered = per.every(x => x.completed), closed = per.every(x => x.recorded), missing = per.filter(x => !x.recorded).map(x => x.s), partial = per.some(x => x.completed) && !delivered;
-  return { per, delivered, closed, missing, partial, status: delivered ? 'delivered' : partial ? 'partial' : closed ? 'closed-not-delivered' : 'open' };
-}
-const doneKeys = e => e.sched === 'rec' ? Object.keys(e.ex || {}).filter(od => (e.ex[od] || {}).done && !(e.ex[od] || {}).deleted) : (e.done ? [e.date] : []);
-// occurrences of Live entries that exist on a given date (incl. moved-in ones)
-function occurrencesOn(db, date) {
-  const out = [];
-  (db.tt || []).forEach(e => {
-    if (!live(e)) return;
-    if (e.sched !== 'rec') { if (e.date === date) out.push({ e, od: e.date }); return; }
-    const ex = e.ex || {}, x = ex[date] || {};
-    if (e.a && date >= e.a && (!e.b || date <= e.b) && dowN(date) === e.dw && !x.deleted && !x.moved) out.push({ e, od: date });
-    Object.keys(ex).forEach(od => { const y = ex[od]; if (y.moved && !y.deleted && y.moved.date === date) out.push({ e, od }); });
-  });
-  return out;
-}
-function integrity(db) {
-  const r = { doneWithoutLesson: [], doneNotDelivered: [], donePartial: [], unlinkedLessons: [], inconsistentLinks: [], duplicateLooking: [], proposal: [], counts: {} };
-  const byId = new Map((db.tt || []).map(e => [e.id, e]));
-  (db.tt || []).forEach(e => { if (!live(e)) return; doneKeys(e).forEach(od => { const c = coverage(db, e, od), base = { tt: e.id, od, date: info(e, od).date, teacher: e.t || null, students: need(e).filter(Boolean) };
-    if (c.status === 'delivered') return;
-    if (!c.per.some(x => x.recorded)) r.doneWithoutLesson.push({ ...base, note: 'marked done but no lesson is linked to this occurrence' });
-    else if (c.status === 'partial') r.donePartial.push({ ...base, missingStudents: c.missing, note: 'some required students have a completed lesson, others do not' });
-    else r.doneNotDelivered.push({ ...base, note: 'closed as not delivered (Cancelled / No Show) or recorded for a different date/teacher; not counted as a completed session' }); }); });
-  (db.l || []).forEach(l => {
-    if (l.tt) {
-      const e = byId.get(l.tt); if (!e) { r.inconsistentLinks.push({ lesson: l.id, problem: 'linked timetable entry ' + l.tt + ' does not exist' }); return; }
-      const p = [];
-      if (e.t && l.t !== e.t) p.push('teacher differs from the scheduled teacher');
-      if ((e.s || []).length && !(e.s || []).includes(l.s)) p.push('student is not one of the scheduled students');
-      if (e.sched === 'rec') { const ok = (e.ex || {})[l.od] ? true : (l.od && dowN(l.od) === e.dw && (!e.a || l.od >= e.a) && (!e.b || l.od <= e.b)); if (!l.od || !ok) p.push('occurrence date ' + (l.od || '(none)') + ' is not an occurrence of this weekly entry'); }
-      else if (l.od && l.od !== e.date) p.push('occurrence date differs from the entry date');
-      if (e.sched && l.od && info(e, l.od).date !== l.date) p.push('lesson date ' + l.date + ' differs from the occurrence date ' + info(e, l.od).date);
-      if (p.length) r.inconsistentLinks.push({ lesson: l.id, tt: l.tt, od: l.od || null, problem: p.join('; ') });
-      return;
-    }
-    // not linked: is there a scheduled Live occurrence for this teacher/student on this date?
-    const cand = occurrencesOn(db, l.date).filter(o => o.e.t === l.t && ((o.e.s || []).includes(l.s)));
-    let c2 = cand; if (cand.length > 1 && l.ts) c2 = cand.filter(o => info(o.e, o.od).st === l.ts);
-    if (cand.length) {
-      const alreadyTaken = c2.length === 1 && (db.l || []).some(z => z.id !== l.id && z.tt === c2[0].e.id && z.od === c2[0].od && z.s === l.s);
-      r.unlinkedLessons.push({ lesson: l.id, date: l.date, status: l.st, candidates: c2.map(o => ({ tt: o.e.id, od: o.od })), ambiguous: c2.length !== 1 || alreadyTaken });
-      if (c2.length === 1 && !alreadyTaken) r.proposal.push({ lesson: l.id, tt: c2[0].e.id, od: c2[0].od, basis: 'same teacher, student and date; exactly one scheduled Live occurrence; no other lesson linked to it for this student' });
-    }
-  });
-  // identical-looking Live entries: same teacher, weekday/date, start and end, subject, overlapping date range and a shared student (listed only; never merged)
-  const es = (db.tt || []).filter(live);
-  for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) { const a = es[i], b = es[j];
-    if (a.t !== b.t || a.sched !== b.sched || (a.st || '') !== (b.st || '') || (a.en || '') !== (b.en || '') || (a.subj || a.sub) !== (b.subj || b.sub)) continue;
-    const same = a.sched === 'rec' ? a.dw === b.dw && (a.a || '') <= (b.b || '9999') && (b.a || '') <= (a.b || '9999') : a.date === b.date; if (!same) continue;
-    const sa = need(a), sb = need(b); if (!sa.some(x => sb.includes(x))) continue; r.duplicateLooking.push({ tt: [a.id, b.id], note: 'same teacher, time, subject and a shared student' }); }
-  r.counts = Object.fromEntries(Object.entries(r).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length]));
-  return r;
-}
-// rule for a save: an occurrence that is NEWLY marked done must be closed by recorded lessons for every required student
-function doneProblems(newDb, oldDb) {
-  const bad = [], was = new Map((oldDb.tt || []).map(e => [e.id, e]));
-  (newDb.tt || []).forEach(e => { if (!live(e)) return; const w = was.get(e.id), before = new Set(w ? doneKeys(w) : []);
-    doneKeys(e).forEach(od => { if (before.has(od)) return; const c = coverage(newDb, e, od);
-      if (!c.closed) bad.push(\`timetable \${e.id} on \${od}: a Live session can only be marked done after a lesson is recorded for \${c.missing.length > 1 || c.missing[0] ? 'student(s) ' + c.missing.filter(Boolean).join(', ') : 'it'} (a Cancelled or No Show lesson also closes it, but is not counted as delivered)\`); }); });
-  return bad;
-}
-module.exports = { coverage, integrity, doneProblems, occurrencesOn, info, doneKeys };
+`, "/app/src/timetable.js": `'use strict';\r
+// G: timetable integrity. READ-ONLY analysis over the legacy-shaped state (the same shape the page holds), plus the rule used when an occurrence is marked done.\r
+// Nothing here invents or links a lesson: unambiguous relationships are only PROPOSED (the owner decides), ambiguous ones are listed.\r
+const addD = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };\r
+const dowN = iso => new Date(iso + 'T00:00:00Z').getUTCDay();\r
+const live = e => (e.wt || 'Live') === 'Live';\r
+const need = e => ((e.s || []).length ? e.s : [0]);\r
+// the date/time an occurrence really takes place (a moved occurrence keeps its original key \`od\`)\r
+const info = (e, od) => { if (e.sched !== 'rec') return { date: e.date, st: e.st, en: e.en }; const x = (e.ex || {})[od] || {}; return x.moved ? { date: x.moved.date, st: x.moved.st, en: x.moved.en } : { date: od, st: e.st, en: e.en }; };\r
+// a lesson QUALIFIES for (entry, occurrence, student) only if it is linked to exactly that occurrence, is for that student, was taught by the scheduled teacher and took place on the occurrence's date.\r
+// Cancelled / No Show lessons are linked records (they close the session) but never count as delivered; a lesson moved to another date or reassigned to another teacher/student does not qualify.\r
+const linked = (db, e, od, s) => { const i = info(e, od); return (db.l || []).filter(l => l.tt === e.id && l.od === od && (s ? l.s === s : true) && (!e.t || l.t === e.t) && l.date === i.date); };\r
+function coverage(db, e, od) {\r
+  const n = need(e), per = n.map(s => ({ s, lessons: linked(db, e, od, s) })).map(x => ({ ...x, completed: x.lessons.some(l => l.st === 'Completed'), recorded: x.lessons.length > 0 }));\r
+  const noStudent = n[0] === 0; const all = noStudent ? linked(db, e, od, 0) : null;\r
+  if (noStudent) { const c = all.some(l => l.st === 'Completed'); per[0] = { s: 0, lessons: all, completed: c, recorded: all.length > 0 }; }\r
+  const delivered = per.every(x => x.completed), closed = per.every(x => x.recorded), missing = per.filter(x => !x.recorded).map(x => x.s), partial = per.some(x => x.completed) && !delivered;\r
+  return { per, delivered, closed, missing, partial, status: delivered ? 'delivered' : partial ? 'partial' : closed ? 'closed-not-delivered' : 'open' };\r
+}\r
+const doneKeys = e => e.sched === 'rec' ? Object.keys(e.ex || {}).filter(od => (e.ex[od] || {}).done && !(e.ex[od] || {}).deleted) : (e.done ? [e.date] : []);\r
+// occurrences of Live entries that exist on a given date (incl. moved-in ones)\r
+function occurrencesOn(db, date) {\r
+  const out = [];\r
+  (db.tt || []).forEach(e => {\r
+    if (!live(e)) return;\r
+    if (e.sched !== 'rec') { if (e.date === date) out.push({ e, od: e.date }); return; }\r
+    const ex = e.ex || {}, x = ex[date] || {};\r
+    if (e.a && date >= e.a && (!e.b || date <= e.b) && dowN(date) === e.dw && !x.deleted && !x.moved) out.push({ e, od: date });\r
+    Object.keys(ex).forEach(od => { const y = ex[od]; if (y.moved && !y.deleted && y.moved.date === date) out.push({ e, od }); });\r
+  });\r
+  return out;\r
+}\r
+function integrity(db) {\r
+  const r = { doneWithoutLesson: [], doneNotDelivered: [], donePartial: [], unlinkedLessons: [], inconsistentLinks: [], duplicateLooking: [], proposal: [], counts: {} };\r
+  const byId = new Map((db.tt || []).map(e => [e.id, e]));\r
+  (db.tt || []).forEach(e => { if (!live(e)) return; doneKeys(e).forEach(od => { const c = coverage(db, e, od), base = { tt: e.id, od, date: info(e, od).date, teacher: e.t || null, students: need(e).filter(Boolean) };\r
+    if (c.status === 'delivered') return;\r
+    if (!c.per.some(x => x.recorded)) r.doneWithoutLesson.push({ ...base, note: 'marked done but no lesson is linked to this occurrence' });\r
+    else if (c.status === 'partial') r.donePartial.push({ ...base, missingStudents: c.missing, note: 'some required students have a completed lesson, others do not' });\r
+    else r.doneNotDelivered.push({ ...base, note: 'closed as not delivered (Cancelled / No Show) or recorded for a different date/teacher; not counted as a completed session' }); }); });\r
+  (db.l || []).forEach(l => {\r
+    if (l.tt) {\r
+      const e = byId.get(l.tt); if (!e) { r.inconsistentLinks.push({ lesson: l.id, problem: 'linked timetable entry ' + l.tt + ' does not exist' }); return; }\r
+      const p = [];\r
+      if (e.t && l.t !== e.t) p.push('teacher differs from the scheduled teacher');\r
+      if ((e.s || []).length && !(e.s || []).includes(l.s)) p.push('student is not one of the scheduled students');\r
+      if (e.sched === 'rec') { const ok = (e.ex || {})[l.od] ? true : (l.od && dowN(l.od) === e.dw && (!e.a || l.od >= e.a) && (!e.b || l.od <= e.b)); if (!l.od || !ok) p.push('occurrence date ' + (l.od || '(none)') + ' is not an occurrence of this weekly entry'); }\r
+      else if (l.od && l.od !== e.date) p.push('occurrence date differs from the entry date');\r
+      if (e.sched && l.od && info(e, l.od).date !== l.date) p.push('lesson date ' + l.date + ' differs from the occurrence date ' + info(e, l.od).date);\r
+      if (p.length) r.inconsistentLinks.push({ lesson: l.id, tt: l.tt, od: l.od || null, problem: p.join('; ') });\r
+      return;\r
+    }\r
+    // not linked: is there a scheduled Live occurrence for this teacher/student on this date?\r
+    const cand = occurrencesOn(db, l.date).filter(o => o.e.t === l.t && ((o.e.s || []).includes(l.s)));\r
+    let c2 = cand; if (cand.length > 1 && l.ts) c2 = cand.filter(o => info(o.e, o.od).st === l.ts);\r
+    if (cand.length) {\r
+      const alreadyTaken = c2.length === 1 && (db.l || []).some(z => z.id !== l.id && z.tt === c2[0].e.id && z.od === c2[0].od && z.s === l.s);\r
+      r.unlinkedLessons.push({ lesson: l.id, date: l.date, status: l.st, candidates: c2.map(o => ({ tt: o.e.id, od: o.od })), ambiguous: c2.length !== 1 || alreadyTaken });\r
+      if (c2.length === 1 && !alreadyTaken) r.proposal.push({ lesson: l.id, tt: c2[0].e.id, od: c2[0].od, basis: 'same teacher, student and date; exactly one scheduled Live occurrence; no other lesson linked to it for this student' });\r
+    }\r
+  });\r
+  // identical-looking Live entries: same teacher, weekday/date, start and end, subject, overlapping date range and a shared student (listed only; never merged)\r
+  const es = (db.tt || []).filter(live);\r
+  for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) { const a = es[i], b = es[j];\r
+    if (a.t !== b.t || a.sched !== b.sched || (a.st || '') !== (b.st || '') || (a.en || '') !== (b.en || '') || (a.subj || a.sub) !== (b.subj || b.sub)) continue;\r
+    const same = a.sched === 'rec' ? a.dw === b.dw && (a.a || '') <= (b.b || '9999') && (b.a || '') <= (a.b || '9999') : a.date === b.date; if (!same) continue;\r
+    const sa = need(a), sb = need(b); if (!sa.some(x => sb.includes(x))) continue; r.duplicateLooking.push({ tt: [a.id, b.id], note: 'same teacher, time, subject and a shared student' }); }\r
+  r.counts = Object.fromEntries(Object.entries(r).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length]));\r
+  return r;\r
+}\r
+// rule for a save: an occurrence that is NEWLY marked done must be closed by recorded lessons for every required student\r
+function doneProblems(newDb, oldDb) {\r
+  const bad = [], was = new Map((oldDb.tt || []).map(e => [e.id, e]));\r
+  (newDb.tt || []).forEach(e => { if (!live(e)) return; const w = was.get(e.id), before = new Set(w ? doneKeys(w) : []);\r
+    doneKeys(e).forEach(od => { if (before.has(od)) return; const c = coverage(newDb, e, od);\r
+      if (!c.closed) bad.push(\`timetable \${e.id} on \${od}: a Live session can only be marked done after a lesson is recorded for \${c.missing.length > 1 || c.missing[0] ? 'student(s) ' + c.missing.filter(Boolean).join(', ') : 'it'} (a Cancelled or No Show lesson also closes it, but is not counted as delivered)\`); }); });\r
+  return bad;\r
+}\r
+module.exports = { coverage, integrity, doneProblems, occurrencesOn, info, doneKeys };\r
 `, "/app/src/treasury.js": `'use strict';\r
 const {tx}=require('./db'),{assemble}=require('./state'),rules=require('./rules'),audit=require('./audit'),cairo=require('./cairo'),crypto=require('crypto');\r
 const tables={sp:'student_payments',tp:'teacher_payments',pp:'project_payments',cp:'course_payments',ad:'student_adjustments'};\r
@@ -29947,301 +29947,301 @@ function writeCore(db,input,u,now=new Date()){allowed(u);if(!input||!Number.isIn
  });}\r
 function write(...args){try{return writeCore(...args)}catch(e){if(e.code==='ERR_SQLITE_ERROR'&&/constraint|immutable|cannot be deleted|fixed/i.test(e.message))throw new TreasuryError('Duplicate reference or protected financial record. No changes were saved.',409);throw e}}\r
 module.exports={read,write,attachNative,balance,TreasuryError,csvRows,allowed};\r
-`, "/app/db/migrations/001_init.sql": `-- A+ Hub schema v3, migration 001. Forward-only. Money = integer thousandths. Rates = exact REAL (never rounded to thousandths).
--- Record IDs keep the legacy single shared counter: id_registry makes every id unique across all tables and is never deleted from.
-CREATE TABLE schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE id_registry(id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
-CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE currencies(code TEXT PRIMARY KEY, name TEXT NOT NULL, seq INTEGER NOT NULL);
-CREATE TABLE exchange_rates_current(code TEXT PRIMARY KEY REFERENCES currencies(code), rate REAL NOT NULL CHECK(rate>0), saved_at TEXT, rate_type TEXT);
-CREATE TABLE exchange_rate_history(id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, rate REAL NOT NULL CHECK(rate>0), saved_at TEXT, rate_type TEXT, recorded_at TEXT NOT NULL);
-
-CREATE TABLE teachers(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, phone TEXT, email TEXT, spec TEXT, cur TEXT, rate INTEGER,
-  status TEXT NOT NULL CHECK(status IN('Active','Inactive')), notes TEXT, archived_at TEXT, extra_json TEXT);
-CREATE TABLE students(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, uni TEXT, country TEXT, major TEXT, lv TEXT, cur TEXT, phone TEXT, email TEXT,
-  status TEXT NOT NULL CHECK(status IN('Active','Inactive')), notes TEXT, archived_at TEXT, extra_json TEXT);
-CREATE TABLE subjects(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN('Live','Recorded','Project')), uni TEXT,
-  inst INTEGER REFERENCES teachers(id), lv TEXT, tc TEXT, tr INTEGER, sc TEXT, sr INTEGER, extra_json TEXT);
-CREATE TABLE subject_students(subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES students(id), pos INTEGER NOT NULL, PRIMARY KEY(subject_id,student_id));
-
-CREATE TABLE timetable_entries(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, sched TEXT NOT NULL CHECK(sched IN('one','rec')), wt TEXT CHECK(wt IS NULL OR wt IN('Live','Project','Recorded')),
-  date TEXT, day TEXT, dw INTEGER, a TEXT, b TEXT, st TEXT, en TEXT, t INTEGER REFERENCES teachers(id), lv TEXT, sub TEXT, notes TEXT,
-  done INTEGER, hist TEXT, rs INTEGER, archived_at TEXT, extra_json TEXT);
-CREATE TABLE timetable_students(tt INTEGER NOT NULL REFERENCES timetable_entries(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES students(id), pos INTEGER NOT NULL, PRIMARY KEY(tt,student_id));
--- one row per occurrence date of a recurring series; flags are independent so an occurrence can be moved AND done; nothing here touches the series
-CREATE TABLE timetable_occurrences(tt INTEGER NOT NULL REFERENCES timetable_entries(id) ON DELETE CASCADE, od TEXT NOT NULL, done INTEGER, cancelled INTEGER, skipped INTEGER, deleted INTEGER,
-  moved_date TEXT, moved_st TEXT, moved_en TEXT, hist TEXT, extra_json TEXT, PRIMARY KEY(tt,od));
-
-CREATE TABLE lessons(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, date TEXT NOT NULL, t INTEGER NOT NULL REFERENCES teachers(id), s INTEGER NOT NULL REFERENCES students(id),
-  sub INTEGER NOT NULL REFERENCES subjects(id), lv TEXT, d REAL NOT NULL, tr INTEGER, sr INTEGER,
-  st TEXT NOT NULL CHECK(st IN('Completed','Cancelled','Rescheduled','No Show')), tc TEXT, sc TEXT, trx REAL, srx REAL, bc TEXT, bcost INTEGER NOT NULL, bchg INTEGER NOT NULL, rt TEXT,
-  oc INTEGER, og INTEGER, ts TEXT, te TEXT, notes TEXT, tt INTEGER REFERENCES timetable_entries(id) ON DELETE SET NULL, od TEXT, extra_json TEXT);
-CREATE TABLE student_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, p INTEGER NOT NULL REFERENCES students(id), date TEXT NOT NULL, cur TEXT, amt INTEGER NOT NULL, rx REAL, rt TEXT,
-  bamt INTEGER NOT NULL, bc TEXT, meth TEXT, notes TEXT, extra_json TEXT);
-CREATE TABLE teacher_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, p INTEGER NOT NULL REFERENCES teachers(id), date TEXT NOT NULL, cur TEXT, amt INTEGER NOT NULL, rx REAL, rt TEXT,
-  bamt INTEGER NOT NULL, bc TEXT, meth TEXT, notes TEXT, src TEXT, srcd TEXT, lk INTEGER, extra_json TEXT);
-
-CREATE TABLE projects(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, sub TEXT, subj INTEGER REFERENCES subjects(id), uni TEXT, t INTEGER REFERENCES teachers(id), s INTEGER REFERENCES students(id), lv TEXT,
-  status TEXT NOT NULL CHECK(status IN('Not Started','In Progress','Completed','Cancelled')), cur TEXT, rev INTEGER NOT NULL, share REAL, rx REAL, rt TEXT, bc TEXT, start TEXT, due TEXT, paid0 INTEGER, notes TEXT, extra_json TEXT);
-CREATE TABLE project_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, pr INTEGER NOT NULL REFERENCES projects(id), date TEXT, amt INTEGER NOT NULL, meth TEXT, notes TEXT, extra_json TEXT);
-CREATE TABLE recorded_courses(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, sub TEXT, subj INTEGER REFERENCES subjects(id), uni TEXT, inst INTEGER REFERENCES teachers(id), lv TEXT, cur TEXT,
-  rx REAL, rt TEXT, bc TEXT, cost INTEGER, price INTEGER NOT NULL, n INTEGER NOT NULL, share REAL, date TEXT, notes TEXT, extra_json TEXT);
--- enrolment paid is ONE running total in the legacy data: kept as an opening balance, never split into invented payments
-CREATE TABLE course_enrollments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, rc INTEGER NOT NULL REFERENCES recorded_courses(id), s INTEGER NOT NULL REFERENCES students(id), date TEXT, price INTEGER NOT NULL, paid INTEGER NOT NULL, extra_json TEXT);
-CREATE TABLE course_reminders(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT, rc INTEGER NOT NULL REFERENCES recorded_courses(id), days TEXT, time TEXT, a TEXT, b TEXT, f TEXT, extra_json TEXT);
-CREATE TABLE reminder_completions(reminder_id INTEGER NOT NULL REFERENCES course_reminders(id) ON DELETE CASCADE, date TEXT NOT NULL, PRIMARY KEY(reminder_id,date));
-
-CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, action TEXT NOT NULL, entity TEXT, entity_id INTEGER, before_json TEXT, detail TEXT);
-CREATE TABLE migration_runs(id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, mode TEXT NOT NULL, source_sha256 TEXT, status TEXT NOT NULL, report_json TEXT);
-CREATE TABLE migration_quarantine(id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER REFERENCES migration_runs(id), entity TEXT NOT NULL, legacy_id INTEGER, reason TEXT NOT NULL, row_json TEXT NOT NULL);
-
-CREATE INDEX ix_lessons_t ON lessons(t); CREATE INDEX ix_lessons_s ON lessons(s); CREATE INDEX ix_lessons_date ON lessons(date); CREATE INDEX ix_lessons_tt ON lessons(tt);
-CREATE INDEX ix_sp_p ON student_payments(p); CREATE INDEX ix_tp_p ON teacher_payments(p); CREATE INDEX ix_pp_pr ON project_payments(pr);
-CREATE INDEX ix_re_rc ON course_enrollments(rc); CREATE INDEX ix_re_s ON course_enrollments(s); CREATE INDEX ix_rm_rc ON course_reminders(rc);
-
--- every record id must be registered (kind matches) before insert: ids stay unique across ALL tables and are never reused
-CREATE TRIGGER teachers_id_guard BEFORE INSERT ON teachers WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher' BEGIN SELECT RAISE(ABORT,'id not registered for teacher'); END;
-CREATE TRIGGER teachers_id_immutable BEFORE UPDATE OF id ON teachers BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER students_id_guard BEFORE INSERT ON students WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student' BEGIN SELECT RAISE(ABORT,'id not registered for student'); END;
-CREATE TRIGGER students_id_immutable BEFORE UPDATE OF id ON students BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER subjects_id_guard BEFORE INSERT ON subjects WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'subject' BEGIN SELECT RAISE(ABORT,'id not registered for subject'); END;
-CREATE TRIGGER subjects_id_immutable BEFORE UPDATE OF id ON subjects BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER lessons_id_guard BEFORE INSERT ON lessons WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'lesson' BEGIN SELECT RAISE(ABORT,'id not registered for lesson'); END;
-CREATE TRIGGER lessons_id_immutable BEFORE UPDATE OF id ON lessons BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER student_payments_id_guard BEFORE INSERT ON student_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student_payment' BEGIN SELECT RAISE(ABORT,'id not registered for student_payment'); END;
-CREATE TRIGGER student_payments_id_immutable BEFORE UPDATE OF id ON student_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER teacher_payments_id_guard BEFORE INSERT ON teacher_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher_payment' BEGIN SELECT RAISE(ABORT,'id not registered for teacher_payment'); END;
-CREATE TRIGGER teacher_payments_id_immutable BEFORE UPDATE OF id ON teacher_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER timetable_entries_id_guard BEFORE INSERT ON timetable_entries WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'timetable' BEGIN SELECT RAISE(ABORT,'id not registered for timetable'); END;
-CREATE TRIGGER timetable_entries_id_immutable BEFORE UPDATE OF id ON timetable_entries BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER projects_id_guard BEFORE INSERT ON projects WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'project' BEGIN SELECT RAISE(ABORT,'id not registered for project'); END;
-CREATE TRIGGER projects_id_immutable BEFORE UPDATE OF id ON projects BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER project_payments_id_guard BEFORE INSERT ON project_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'project_payment' BEGIN SELECT RAISE(ABORT,'id not registered for project_payment'); END;
-CREATE TRIGGER project_payments_id_immutable BEFORE UPDATE OF id ON project_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER recorded_courses_id_guard BEFORE INSERT ON recorded_courses WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'course' BEGIN SELECT RAISE(ABORT,'id not registered for course'); END;
-CREATE TRIGGER recorded_courses_id_immutable BEFORE UPDATE OF id ON recorded_courses BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER course_enrollments_id_guard BEFORE INSERT ON course_enrollments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'enrollment' BEGIN SELECT RAISE(ABORT,'id not registered for enrollment'); END;
-CREATE TRIGGER course_enrollments_id_immutable BEFORE UPDATE OF id ON course_enrollments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER course_reminders_id_guard BEFORE INSERT ON course_reminders WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'reminder' BEGIN SELECT RAISE(ABORT,'id not registered for reminder'); END;
-CREATE TRIGGER course_reminders_id_immutable BEFORE UPDATE OF id ON course_reminders BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER id_registry_nodelete BEFORE DELETE ON id_registry BEGIN SELECT RAISE(ABORT,'ids are never reused'); END;
-`, "/app/db/migrations/002_audit_guards.sql": `-- Migration 002 (forward-only): richer, append-only audit log. Existing rows are untouched; new columns are NULL for them.
-ALTER TABLE audit_log ADD COLUMN after_json TEXT;
-ALTER TABLE audit_log ADD COLUMN actor TEXT;
-CREATE INDEX ix_audit_entity ON audit_log(entity, entity_id);
-CREATE INDEX ix_audit_at ON audit_log(at);
--- append-only: the application can add audit rows but never change or remove them
-CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;
-CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;
-`, "/app/db/migrations/003_financial_ledger.sql": `-- Migration 003 (forward-only, additive): financial ledger.
--- Nothing is dropped, renamed or rewritten. Every original amount, date, rate and id is untouched.
--- Back-fills only NEW bookkeeping columns, and marks how trustworthy each stored conversion is:
---   fxs = 'stored'   : the payment itself carries its own rate and base amount (student / teacher payments)
---   fxs = 'identity' : payment currency is the base currency: rate 1 by definition (nothing to look up, nothing copied)
---   fxs = 'derived'  : ONLY for payments entered after this migration in a foreign currency: the parent's saved rate at the moment of entry, frozen and flagged as an estimate
---   fxs = 'missing'  : no usable rate exists anywhere; it is listed in the reconciliation report and never guessed
---   fxs = 'corrected': changed later by an audited manual correction (new rows only)
-
--- ---- H3: frozen conversion on every payment ---------------------------------------------------------------
-ALTER TABLE student_payments ADD COLUMN fxs TEXT;
-ALTER TABLE teacher_payments ADD COLUMN fxs TEXT;
-ALTER TABLE project_payments ADD COLUMN cur TEXT;
-ALTER TABLE project_payments ADD COLUMN rx REAL;
-ALTER TABLE project_payments ADD COLUMN bamt INTEGER;
-ALTER TABLE project_payments ADD COLUMN bc TEXT;
-ALTER TABLE project_payments ADD COLUMN fxs TEXT;
-
-UPDATE student_payments SET fxs = CASE WHEN rx > 0 AND bamt IS NOT NULL AND bc IS NOT NULL THEN 'stored' ELSE 'missing' END;
-UPDATE teacher_payments SET fxs = CASE WHEN rx > 0 AND bamt IS NOT NULL AND bc IS NOT NULL THEN 'stored' ELSE 'missing' END;
--- Legacy project payments never had a rate of their own. The parent project's CURRENT rate is NOT copied (it is not a transaction-date rate):
---   * payment currency = base currency  -> fxs 'identity': rate 1 and bamt = amt by definition, no historical rate needed
---   * any other currency                -> fxs 'missing': no rate or base amount is invented; it is listed for an audited manual correction
-UPDATE project_payments SET cur = (SELECT cur FROM projects WHERE projects.id = project_payments.pr);
-UPDATE project_payments SET rx = 1, bamt = amt, bc = cur, fxs = 'identity'
-  WHERE cur IS NOT NULL AND cur = (SELECT trim(value, '"') FROM settings WHERE key = 'base');
-UPDATE project_payments SET fxs = 'missing' WHERE fxs IS NULL;
-
--- ---- H5: dated receipts for course enrolments; the old undated "paid" figure becomes a labelled opening balance ----
-ALTER TABLE course_enrollments ADD COLUMN paid_open INTEGER;
-UPDATE course_enrollments SET paid_open = paid;   -- everything recorded before this migration has no payment date: it is an opening balance
-
-CREATE TABLE course_payments(
-  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,
-  re INTEGER NOT NULL REFERENCES course_enrollments(id),
-  date TEXT NOT NULL, amt INTEGER NOT NULL CHECK(amt > 0),
-  cur TEXT, rx REAL, bamt INTEGER, bc TEXT, fxs TEXT, meth TEXT, notes TEXT, extra_json TEXT);
-CREATE INDEX ix_cp_re ON course_payments(re);
-
--- ---- M1: explicit allocation of a student receipt to a work type and (optionally) one specific charge -------------
-CREATE TABLE payment_allocations(
-  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,
-  sp INTEGER NOT NULL REFERENCES student_payments(id),
-  wt TEXT NOT NULL CHECK(wt IN('Live','Recorded','Project','Other')),
-  tk TEXT CHECK(tk IS NULL OR tk IN('lesson','enrollment','project')),
-  tid INTEGER, amt INTEGER NOT NULL CHECK(amt > 0), date TEXT NOT NULL, reason TEXT, extra_json TEXT);
-CREATE INDEX ix_al_sp ON payment_allocations(sp);
-CREATE TRIGGER al_no_overallocation_ins BEFORE INSERT ON payment_allocations
-  WHEN (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.sp) + NEW.amt > (SELECT amt FROM student_payments WHERE id = NEW.sp)
-  BEGIN SELECT RAISE(ABORT,'allocations would exceed the payment amount'); END;
-CREATE TRIGGER al_no_overallocation_upd BEFORE UPDATE OF amt, sp ON payment_allocations
-  WHEN (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.sp AND id <> NEW.id) + NEW.amt > (SELECT amt FROM student_payments WHERE id = NEW.sp)
-  BEGIN SELECT RAISE(ABORT,'allocations would exceed the payment amount'); END;
-CREATE TRIGGER sp_amount_not_below_allocations BEFORE UPDATE OF amt ON student_payments
-  WHEN NEW.amt < (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.id)
-  BEGIN SELECT RAISE(ABORT,'a payment cannot be reduced below the amount already allocated; remove or reduce the allocations first'); END;
-
--- ---- M2: refunds, student credit and explicit resolution of money held for a cancelled project ----------------------
---  refund      money returned to the student           credit       money kept by the academy as student credit
---  credit-used student credit applied to a new charge   retained     explicit manual resolution: the academy keeps the money (reason mandatory)
-CREATE TABLE student_adjustments(
-  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,
-  s INTEGER NOT NULL REFERENCES students(id), pr INTEGER REFERENCES projects(id),
-  kind TEXT NOT NULL CHECK(kind IN('refund','credit','credit-used','retained')),
-  date TEXT NOT NULL, cur TEXT NOT NULL, amt INTEGER NOT NULL CHECK(amt > 0),
-  rx REAL, bamt INTEGER, bc TEXT, fxs TEXT,
-  ok TEXT, oid INTEGER,                                   -- original payment reference (kind: sp | pp | cp | opening), when there is one
-  reason TEXT NOT NULL CHECK(length(trim(reason)) >= 3), extra_json TEXT);
-CREATE INDEX ix_sa_s ON student_adjustments(s);
-CREATE INDEX ix_sa_pr ON student_adjustments(pr);
-
--- ---- id registry guards for the new record kinds (same single shared id counter as the rest of the app) ----------------
-CREATE TRIGGER course_payments_id_guard BEFORE INSERT ON course_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'course_payment' BEGIN SELECT RAISE(ABORT,'id not registered for course_payment'); END;
-CREATE TRIGGER course_payments_id_immutable BEFORE UPDATE OF id ON course_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER payment_allocations_id_guard BEFORE INSERT ON payment_allocations WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'payment_allocation' BEGIN SELECT RAISE(ABORT,'id not registered for payment_allocation'); END;
-CREATE TRIGGER payment_allocations_id_immutable BEFORE UPDATE OF id ON payment_allocations BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-CREATE TRIGGER student_adjustments_id_guard BEFORE INSERT ON student_adjustments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student_adjustment' BEGIN SELECT RAISE(ABORT,'id not registered for student_adjustment'); END;
-CREATE TRIGGER student_adjustments_id_immutable BEFORE UPDATE OF id ON student_adjustments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
-
--- ---- H6: audit entries can carry a reason and the related student / teacher / project ids ---------------------------------
-ALTER TABLE audit_log ADD COLUMN reason TEXT;
-ALTER TABLE audit_log ADD COLUMN related_json TEXT;
-`, "/app/db/migrations/004_stabilization.sql": `-- Migration 004 (forward-only, additive). Nothing is dropped, renamed or rewritten; no existing value, id, amount, date or rate changes.
--- M9: save requests are remembered so a retried / double-submitted save is answered with its first result instead of being applied twice.
-CREATE TABLE IF NOT EXISTS save_requests(req_id TEXT PRIMARY KEY, rev_before INTEGER NOT NULL, rev_after INTEGER NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL);
--- L6: one row per reminder occurrence that has been surfaced, so it is never surfaced twice.
-CREATE TABLE IF NOT EXISTS reminder_log(reminder_id INTEGER NOT NULL, due_date TEXT NOT NULL, surfaced_at TEXT NOT NULL, PRIMARY KEY(reminder_id, due_date));
--- M7: a real reference from a timetable entry to its subject. The legacy free-text column \`sub\` is kept exactly as it is.
-ALTER TABLE timetable_entries ADD COLUMN subj INTEGER REFERENCES subjects(id);
--- Back-fill ONLY where the legacy text matches exactly one subject name (case / spacing-insensitive); ambiguous or unknown text is left NULL (never guessed).
-UPDATE timetable_entries SET subj = (SELECT s.id FROM subjects s WHERE lower(trim(s.name)) = lower(trim(timetable_entries.sub)))
-  WHERE sub IS NOT NULL AND (SELECT count(*) FROM subjects s WHERE lower(trim(s.name)) = lower(trim(timetable_entries.sub))) = 1;
-`, "/app/db/migrations/005_technical_stabilization.sql": `-- Migration 005 (forward-only, additive). Nothing is dropped, renamed or rewritten; no existing value, id, amount, date or rate changes.
--- C: explicit cross-currency settlement of a teacher payment. A settlement says "this much of payment #tp (in its own currency) settles this much of obligation (lesson / course / project) in the obligation's currency, at this rate".
---    Historical payments get NO settlement rows: they stay exactly as recorded and are reported as unresolved (never guessed).
-CREATE TABLE teacher_settlements(
-  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,
-  tp INTEGER NOT NULL REFERENCES teacher_payments(id),
-  ok TEXT NOT NULL CHECK(ok IN('lesson','course','project')), oid INTEGER NOT NULL,           -- the obligation settled
-  pcur TEXT NOT NULL, pamt INTEGER NOT NULL CHECK(pamt > 0),                                    -- currency and amount PAID that is used for this settlement
-  scur TEXT NOT NULL, samt INTEGER NOT NULL CHECK(samt > 0),                                    -- currency and amount SETTLED on the obligation
-  rx REAL NOT NULL CHECK(rx > 0),                                                               -- units of scur per 1 unit of pcur (direction: pcur -> scur)
-  date TEXT NOT NULL,                                                                           -- settlement date
-  prov TEXT NOT NULL DEFAULT 'new' CHECK(prov IN('new','correction')),                          -- provenance: 'correction' = recorded later for a historical payment (reason mandatory)
-  reason TEXT, extra_json TEXT,
-  CHECK(pcur <> scur), CHECK(prov = 'new' OR length(trim(coalesce(reason,''))) >= 3));
-CREATE INDEX ix_ts_tp ON teacher_settlements(tp);
-CREATE INDEX ix_ts_ob ON teacher_settlements(ok, oid);
-CREATE TRIGGER teacher_settlements_id_guard BEFORE INSERT ON teacher_settlements WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher_settlement' BEGIN SELECT RAISE(ABORT,'id not registered for teacher_settlement'); END;
-CREATE TRIGGER teacher_settlements_id_immutable BEFORE UPDATE OF id ON teacher_settlements BEGIN SELECT RAISE(ABORT,'id is immutable'); END;
--- conservation: settlements can never use more of a payment than the payment holds
-CREATE TRIGGER ts_no_overuse_ins BEFORE INSERT ON teacher_settlements
-  WHEN (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.tp) + NEW.pamt > (SELECT amt FROM teacher_payments WHERE id = NEW.tp)
-  BEGIN SELECT RAISE(ABORT,'settlements would use more than the payment amount'); END;
-CREATE TRIGGER ts_no_overuse_upd BEFORE UPDATE OF pamt, tp ON teacher_settlements
-  WHEN (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.tp AND id <> NEW.id) + NEW.pamt > (SELECT amt FROM teacher_payments WHERE id = NEW.tp)
-  BEGIN SELECT RAISE(ABORT,'settlements would use more than the payment amount'); END;
-CREATE TRIGGER tp_amount_not_below_settlements BEFORE UPDATE OF amt ON teacher_payments
-  WHEN NEW.amt < (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.id)
-  BEGIN SELECT RAISE(ABORT,'a payment cannot be reduced below the amount already used by settlements'); END;
-
--- I: indexes for query paths that exist in the code (lookups by linked service, owner and date); no data is touched
-CREATE INDEX IF NOT EXISTS ix_tp_lk ON teacher_payments(lk);
-CREATE INDEX IF NOT EXISTS ix_tp_date ON teacher_payments(date);
-CREATE INDEX IF NOT EXISTS ix_sp_date ON student_payments(date);
-CREATE INDEX IF NOT EXISTS ix_lessons_sub ON lessons(sub);
-CREATE INDEX IF NOT EXISTS ix_pr_s ON projects(s);
-CREATE INDEX IF NOT EXISTS ix_pr_t ON projects(t);
-CREATE INDEX IF NOT EXISTS ix_rc_inst ON recorded_courses(inst);
-CREATE INDEX IF NOT EXISTS ix_tt_t ON timetable_entries(t);
-`, "/app/db/migrations/006_academy_operations.sql": `-- Administrative records only. No historical financial or teaching rows are rewritten.
-CREATE TABLE service_registrations (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- student_id INTEGER NOT NULL REFERENCES students(id),
- teacher_id INTEGER REFERENCES teachers(id),
- subject_id INTEGER NOT NULL REFERENCES subjects(id),
- title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200),
- starts_on TEXT NOT NULL, ends_on TEXT,
- status TEXT NOT NULL CHECK(status IN ('Active','Paused','Completed','Cancelled')),
- goal TEXT NOT NULL DEFAULT '',
- billing_basis TEXT NOT NULL CHECK(billing_basis IN ('Per lesson','Package','Course','Project')),
- agreed_price INTEGER CHECK(agreed_price IS NULL OR agreed_price>=0),
- -- Currency catalog is replaced transactionally by the legacy settings save.
- -- Validate agreement currency in the API; preserve the historical code here.
- currency TEXT,
- planned_sessions INTEGER CHECK(planned_sessions IS NULL OR planned_sessions>0),
- created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-);
-CREATE INDEX ix_registration_student ON service_registrations(student_id,status);
-CREATE INDEX ix_registration_teacher ON service_registrations(teacher_id,status);
-CREATE TABLE lesson_attendance (
- lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),
- status TEXT NOT NULL CHECK(status IN ('Present','Late','Excused','Absent')),
- note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
-);
-CREATE TABLE lesson_journals (
- lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),
- taught TEXT NOT NULL DEFAULT '', next_step TEXT NOT NULL DEFAULT '',
- homework TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
-);
-CREATE TABLE followup_tasks (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200),
- owner TEXT NOT NULL CHECK(length(trim(owner)) BETWEEN 1 AND 100),
- due_on TEXT NOT NULL,
- priority TEXT NOT NULL CHECK(priority IN ('Normal','High')),
- status TEXT NOT NULL CHECK(status IN ('Open','In Progress','Done','Cancelled')),
- student_id INTEGER REFERENCES students(id), teacher_id INTEGER REFERENCES teachers(id),
- registration_id INTEGER REFERENCES service_registrations(id),
- detail TEXT NOT NULL DEFAULT '', result TEXT NOT NULL DEFAULT '',
- created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-);
-CREATE INDEX ix_tasks_due ON followup_tasks(status,due_on,priority);
-CREATE INDEX ix_tasks_student ON followup_tasks(student_id,status);
-`, "/app/db/migrations/007_academy_management.sql": `-- Additive management features. Existing money, IDs and lesson history are unchanged.
-CREATE TABLE team_users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('Admin','Coordinator','Accountant','Teacher')),teacher_id INTEGER REFERENCES teachers(id),password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL);
-CREATE TABLE user_sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES team_users(id),expires_at TEXT NOT NULL);
-CREATE INDEX ix_sessions_user ON user_sessions(user_id);
-CREATE TABLE teacher_availability(id INTEGER PRIMARY KEY AUTOINCREMENT,teacher_id INTEGER NOT NULL REFERENCES teachers(id),weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)));
-CREATE INDEX ix_availability_teacher ON teacher_availability(teacher_id,weekday);
-CREATE TABLE managed_sessions(id INTEGER PRIMARY KEY AUTOINCREMENT,teacher_id INTEGER NOT NULL REFERENCES teachers(id),student_id INTEGER NOT NULL REFERENCES students(id),subject_id INTEGER NOT NULL REFERENCES subjects(id),date TEXT NOT NULL,starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Proposed','Confirmed','Completed','Cancelled')),kind TEXT NOT NULL CHECK(kind IN('Lesson','Makeup')),replaces_id INTEGER REFERENCES managed_sessions(id),lesson_id INTEGER UNIQUE REFERENCES lessons(id),note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
-CREATE INDEX ix_managed_date ON managed_sessions(date,status,teacher_id);
-CREATE TABLE session_confirmations(session_id INTEGER NOT NULL REFERENCES managed_sessions(id),party TEXT NOT NULL CHECK(party IN('Student','Teacher')),confirmed_at TEXT NOT NULL,recorded_by INTEGER REFERENCES team_users(id),PRIMARY KEY(session_id,party));
-CREATE TABLE lesson_waitlist(id INTEGER PRIMARY KEY AUTOINCREMENT,student_id INTEGER NOT NULL REFERENCES students(id),subject_id INTEGER NOT NULL REFERENCES subjects(id),preferred_teacher_id INTEGER REFERENCES teachers(id),preferred_days TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN('Waiting','Contacted','Placed','Cancelled')));
-CREATE TABLE billing_contracts(id INTEGER PRIMARY KEY AUTOINCREMENT,registration_id INTEGER NOT NULL UNIQUE REFERENCES service_registrations(id),source_kind TEXT NOT NULL CHECK(source_kind IN('Live','Project','Recorded')),target_id INTEGER,total INTEGER NOT NULL CHECK(total>0),currency TEXT NOT NULL,sessions INTEGER NOT NULL CHECK(sessions>0),starts_on TEXT NOT NULL,ends_on TEXT,status TEXT NOT NULL CHECK(status IN('Active','Completed','Cancelled')),created_at TEXT NOT NULL);
-CREATE UNIQUE INDEX ix_contract_target ON billing_contracts(source_kind,target_id) WHERE target_id IS NOT NULL;
-CREATE TABLE billing_installments(id INTEGER PRIMARY KEY AUTOINCREMENT,contract_id INTEGER NOT NULL REFERENCES billing_contracts(id),due_on TEXT NOT NULL,amount INTEGER NOT NULL CHECK(amount>0),note TEXT NOT NULL DEFAULT '');
-CREATE INDEX ix_installment_contract ON billing_installments(contract_id,due_on);
-CREATE TABLE billing_receipts(id INTEGER PRIMARY KEY AUTOINCREMENT,contract_id INTEGER NOT NULL REFERENCES billing_contracts(id),payment_kind TEXT NOT NULL CHECK(payment_kind IN('sp','pp','cp','ad')),payment_id INTEGER NOT NULL,number TEXT UNIQUE,created_at TEXT NOT NULL,UNIQUE(payment_kind,payment_id));
-CREATE TABLE package_usage(lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),contract_id INTEGER NOT NULL REFERENCES billing_contracts(id));
-CREATE INDEX ix_usage_contract ON package_usage(contract_id);
-CREATE TABLE project_stages(id INTEGER PRIMARY KEY AUTOINCREMENT,project_id INTEGER NOT NULL REFERENCES projects(id),title TEXT NOT NULL,owner TEXT NOT NULL,due_on TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Pending','In Progress','Review','Approved')),url TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);
-CREATE TABLE project_revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,stage_id INTEGER NOT NULL REFERENCES project_stages(id),description TEXT NOT NULL,due_on TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Open','Done')),updated_at TEXT NOT NULL);
-CREATE TABLE course_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,enrollment_id INTEGER NOT NULL REFERENCES course_enrollments(id),title TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',planned_on TEXT NOT NULL,delivered_on TEXT,status TEXT NOT NULL CHECK(status IN('Planned','Sent','Confirmed')),note TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);
-CREATE INDEX ix_deliveries_enrollment ON course_deliveries(enrollment_id,planned_on);
--- A receipt is a reference to the original financial row, never another cash movement.
-CREATE TRIGGER protected_package_sp BEFORE UPDATE OF p,date,cur,amt,rx,bamt,bc ON student_payments WHEN (NEW.p IS NOT OLD.p OR NEW.date IS NOT OLD.date OR NEW.cur IS NOT OLD.cur OR NEW.amt IS NOT OLD.amt OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='sp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'Use an audited refund; an issued package receipt is immutable'); END;
-CREATE TRIGGER protected_package_sp_delete BEFORE DELETE ON student_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='sp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued package receipt cannot be deleted'); END;
-CREATE TRIGGER protected_package_lesson BEFORE UPDATE OF s,t,sub,date,st,og,bchg,sc ON lessons WHEN (NEW.s IS NOT OLD.s OR NEW.t IS NOT OLD.t OR NEW.sub IS NOT OLD.sub OR NEW.date IS NOT OLD.date OR NEW.st IS NOT OLD.st OR NEW.og IS NOT OLD.og OR NEW.bchg IS NOT OLD.bchg OR NEW.sc IS NOT OLD.sc) AND EXISTS(SELECT 1 FROM package_usage WHERE lesson_id=OLD.id) BEGIN SELECT RAISE(ABORT,'A redeemed package lesson must retain its agreed charge and identity'); END;
-CREATE TRIGGER protected_agreement_pp BEFORE UPDATE ON project_payments WHEN (NEW.pr IS NOT OLD.pr OR NEW.amt IS NOT OLD.amt OR NEW.cur IS NOT OLD.cur OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.date IS NOT OLD.date OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='pp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt is immutable'); END;
-CREATE TRIGGER protected_agreement_cp BEFORE UPDATE ON course_payments WHEN (NEW.re IS NOT OLD.re OR NEW.amt IS NOT OLD.amt OR NEW.cur IS NOT OLD.cur OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.date IS NOT OLD.date OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='cp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt is immutable'); END;
-CREATE TRIGGER protected_agreement_pp_delete BEFORE DELETE ON project_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='pp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt cannot be deleted'); END;
-CREATE TRIGGER protected_agreement_cp_delete BEFORE DELETE ON course_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='cp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt cannot be deleted'); END;
-CREATE TRIGGER protected_agreement_ad_delete BEFORE DELETE ON student_adjustments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='ad' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued refund cannot be deleted'); END;
-CREATE TRIGGER protected_agreement_ad_update BEFORE UPDATE ON student_adjustments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='ad' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued refund is immutable'); END;
-CREATE TRIGGER protected_contract_project BEFORE UPDATE OF s,subj,rev,cur ON projects WHEN (NEW.s IS NOT OLD.s OR NEW.subj IS NOT OLD.subj OR NEW.rev IS NOT OLD.rev OR NEW.cur IS NOT OLD.cur) AND EXISTS(SELECT 1 FROM billing_contracts WHERE source_kind='Project' AND target_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its student, service, price and currency'); END;
-CREATE TRIGGER protected_contract_enrollment BEFORE UPDATE OF s,rc,price ON course_enrollments WHEN (NEW.s IS NOT OLD.s OR NEW.rc IS NOT OLD.rc OR NEW.price IS NOT OLD.price) AND EXISTS(SELECT 1 FROM billing_contracts WHERE source_kind='Recorded' AND target_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its enrolment and price'); END;
-CREATE TRIGGER protected_contract_course BEFORE UPDATE OF cur,subj ON recorded_courses WHEN (NEW.cur IS NOT OLD.cur OR NEW.subj IS NOT OLD.subj) AND EXISTS(SELECT 1 FROM billing_contracts c JOIN course_enrollments e ON e.id=c.target_id WHERE c.source_kind='Recorded' AND e.rc=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its service and currency'); END;
-CREATE TRIGGER protected_contract_registration BEFORE UPDATE ON service_registrations WHEN (NEW.student_id IS NOT OLD.student_id OR NEW.teacher_id IS NOT OLD.teacher_id OR NEW.subject_id IS NOT OLD.subject_id OR NEW.agreed_price IS NOT OLD.agreed_price OR NEW.currency IS NOT OLD.currency OR NEW.planned_sessions IS NOT OLD.planned_sessions) AND EXISTS(SELECT 1 FROM billing_contracts WHERE registration_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated agreement retains its registration identity and terms'); END;
+`, "/app/db/migrations/001_init.sql": `-- A+ Hub schema v3, migration 001. Forward-only. Money = integer thousandths. Rates = exact REAL (never rounded to thousandths).\r
+-- Record IDs keep the legacy single shared counter: id_registry makes every id unique across all tables and is never deleted from.\r
+CREATE TABLE schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);\r
+CREATE TABLE id_registry(id INTEGER PRIMARY KEY, kind TEXT NOT NULL);\r
+CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);\r
+CREATE TABLE currencies(code TEXT PRIMARY KEY, name TEXT NOT NULL, seq INTEGER NOT NULL);\r
+CREATE TABLE exchange_rates_current(code TEXT PRIMARY KEY REFERENCES currencies(code), rate REAL NOT NULL CHECK(rate>0), saved_at TEXT, rate_type TEXT);\r
+CREATE TABLE exchange_rate_history(id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, rate REAL NOT NULL CHECK(rate>0), saved_at TEXT, rate_type TEXT, recorded_at TEXT NOT NULL);\r
+\r
+CREATE TABLE teachers(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, phone TEXT, email TEXT, spec TEXT, cur TEXT, rate INTEGER,\r
+  status TEXT NOT NULL CHECK(status IN('Active','Inactive')), notes TEXT, archived_at TEXT, extra_json TEXT);\r
+CREATE TABLE students(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, uni TEXT, country TEXT, major TEXT, lv TEXT, cur TEXT, phone TEXT, email TEXT,\r
+  status TEXT NOT NULL CHECK(status IN('Active','Inactive')), notes TEXT, archived_at TEXT, extra_json TEXT);\r
+CREATE TABLE subjects(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN('Live','Recorded','Project')), uni TEXT,\r
+  inst INTEGER REFERENCES teachers(id), lv TEXT, tc TEXT, tr INTEGER, sc TEXT, sr INTEGER, extra_json TEXT);\r
+CREATE TABLE subject_students(subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES students(id), pos INTEGER NOT NULL, PRIMARY KEY(subject_id,student_id));\r
+\r
+CREATE TABLE timetable_entries(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, sched TEXT NOT NULL CHECK(sched IN('one','rec')), wt TEXT CHECK(wt IS NULL OR wt IN('Live','Project','Recorded')),\r
+  date TEXT, day TEXT, dw INTEGER, a TEXT, b TEXT, st TEXT, en TEXT, t INTEGER REFERENCES teachers(id), lv TEXT, sub TEXT, notes TEXT,\r
+  done INTEGER, hist TEXT, rs INTEGER, archived_at TEXT, extra_json TEXT);\r
+CREATE TABLE timetable_students(tt INTEGER NOT NULL REFERENCES timetable_entries(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES students(id), pos INTEGER NOT NULL, PRIMARY KEY(tt,student_id));\r
+-- one row per occurrence date of a recurring series; flags are independent so an occurrence can be moved AND done; nothing here touches the series\r
+CREATE TABLE timetable_occurrences(tt INTEGER NOT NULL REFERENCES timetable_entries(id) ON DELETE CASCADE, od TEXT NOT NULL, done INTEGER, cancelled INTEGER, skipped INTEGER, deleted INTEGER,\r
+  moved_date TEXT, moved_st TEXT, moved_en TEXT, hist TEXT, extra_json TEXT, PRIMARY KEY(tt,od));\r
+\r
+CREATE TABLE lessons(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, date TEXT NOT NULL, t INTEGER NOT NULL REFERENCES teachers(id), s INTEGER NOT NULL REFERENCES students(id),\r
+  sub INTEGER NOT NULL REFERENCES subjects(id), lv TEXT, d REAL NOT NULL, tr INTEGER, sr INTEGER,\r
+  st TEXT NOT NULL CHECK(st IN('Completed','Cancelled','Rescheduled','No Show')), tc TEXT, sc TEXT, trx REAL, srx REAL, bc TEXT, bcost INTEGER NOT NULL, bchg INTEGER NOT NULL, rt TEXT,\r
+  oc INTEGER, og INTEGER, ts TEXT, te TEXT, notes TEXT, tt INTEGER REFERENCES timetable_entries(id) ON DELETE SET NULL, od TEXT, extra_json TEXT);\r
+CREATE TABLE student_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, p INTEGER NOT NULL REFERENCES students(id), date TEXT NOT NULL, cur TEXT, amt INTEGER NOT NULL, rx REAL, rt TEXT,\r
+  bamt INTEGER NOT NULL, bc TEXT, meth TEXT, notes TEXT, extra_json TEXT);\r
+CREATE TABLE teacher_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, p INTEGER NOT NULL REFERENCES teachers(id), date TEXT NOT NULL, cur TEXT, amt INTEGER NOT NULL, rx REAL, rt TEXT,\r
+  bamt INTEGER NOT NULL, bc TEXT, meth TEXT, notes TEXT, src TEXT, srcd TEXT, lk INTEGER, extra_json TEXT);\r
+\r
+CREATE TABLE projects(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, sub TEXT, subj INTEGER REFERENCES subjects(id), uni TEXT, t INTEGER REFERENCES teachers(id), s INTEGER REFERENCES students(id), lv TEXT,\r
+  status TEXT NOT NULL CHECK(status IN('Not Started','In Progress','Completed','Cancelled')), cur TEXT, rev INTEGER NOT NULL, share REAL, rx REAL, rt TEXT, bc TEXT, start TEXT, due TEXT, paid0 INTEGER, notes TEXT, extra_json TEXT);\r
+CREATE TABLE project_payments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, pr INTEGER NOT NULL REFERENCES projects(id), date TEXT, amt INTEGER NOT NULL, meth TEXT, notes TEXT, extra_json TEXT);\r
+CREATE TABLE recorded_courses(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT NOT NULL, sub TEXT, subj INTEGER REFERENCES subjects(id), uni TEXT, inst INTEGER REFERENCES teachers(id), lv TEXT, cur TEXT,\r
+  rx REAL, rt TEXT, bc TEXT, cost INTEGER, price INTEGER NOT NULL, n INTEGER NOT NULL, share REAL, date TEXT, notes TEXT, extra_json TEXT);\r
+-- enrolment paid is ONE running total in the legacy data: kept as an opening balance, never split into invented payments\r
+CREATE TABLE course_enrollments(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, rc INTEGER NOT NULL REFERENCES recorded_courses(id), s INTEGER NOT NULL REFERENCES students(id), date TEXT, price INTEGER NOT NULL, paid INTEGER NOT NULL, extra_json TEXT);\r
+CREATE TABLE course_reminders(id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, name TEXT, rc INTEGER NOT NULL REFERENCES recorded_courses(id), days TEXT, time TEXT, a TEXT, b TEXT, f TEXT, extra_json TEXT);\r
+CREATE TABLE reminder_completions(reminder_id INTEGER NOT NULL REFERENCES course_reminders(id) ON DELETE CASCADE, date TEXT NOT NULL, PRIMARY KEY(reminder_id,date));\r
+\r
+CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, action TEXT NOT NULL, entity TEXT, entity_id INTEGER, before_json TEXT, detail TEXT);\r
+CREATE TABLE migration_runs(id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, mode TEXT NOT NULL, source_sha256 TEXT, status TEXT NOT NULL, report_json TEXT);\r
+CREATE TABLE migration_quarantine(id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER REFERENCES migration_runs(id), entity TEXT NOT NULL, legacy_id INTEGER, reason TEXT NOT NULL, row_json TEXT NOT NULL);\r
+\r
+CREATE INDEX ix_lessons_t ON lessons(t); CREATE INDEX ix_lessons_s ON lessons(s); CREATE INDEX ix_lessons_date ON lessons(date); CREATE INDEX ix_lessons_tt ON lessons(tt);\r
+CREATE INDEX ix_sp_p ON student_payments(p); CREATE INDEX ix_tp_p ON teacher_payments(p); CREATE INDEX ix_pp_pr ON project_payments(pr);\r
+CREATE INDEX ix_re_rc ON course_enrollments(rc); CREATE INDEX ix_re_s ON course_enrollments(s); CREATE INDEX ix_rm_rc ON course_reminders(rc);\r
+\r
+-- every record id must be registered (kind matches) before insert: ids stay unique across ALL tables and are never reused\r
+CREATE TRIGGER teachers_id_guard BEFORE INSERT ON teachers WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher' BEGIN SELECT RAISE(ABORT,'id not registered for teacher'); END;\r
+CREATE TRIGGER teachers_id_immutable BEFORE UPDATE OF id ON teachers BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER students_id_guard BEFORE INSERT ON students WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student' BEGIN SELECT RAISE(ABORT,'id not registered for student'); END;\r
+CREATE TRIGGER students_id_immutable BEFORE UPDATE OF id ON students BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER subjects_id_guard BEFORE INSERT ON subjects WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'subject' BEGIN SELECT RAISE(ABORT,'id not registered for subject'); END;\r
+CREATE TRIGGER subjects_id_immutable BEFORE UPDATE OF id ON subjects BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER lessons_id_guard BEFORE INSERT ON lessons WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'lesson' BEGIN SELECT RAISE(ABORT,'id not registered for lesson'); END;\r
+CREATE TRIGGER lessons_id_immutable BEFORE UPDATE OF id ON lessons BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER student_payments_id_guard BEFORE INSERT ON student_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student_payment' BEGIN SELECT RAISE(ABORT,'id not registered for student_payment'); END;\r
+CREATE TRIGGER student_payments_id_immutable BEFORE UPDATE OF id ON student_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER teacher_payments_id_guard BEFORE INSERT ON teacher_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher_payment' BEGIN SELECT RAISE(ABORT,'id not registered for teacher_payment'); END;\r
+CREATE TRIGGER teacher_payments_id_immutable BEFORE UPDATE OF id ON teacher_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER timetable_entries_id_guard BEFORE INSERT ON timetable_entries WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'timetable' BEGIN SELECT RAISE(ABORT,'id not registered for timetable'); END;\r
+CREATE TRIGGER timetable_entries_id_immutable BEFORE UPDATE OF id ON timetable_entries BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER projects_id_guard BEFORE INSERT ON projects WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'project' BEGIN SELECT RAISE(ABORT,'id not registered for project'); END;\r
+CREATE TRIGGER projects_id_immutable BEFORE UPDATE OF id ON projects BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER project_payments_id_guard BEFORE INSERT ON project_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'project_payment' BEGIN SELECT RAISE(ABORT,'id not registered for project_payment'); END;\r
+CREATE TRIGGER project_payments_id_immutable BEFORE UPDATE OF id ON project_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER recorded_courses_id_guard BEFORE INSERT ON recorded_courses WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'course' BEGIN SELECT RAISE(ABORT,'id not registered for course'); END;\r
+CREATE TRIGGER recorded_courses_id_immutable BEFORE UPDATE OF id ON recorded_courses BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER course_enrollments_id_guard BEFORE INSERT ON course_enrollments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'enrollment' BEGIN SELECT RAISE(ABORT,'id not registered for enrollment'); END;\r
+CREATE TRIGGER course_enrollments_id_immutable BEFORE UPDATE OF id ON course_enrollments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER course_reminders_id_guard BEFORE INSERT ON course_reminders WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'reminder' BEGIN SELECT RAISE(ABORT,'id not registered for reminder'); END;\r
+CREATE TRIGGER course_reminders_id_immutable BEFORE UPDATE OF id ON course_reminders BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER id_registry_nodelete BEFORE DELETE ON id_registry BEGIN SELECT RAISE(ABORT,'ids are never reused'); END;\r
+`, "/app/db/migrations/002_audit_guards.sql": `-- Migration 002 (forward-only): richer, append-only audit log. Existing rows are untouched; new columns are NULL for them.\r
+ALTER TABLE audit_log ADD COLUMN after_json TEXT;\r
+ALTER TABLE audit_log ADD COLUMN actor TEXT;\r
+CREATE INDEX ix_audit_entity ON audit_log(entity, entity_id);\r
+CREATE INDEX ix_audit_at ON audit_log(at);\r
+-- append-only: the application can add audit rows but never change or remove them\r
+CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;\r
+CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;\r
+`, "/app/db/migrations/003_financial_ledger.sql": `-- Migration 003 (forward-only, additive): financial ledger.\r
+-- Nothing is dropped, renamed or rewritten. Every original amount, date, rate and id is untouched.\r
+-- Back-fills only NEW bookkeeping columns, and marks how trustworthy each stored conversion is:\r
+--   fxs = 'stored'   : the payment itself carries its own rate and base amount (student / teacher payments)\r
+--   fxs = 'identity' : payment currency is the base currency: rate 1 by definition (nothing to look up, nothing copied)\r
+--   fxs = 'derived'  : ONLY for payments entered after this migration in a foreign currency: the parent's saved rate at the moment of entry, frozen and flagged as an estimate\r
+--   fxs = 'missing'  : no usable rate exists anywhere; it is listed in the reconciliation report and never guessed\r
+--   fxs = 'corrected': changed later by an audited manual correction (new rows only)\r
+\r
+-- ---- H3: frozen conversion on every payment ---------------------------------------------------------------\r
+ALTER TABLE student_payments ADD COLUMN fxs TEXT;\r
+ALTER TABLE teacher_payments ADD COLUMN fxs TEXT;\r
+ALTER TABLE project_payments ADD COLUMN cur TEXT;\r
+ALTER TABLE project_payments ADD COLUMN rx REAL;\r
+ALTER TABLE project_payments ADD COLUMN bamt INTEGER;\r
+ALTER TABLE project_payments ADD COLUMN bc TEXT;\r
+ALTER TABLE project_payments ADD COLUMN fxs TEXT;\r
+\r
+UPDATE student_payments SET fxs = CASE WHEN rx > 0 AND bamt IS NOT NULL AND bc IS NOT NULL THEN 'stored' ELSE 'missing' END;\r
+UPDATE teacher_payments SET fxs = CASE WHEN rx > 0 AND bamt IS NOT NULL AND bc IS NOT NULL THEN 'stored' ELSE 'missing' END;\r
+-- Legacy project payments never had a rate of their own. The parent project's CURRENT rate is NOT copied (it is not a transaction-date rate):\r
+--   * payment currency = base currency  -> fxs 'identity': rate 1 and bamt = amt by definition, no historical rate needed\r
+--   * any other currency                -> fxs 'missing': no rate or base amount is invented; it is listed for an audited manual correction\r
+UPDATE project_payments SET cur = (SELECT cur FROM projects WHERE projects.id = project_payments.pr);\r
+UPDATE project_payments SET rx = 1, bamt = amt, bc = cur, fxs = 'identity'\r
+  WHERE cur IS NOT NULL AND cur = (SELECT trim(value, '"') FROM settings WHERE key = 'base');\r
+UPDATE project_payments SET fxs = 'missing' WHERE fxs IS NULL;\r
+\r
+-- ---- H5: dated receipts for course enrolments; the old undated "paid" figure becomes a labelled opening balance ----\r
+ALTER TABLE course_enrollments ADD COLUMN paid_open INTEGER;\r
+UPDATE course_enrollments SET paid_open = paid;   -- everything recorded before this migration has no payment date: it is an opening balance\r
+\r
+CREATE TABLE course_payments(\r
+  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,\r
+  re INTEGER NOT NULL REFERENCES course_enrollments(id),\r
+  date TEXT NOT NULL, amt INTEGER NOT NULL CHECK(amt > 0),\r
+  cur TEXT, rx REAL, bamt INTEGER, bc TEXT, fxs TEXT, meth TEXT, notes TEXT, extra_json TEXT);\r
+CREATE INDEX ix_cp_re ON course_payments(re);\r
+\r
+-- ---- M1: explicit allocation of a student receipt to a work type and (optionally) one specific charge -------------\r
+CREATE TABLE payment_allocations(\r
+  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,\r
+  sp INTEGER NOT NULL REFERENCES student_payments(id),\r
+  wt TEXT NOT NULL CHECK(wt IN('Live','Recorded','Project','Other')),\r
+  tk TEXT CHECK(tk IS NULL OR tk IN('lesson','enrollment','project')),\r
+  tid INTEGER, amt INTEGER NOT NULL CHECK(amt > 0), date TEXT NOT NULL, reason TEXT, extra_json TEXT);\r
+CREATE INDEX ix_al_sp ON payment_allocations(sp);\r
+CREATE TRIGGER al_no_overallocation_ins BEFORE INSERT ON payment_allocations\r
+  WHEN (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.sp) + NEW.amt > (SELECT amt FROM student_payments WHERE id = NEW.sp)\r
+  BEGIN SELECT RAISE(ABORT,'allocations would exceed the payment amount'); END;\r
+CREATE TRIGGER al_no_overallocation_upd BEFORE UPDATE OF amt, sp ON payment_allocations\r
+  WHEN (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.sp AND id <> NEW.id) + NEW.amt > (SELECT amt FROM student_payments WHERE id = NEW.sp)\r
+  BEGIN SELECT RAISE(ABORT,'allocations would exceed the payment amount'); END;\r
+CREATE TRIGGER sp_amount_not_below_allocations BEFORE UPDATE OF amt ON student_payments\r
+  WHEN NEW.amt < (SELECT COALESCE(SUM(amt),0) FROM payment_allocations WHERE sp = NEW.id)\r
+  BEGIN SELECT RAISE(ABORT,'a payment cannot be reduced below the amount already allocated; remove or reduce the allocations first'); END;\r
+\r
+-- ---- M2: refunds, student credit and explicit resolution of money held for a cancelled project ----------------------\r
+--  refund      money returned to the student           credit       money kept by the academy as student credit\r
+--  credit-used student credit applied to a new charge   retained     explicit manual resolution: the academy keeps the money (reason mandatory)\r
+CREATE TABLE student_adjustments(\r
+  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,\r
+  s INTEGER NOT NULL REFERENCES students(id), pr INTEGER REFERENCES projects(id),\r
+  kind TEXT NOT NULL CHECK(kind IN('refund','credit','credit-used','retained')),\r
+  date TEXT NOT NULL, cur TEXT NOT NULL, amt INTEGER NOT NULL CHECK(amt > 0),\r
+  rx REAL, bamt INTEGER, bc TEXT, fxs TEXT,\r
+  ok TEXT, oid INTEGER,                                   -- original payment reference (kind: sp | pp | cp | opening), when there is one\r
+  reason TEXT NOT NULL CHECK(length(trim(reason)) >= 3), extra_json TEXT);\r
+CREATE INDEX ix_sa_s ON student_adjustments(s);\r
+CREATE INDEX ix_sa_pr ON student_adjustments(pr);\r
+\r
+-- ---- id registry guards for the new record kinds (same single shared id counter as the rest of the app) ----------------\r
+CREATE TRIGGER course_payments_id_guard BEFORE INSERT ON course_payments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'course_payment' BEGIN SELECT RAISE(ABORT,'id not registered for course_payment'); END;\r
+CREATE TRIGGER course_payments_id_immutable BEFORE UPDATE OF id ON course_payments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER payment_allocations_id_guard BEFORE INSERT ON payment_allocations WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'payment_allocation' BEGIN SELECT RAISE(ABORT,'id not registered for payment_allocation'); END;\r
+CREATE TRIGGER payment_allocations_id_immutable BEFORE UPDATE OF id ON payment_allocations BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+CREATE TRIGGER student_adjustments_id_guard BEFORE INSERT ON student_adjustments WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'student_adjustment' BEGIN SELECT RAISE(ABORT,'id not registered for student_adjustment'); END;\r
+CREATE TRIGGER student_adjustments_id_immutable BEFORE UPDATE OF id ON student_adjustments BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+\r
+-- ---- H6: audit entries can carry a reason and the related student / teacher / project ids ---------------------------------\r
+ALTER TABLE audit_log ADD COLUMN reason TEXT;\r
+ALTER TABLE audit_log ADD COLUMN related_json TEXT;\r
+`, "/app/db/migrations/004_stabilization.sql": `-- Migration 004 (forward-only, additive). Nothing is dropped, renamed or rewritten; no existing value, id, amount, date or rate changes.\r
+-- M9: save requests are remembered so a retried / double-submitted save is answered with its first result instead of being applied twice.\r
+CREATE TABLE IF NOT EXISTS save_requests(req_id TEXT PRIMARY KEY, rev_before INTEGER NOT NULL, rev_after INTEGER NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL);\r
+-- L6: one row per reminder occurrence that has been surfaced, so it is never surfaced twice.\r
+CREATE TABLE IF NOT EXISTS reminder_log(reminder_id INTEGER NOT NULL, due_date TEXT NOT NULL, surfaced_at TEXT NOT NULL, PRIMARY KEY(reminder_id, due_date));\r
+-- M7: a real reference from a timetable entry to its subject. The legacy free-text column \`sub\` is kept exactly as it is.\r
+ALTER TABLE timetable_entries ADD COLUMN subj INTEGER REFERENCES subjects(id);\r
+-- Back-fill ONLY where the legacy text matches exactly one subject name (case / spacing-insensitive); ambiguous or unknown text is left NULL (never guessed).\r
+UPDATE timetable_entries SET subj = (SELECT s.id FROM subjects s WHERE lower(trim(s.name)) = lower(trim(timetable_entries.sub)))\r
+  WHERE sub IS NOT NULL AND (SELECT count(*) FROM subjects s WHERE lower(trim(s.name)) = lower(trim(timetable_entries.sub))) = 1;\r
+`, "/app/db/migrations/005_technical_stabilization.sql": `-- Migration 005 (forward-only, additive). Nothing is dropped, renamed or rewritten; no existing value, id, amount, date or rate changes.\r
+-- C: explicit cross-currency settlement of a teacher payment. A settlement says "this much of payment #tp (in its own currency) settles this much of obligation (lesson / course / project) in the obligation's currency, at this rate".\r
+--    Historical payments get NO settlement rows: they stay exactly as recorded and are reported as unresolved (never guessed).\r
+CREATE TABLE teacher_settlements(\r
+  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL,\r
+  tp INTEGER NOT NULL REFERENCES teacher_payments(id),\r
+  ok TEXT NOT NULL CHECK(ok IN('lesson','course','project')), oid INTEGER NOT NULL,           -- the obligation settled\r
+  pcur TEXT NOT NULL, pamt INTEGER NOT NULL CHECK(pamt > 0),                                    -- currency and amount PAID that is used for this settlement\r
+  scur TEXT NOT NULL, samt INTEGER NOT NULL CHECK(samt > 0),                                    -- currency and amount SETTLED on the obligation\r
+  rx REAL NOT NULL CHECK(rx > 0),                                                               -- units of scur per 1 unit of pcur (direction: pcur -> scur)\r
+  date TEXT NOT NULL,                                                                           -- settlement date\r
+  prov TEXT NOT NULL DEFAULT 'new' CHECK(prov IN('new','correction')),                          -- provenance: 'correction' = recorded later for a historical payment (reason mandatory)\r
+  reason TEXT, extra_json TEXT,\r
+  CHECK(pcur <> scur), CHECK(prov = 'new' OR length(trim(coalesce(reason,''))) >= 3));\r
+CREATE INDEX ix_ts_tp ON teacher_settlements(tp);\r
+CREATE INDEX ix_ts_ob ON teacher_settlements(ok, oid);\r
+CREATE TRIGGER teacher_settlements_id_guard BEFORE INSERT ON teacher_settlements WHEN (SELECT kind FROM id_registry WHERE id=NEW.id) IS NOT 'teacher_settlement' BEGIN SELECT RAISE(ABORT,'id not registered for teacher_settlement'); END;\r
+CREATE TRIGGER teacher_settlements_id_immutable BEFORE UPDATE OF id ON teacher_settlements BEGIN SELECT RAISE(ABORT,'id is immutable'); END;\r
+-- conservation: settlements can never use more of a payment than the payment holds\r
+CREATE TRIGGER ts_no_overuse_ins BEFORE INSERT ON teacher_settlements\r
+  WHEN (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.tp) + NEW.pamt > (SELECT amt FROM teacher_payments WHERE id = NEW.tp)\r
+  BEGIN SELECT RAISE(ABORT,'settlements would use more than the payment amount'); END;\r
+CREATE TRIGGER ts_no_overuse_upd BEFORE UPDATE OF pamt, tp ON teacher_settlements\r
+  WHEN (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.tp AND id <> NEW.id) + NEW.pamt > (SELECT amt FROM teacher_payments WHERE id = NEW.tp)\r
+  BEGIN SELECT RAISE(ABORT,'settlements would use more than the payment amount'); END;\r
+CREATE TRIGGER tp_amount_not_below_settlements BEFORE UPDATE OF amt ON teacher_payments\r
+  WHEN NEW.amt < (SELECT COALESCE(SUM(pamt),0) FROM teacher_settlements WHERE tp = NEW.id)\r
+  BEGIN SELECT RAISE(ABORT,'a payment cannot be reduced below the amount already used by settlements'); END;\r
+\r
+-- I: indexes for query paths that exist in the code (lookups by linked service, owner and date); no data is touched\r
+CREATE INDEX IF NOT EXISTS ix_tp_lk ON teacher_payments(lk);\r
+CREATE INDEX IF NOT EXISTS ix_tp_date ON teacher_payments(date);\r
+CREATE INDEX IF NOT EXISTS ix_sp_date ON student_payments(date);\r
+CREATE INDEX IF NOT EXISTS ix_lessons_sub ON lessons(sub);\r
+CREATE INDEX IF NOT EXISTS ix_pr_s ON projects(s);\r
+CREATE INDEX IF NOT EXISTS ix_pr_t ON projects(t);\r
+CREATE INDEX IF NOT EXISTS ix_rc_inst ON recorded_courses(inst);\r
+CREATE INDEX IF NOT EXISTS ix_tt_t ON timetable_entries(t);\r
+`, "/app/db/migrations/006_academy_operations.sql": `-- Administrative records only. No historical financial or teaching rows are rewritten.\r
+CREATE TABLE service_registrations (\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,\r
+ student_id INTEGER NOT NULL REFERENCES students(id),\r
+ teacher_id INTEGER REFERENCES teachers(id),\r
+ subject_id INTEGER NOT NULL REFERENCES subjects(id),\r
+ title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200),\r
+ starts_on TEXT NOT NULL, ends_on TEXT,\r
+ status TEXT NOT NULL CHECK(status IN ('Active','Paused','Completed','Cancelled')),\r
+ goal TEXT NOT NULL DEFAULT '',\r
+ billing_basis TEXT NOT NULL CHECK(billing_basis IN ('Per lesson','Package','Course','Project')),\r
+ agreed_price INTEGER CHECK(agreed_price IS NULL OR agreed_price>=0),\r
+ -- Currency catalog is replaced transactionally by the legacy settings save.\r
+ -- Validate agreement currency in the API; preserve the historical code here.\r
+ currency TEXT,\r
+ planned_sessions INTEGER CHECK(planned_sessions IS NULL OR planned_sessions>0),\r
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL\r
+);\r
+CREATE INDEX ix_registration_student ON service_registrations(student_id,status);\r
+CREATE INDEX ix_registration_teacher ON service_registrations(teacher_id,status);\r
+CREATE TABLE lesson_attendance (\r
+ lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),\r
+ status TEXT NOT NULL CHECK(status IN ('Present','Late','Excused','Absent')),\r
+ note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL\r
+);\r
+CREATE TABLE lesson_journals (\r
+ lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),\r
+ taught TEXT NOT NULL DEFAULT '', next_step TEXT NOT NULL DEFAULT '',\r
+ homework TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL\r
+);\r
+CREATE TABLE followup_tasks (\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,\r
+ title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 200),\r
+ owner TEXT NOT NULL CHECK(length(trim(owner)) BETWEEN 1 AND 100),\r
+ due_on TEXT NOT NULL,\r
+ priority TEXT NOT NULL CHECK(priority IN ('Normal','High')),\r
+ status TEXT NOT NULL CHECK(status IN ('Open','In Progress','Done','Cancelled')),\r
+ student_id INTEGER REFERENCES students(id), teacher_id INTEGER REFERENCES teachers(id),\r
+ registration_id INTEGER REFERENCES service_registrations(id),\r
+ detail TEXT NOT NULL DEFAULT '', result TEXT NOT NULL DEFAULT '',\r
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL\r
+);\r
+CREATE INDEX ix_tasks_due ON followup_tasks(status,due_on,priority);\r
+CREATE INDEX ix_tasks_student ON followup_tasks(student_id,status);\r
+`, "/app/db/migrations/007_academy_management.sql": `-- Additive management features. Existing money, IDs and lesson history are unchanged.\r
+CREATE TABLE team_users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('Admin','Coordinator','Accountant','Teacher')),teacher_id INTEGER REFERENCES teachers(id),password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL);\r
+CREATE TABLE user_sessions(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES team_users(id),expires_at TEXT NOT NULL);\r
+CREATE INDEX ix_sessions_user ON user_sessions(user_id);\r
+CREATE TABLE teacher_availability(id INTEGER PRIMARY KEY AUTOINCREMENT,teacher_id INTEGER NOT NULL REFERENCES teachers(id),weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)));\r
+CREATE INDEX ix_availability_teacher ON teacher_availability(teacher_id,weekday);\r
+CREATE TABLE managed_sessions(id INTEGER PRIMARY KEY AUTOINCREMENT,teacher_id INTEGER NOT NULL REFERENCES teachers(id),student_id INTEGER NOT NULL REFERENCES students(id),subject_id INTEGER NOT NULL REFERENCES subjects(id),date TEXT NOT NULL,starts_at TEXT NOT NULL,ends_at TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Proposed','Confirmed','Completed','Cancelled')),kind TEXT NOT NULL CHECK(kind IN('Lesson','Makeup')),replaces_id INTEGER REFERENCES managed_sessions(id),lesson_id INTEGER UNIQUE REFERENCES lessons(id),note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);\r
+CREATE INDEX ix_managed_date ON managed_sessions(date,status,teacher_id);\r
+CREATE TABLE session_confirmations(session_id INTEGER NOT NULL REFERENCES managed_sessions(id),party TEXT NOT NULL CHECK(party IN('Student','Teacher')),confirmed_at TEXT NOT NULL,recorded_by INTEGER REFERENCES team_users(id),PRIMARY KEY(session_id,party));\r
+CREATE TABLE lesson_waitlist(id INTEGER PRIMARY KEY AUTOINCREMENT,student_id INTEGER NOT NULL REFERENCES students(id),subject_id INTEGER NOT NULL REFERENCES subjects(id),preferred_teacher_id INTEGER REFERENCES teachers(id),preferred_days TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN('Waiting','Contacted','Placed','Cancelled')));\r
+CREATE TABLE billing_contracts(id INTEGER PRIMARY KEY AUTOINCREMENT,registration_id INTEGER NOT NULL UNIQUE REFERENCES service_registrations(id),source_kind TEXT NOT NULL CHECK(source_kind IN('Live','Project','Recorded')),target_id INTEGER,total INTEGER NOT NULL CHECK(total>0),currency TEXT NOT NULL,sessions INTEGER NOT NULL CHECK(sessions>0),starts_on TEXT NOT NULL,ends_on TEXT,status TEXT NOT NULL CHECK(status IN('Active','Completed','Cancelled')),created_at TEXT NOT NULL);\r
+CREATE UNIQUE INDEX ix_contract_target ON billing_contracts(source_kind,target_id) WHERE target_id IS NOT NULL;\r
+CREATE TABLE billing_installments(id INTEGER PRIMARY KEY AUTOINCREMENT,contract_id INTEGER NOT NULL REFERENCES billing_contracts(id),due_on TEXT NOT NULL,amount INTEGER NOT NULL CHECK(amount>0),note TEXT NOT NULL DEFAULT '');\r
+CREATE INDEX ix_installment_contract ON billing_installments(contract_id,due_on);\r
+CREATE TABLE billing_receipts(id INTEGER PRIMARY KEY AUTOINCREMENT,contract_id INTEGER NOT NULL REFERENCES billing_contracts(id),payment_kind TEXT NOT NULL CHECK(payment_kind IN('sp','pp','cp','ad')),payment_id INTEGER NOT NULL,number TEXT UNIQUE,created_at TEXT NOT NULL,UNIQUE(payment_kind,payment_id));\r
+CREATE TABLE package_usage(lesson_id INTEGER PRIMARY KEY REFERENCES lessons(id),contract_id INTEGER NOT NULL REFERENCES billing_contracts(id));\r
+CREATE INDEX ix_usage_contract ON package_usage(contract_id);\r
+CREATE TABLE project_stages(id INTEGER PRIMARY KEY AUTOINCREMENT,project_id INTEGER NOT NULL REFERENCES projects(id),title TEXT NOT NULL,owner TEXT NOT NULL,due_on TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Pending','In Progress','Review','Approved')),url TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);\r
+CREATE TABLE project_revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,stage_id INTEGER NOT NULL REFERENCES project_stages(id),description TEXT NOT NULL,due_on TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('Open','Done')),updated_at TEXT NOT NULL);\r
+CREATE TABLE course_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,enrollment_id INTEGER NOT NULL REFERENCES course_enrollments(id),title TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',planned_on TEXT NOT NULL,delivered_on TEXT,status TEXT NOT NULL CHECK(status IN('Planned','Sent','Confirmed')),note TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL);\r
+CREATE INDEX ix_deliveries_enrollment ON course_deliveries(enrollment_id,planned_on);\r
+-- A receipt is a reference to the original financial row, never another cash movement.\r
+CREATE TRIGGER protected_package_sp BEFORE UPDATE OF p,date,cur,amt,rx,bamt,bc ON student_payments WHEN (NEW.p IS NOT OLD.p OR NEW.date IS NOT OLD.date OR NEW.cur IS NOT OLD.cur OR NEW.amt IS NOT OLD.amt OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='sp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'Use an audited refund; an issued package receipt is immutable'); END;\r
+CREATE TRIGGER protected_package_sp_delete BEFORE DELETE ON student_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='sp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued package receipt cannot be deleted'); END;\r
+CREATE TRIGGER protected_package_lesson BEFORE UPDATE OF s,t,sub,date,st,og,bchg,sc ON lessons WHEN (NEW.s IS NOT OLD.s OR NEW.t IS NOT OLD.t OR NEW.sub IS NOT OLD.sub OR NEW.date IS NOT OLD.date OR NEW.st IS NOT OLD.st OR NEW.og IS NOT OLD.og OR NEW.bchg IS NOT OLD.bchg OR NEW.sc IS NOT OLD.sc) AND EXISTS(SELECT 1 FROM package_usage WHERE lesson_id=OLD.id) BEGIN SELECT RAISE(ABORT,'A redeemed package lesson must retain its agreed charge and identity'); END;\r
+CREATE TRIGGER protected_agreement_pp BEFORE UPDATE ON project_payments WHEN (NEW.pr IS NOT OLD.pr OR NEW.amt IS NOT OLD.amt OR NEW.cur IS NOT OLD.cur OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.date IS NOT OLD.date OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='pp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt is immutable'); END;\r
+CREATE TRIGGER protected_agreement_cp BEFORE UPDATE ON course_payments WHEN (NEW.re IS NOT OLD.re OR NEW.amt IS NOT OLD.amt OR NEW.cur IS NOT OLD.cur OR NEW.rx IS NOT OLD.rx OR NEW.bamt IS NOT OLD.bamt OR NEW.date IS NOT OLD.date OR NEW.bc IS NOT OLD.bc) AND EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='cp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt is immutable'); END;\r
+CREATE TRIGGER protected_agreement_pp_delete BEFORE DELETE ON project_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='pp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt cannot be deleted'); END;\r
+CREATE TRIGGER protected_agreement_cp_delete BEFORE DELETE ON course_payments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='cp' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued agreement receipt cannot be deleted'); END;\r
+CREATE TRIGGER protected_agreement_ad_delete BEFORE DELETE ON student_adjustments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='ad' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued refund cannot be deleted'); END;\r
+CREATE TRIGGER protected_agreement_ad_update BEFORE UPDATE ON student_adjustments WHEN EXISTS(SELECT 1 FROM billing_receipts WHERE payment_kind='ad' AND payment_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An issued refund is immutable'); END;\r
+CREATE TRIGGER protected_contract_project BEFORE UPDATE OF s,subj,rev,cur ON projects WHEN (NEW.s IS NOT OLD.s OR NEW.subj IS NOT OLD.subj OR NEW.rev IS NOT OLD.rev OR NEW.cur IS NOT OLD.cur) AND EXISTS(SELECT 1 FROM billing_contracts WHERE source_kind='Project' AND target_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its student, service, price and currency'); END;\r
+CREATE TRIGGER protected_contract_enrollment BEFORE UPDATE OF s,rc,price ON course_enrollments WHEN (NEW.s IS NOT OLD.s OR NEW.rc IS NOT OLD.rc OR NEW.price IS NOT OLD.price) AND EXISTS(SELECT 1 FROM billing_contracts WHERE source_kind='Recorded' AND target_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its enrolment and price'); END;\r
+CREATE TRIGGER protected_contract_course BEFORE UPDATE OF cur,subj ON recorded_courses WHEN (NEW.cur IS NOT OLD.cur OR NEW.subj IS NOT OLD.subj) AND EXISTS(SELECT 1 FROM billing_contracts c JOIN course_enrollments e ON e.id=c.target_id WHERE c.source_kind='Recorded' AND e.rc=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated collection agreement retains its service and currency'); END;\r
+CREATE TRIGGER protected_contract_registration BEFORE UPDATE ON service_registrations WHEN (NEW.student_id IS NOT OLD.student_id OR NEW.teacher_id IS NOT OLD.teacher_id OR NEW.subject_id IS NOT OLD.subject_id OR NEW.agreed_price IS NOT OLD.agreed_price OR NEW.currency IS NOT OLD.currency OR NEW.planned_sessions IS NOT OLD.planned_sessions) AND EXISTS(SELECT 1 FROM billing_contracts WHERE registration_id=OLD.id) BEGIN SELECT RAISE(ABORT,'An activated agreement retains its registration identity and terms'); END;\r
 `, "/app/db/migrations/008_treasury.sql": `-- Operational expenses and cash custody. Native receipts/payments remain the sole financial source.\r
 CREATE TABLE treasury_accounts(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL UNIQUE,kind TEXT NOT NULL CHECK(kind IN('Cash','Bank','Wallet')),currency TEXT NOT NULL REFERENCES currencies(code),opened_on TEXT NOT NULL,allow_overdraft INTEGER NOT NULL DEFAULT 0 CHECK(allow_overdraft IN(0,1)),active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL);\r
 CREATE TABLE treasury_expenses(id INTEGER PRIMARY KEY AUTOINCREMENT,number TEXT UNIQUE,incurred_on TEXT NOT NULL,category TEXT NOT NULL,supplier TEXT NOT NULL,invoice_ref TEXT NOT NULL DEFAULT '',description TEXT NOT NULL,amount INTEGER NOT NULL CHECK(amount>0),currency TEXT NOT NULL REFERENCES currencies(code),rate REAL NOT NULL CHECK(rate>0),base_amount INTEGER NOT NULL CHECK(base_amount>=0),base_currency TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Active' CHECK(status IN('Active','Voided')),void_reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);\r
@@ -31765,923 +31765,923 @@ try{Chart.defaults.color=getComputedStyle(document.documentElement).getPropertyV
 UX.install();TEAM_UI.install();P3_INSTALL();if(TEAM_UI.user.role==='Admin')save();render();sbn();P3_BOOT();
 if(TEAM_UI.user.role==='Admin'&&!LOCK&&!Object.keys(db.rates).length)refreshRates();
 </script><div id="review-banner" dir="rtl" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fef3c7;color:#713f12;border:1px solid #d97706;border-radius:8px;padding:8px 12px;font:14px system-ui;pointer-events:none">نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000</div></body></html>
-`, "/app/public/team-login.html": '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A+ Hub · Team sign in</title><style>body{margin:0;background:#101e33;color:#edf4ff;font:16px system-ui;display:grid;min-height:100vh;place-items:center}.card{background:#1b304d;border:1px solid #395477;border-radius:18px;padding:32px;width:min(420px,85vw)}h1{margin-top:0}label{display:block;margin:16px 0}input,button{box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #6882a5;background:#102139;color:white;font:inherit}button{background:#82b8f3;color:#102139;font-weight:700;cursor:pointer}small{color:#c0d2e7}#error{color:#ffb8b8;white-space:pre-wrap}#setup{display:none}</style></head><body><main class="card"><h1>A+ Hub</h1><h2 id="heading">Team sign in</h2><p id="context">Your account controls which academy records you can access.</p><form id="login"><label>Username<input id="username" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div id="setup"><label>Administrator display name<input id="display"></label><label>Setup code from the server console<input id="code" autocomplete="off"></label><small>Choose your own administrator password, with at least 12 characters. No default production password exists.</small></div><p id="error" role="alert"></p><button id="submit">Sign in</button></form></main><script src="/team-login.js"></script><div id="review-banner" dir="rtl" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fef3c7;color:#713f12;border:1px solid #d97706;border-radius:8px;padding:8px 12px;font:14px system-ui;pointer-events:none">نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000</div></body></html>\n', "/app/public/team-login.js": `'use strict';
-let setup=false;const field=id=>document.getElementById(id);
-fetch('/api/auth/status').then(r=>r.json()).then(r=>{if(r.user){location.replace('/');return;}setup=r.needsSetup;if(setup){field('setup').style.display='block';field('heading').textContent='Create the first administrator';field('submit').textContent='Create administrator';field('context').textContent='Enter the setup code shown in the server console to connect the first administrator.'}}).catch(()=>field('error').textContent='The local server is not available.');
-field('login').onsubmit=async event=>{event.preventDefault();field('submit').disabled=true;field('error').textContent='';try{const body={username:field('username').value,password:field('password').value};if(setup)Object.assign(body,{display_name:field('display').value,setupCode:field('code').value});const response=await fetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-APlus-Token':document.querySelector('meta[name=aplus-token]').content},body:JSON.stringify(body)}),result=await response.json();if(!response.ok)throw Error(result.error||'Could not sign in.');if(setup){setup=false;field('setup').style.display='none';field('heading').textContent='Administrator created — sign in';field('submit').textContent='Sign in';field('password').value='';}else location.replace('/');}catch(error){field('error').textContent=error.message;}finally{field('submit').disabled=false;}};
-`, "/app/fixtures/synthetic-legacy.json": `{
- "t": [
-  {
-   "id": 1,
-   "name": "DEV Legacy Teacher",
-   "rate": 10000
-  }
- ],
- "s": [
-  {
-   "id": 2,
-   "name": "DEV Legacy Student"
-  }
- ],
- "sub": [],
- "l": [
-  {
-   "id": 3,
-   "date": "2026-01-05",
-   "t": 1,
-   "s": 2,
-   "sub": "x",
-   "d": 2,
-   "tr": 10000,
-   "sr": 15000,
-   "st": "Completed",
-   "notes": ""
-  }
- ],
- "sp": [
-  {
-   "id": 4,
-   "p": 2,
-   "date": "2026-01-06",
-   "amt": 20000,
-   "meth": "Cash"
-  }
- ],
- "tp": [
-  {
-   "id": 5,
-   "p": 1,
-   "date": "2026-01-07",
-   "amt": 5000,
-   "meth": "Cash"
-  }
- ],
- "set": {
-  "name": "DEV Legacy",
-  "tr": "10",
-  "sr": "15"
- },
- "id": 6
-}`, "/app/fixtures/synthetic-v5.json": `{
- "v": 5,
- "id": 152,
- "set": {
-  "name": "DEV A+ Hub (synthetic)",
-  "tr": "10",
-  "sr": "15",
-  "base": "KWD"
- },
- "cur": [
-  {
-   "c": "EGP",
-   "n": "Egyptian Pound"
-  },
-  {
-   "c": "KWD",
-   "n": "Kuwaiti Dinar"
-  },
-  {
-   "c": "SAR",
-   "n": "Saudi Riyal"
-  },
-  {
-   "c": "USD",
-   "n": "US Dollar"
-  }
- ],
- "rates": {
-  "EGP": {
-   "r": 0.0064,
-   "t": "2026-01-01T00:00:00.000Z",
-   "type": "Manual"
-  },
-  "SAR": {
-   "r": 0.082,
-   "t": "2026-01-01T00:00:00.000Z",
-   "type": "Manual"
-  },
-  "USD": {
-   "r": 0.307,
-   "t": "2026-01-01T00:00:00.000Z",
-   "type": "Manual"
-  }
- },
- "t": [
-  {
-   "id": 100,
-   "name": "DEV Teacher 01",
-   "phone": "000",
-   "email": "",
-   "spec": "DEV",
-   "cur": "KWD",
-   "rate": 10000,
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 101,
-   "name": "DEV Teacher 02",
-   "phone": "000",
-   "email": "",
-   "spec": "DEV",
-   "cur": "EGP",
-   "rate": 60000,
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 102,
-   "name": "DEV Teacher 03",
-   "phone": "000",
-   "email": "",
-   "spec": "DEV",
-   "cur": "KWD",
-   "rate": 12500,
-   "status": "Active",
-   "notes": ""
-  }
- ],
- "s": [
-  {
-   "id": 103,
-   "name": "DEV Student 01",
-   "uni": "DEV Univ",
-   "country": "",
-   "major": "",
-   "lv": "Undergraduate",
-   "cur": "KWD",
-   "phone": "",
-   "email": "",
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 104,
-   "name": "DEV Student 02",
-   "uni": "DEV Univ",
-   "country": "",
-   "major": "",
-   "lv": "High School",
-   "cur": "SAR",
-   "phone": "",
-   "email": "",
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 105,
-   "name": "DEV Student 03",
-   "uni": "DEV Univ",
-   "country": "",
-   "major": "",
-   "lv": "Postgraduate",
-   "cur": "EGP",
-   "phone": "",
-   "email": "",
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 106,
-   "name": "DEV Student 04",
-   "uni": "DEV Univ",
-   "country": "",
-   "major": "",
-   "lv": "",
-   "cur": "KWD",
-   "phone": "",
-   "email": "",
-   "status": "Active",
-   "notes": ""
-  },
-  {
-   "id": 107,
-   "name": "DEV Student 05",
-   "uni": "DEV Univ",
-   "country": "",
-   "major": "",
-   "lv": "High School",
-   "cur": "USD",
-   "phone": "",
-   "email": "",
-   "status": "Active",
-   "notes": ""
-  }
- ],
- "sub": [
-  {
-   "id": 108,
-   "name": "DEV Math",
-   "type": "Live",
-   "uni": "DEV Univ",
-   "inst": 100,
-   "studs": [
-    103,
-    104
-   ]
-  },
-  {
-   "id": 109,
-   "name": "DEV Physics",
-   "type": "Live",
-   "uni": "DEV Univ",
-   "inst": 101,
-   "studs": [
-    105
-   ]
-  },
-  {
-   "id": 110,
-   "name": "DEV Chemistry",
-   "type": "Live",
-   "uni": "DEV Univ",
-   "inst": 102,
-   "studs": [
-    106,
-    103
-   ]
-  },
-  {
-   "id": 129,
-   "name": "DEV Project Alpha",
-   "type": "Project",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 131,
-   "name": "DEV Project Beta",
-   "type": "Project",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 133,
-   "name": "DEV Project Gamma",
-   "type": "Project",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 135,
-   "name": "DEV Project Delta",
-   "type": "Project",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 139,
-   "name": "DEV Course A",
-   "type": "Recorded",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 141,
-   "name": "DEV Course B",
-   "type": "Recorded",
-   "uni": "DEV Univ"
-  },
-  {
-   "id": 143,
-   "name": "DEV Course C",
-   "type": "Recorded",
-   "uni": "DEV Univ"
-  }
- ],
- "l": [
-  {
-   "id": 111,
-   "date": "2026-08-03",
-   "t": 100,
-   "s": 103,
-   "sub": 108,
-   "lv": "",
-   "d": 2,
-   "tr": 10000,
-   "sr": 15000,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "KWD",
-   "trx": 1,
-   "srx": 1,
-   "bc": "KWD",
-   "bcost": 20000,
-   "bchg": 30000,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 112,
-   "date": "2026-08-10",
-   "t": 100,
-   "s": 104,
-   "sub": 108,
-   "lv": "",
-   "d": 1.5,
-   "tr": 10000,
-   "sr": 45000,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "SAR",
-   "trx": 1,
-   "srx": 0.082,
-   "bc": "KWD",
-   "bcost": 15000,
-   "bchg": 5535,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 113,
-   "date": "2026-08-12",
-   "t": 101,
-   "s": 105,
-   "sub": 109,
-   "lv": "",
-   "d": 2,
-   "tr": 60000,
-   "sr": 90000,
-   "st": "Completed",
-   "tc": "EGP",
-   "sc": "EGP",
-   "trx": 0.0064,
-   "srx": 0.0064,
-   "bc": "KWD",
-   "bcost": 768,
-   "bchg": 1152,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 114,
-   "date": "2026-09-02",
-   "t": 102,
-   "s": 106,
-   "sub": 110,
-   "lv": "",
-   "d": 1,
-   "tr": 12500,
-   "sr": 18000,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "KWD",
-   "trx": 1,
-   "srx": 1,
-   "bc": "KWD",
-   "bcost": 12500,
-   "bchg": 18000,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 115,
-   "date": "2026-09-04",
-   "t": 100,
-   "s": 103,
-   "sub": 108,
-   "lv": "",
-   "d": 1,
-   "tr": 10000,
-   "sr": 15000,
-   "st": "Cancelled",
-   "tc": "KWD",
-   "sc": "KWD",
-   "trx": 1,
-   "srx": 1,
-   "bc": "KWD",
-   "bcost": 10000,
-   "bchg": 15000,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 116,
-   "date": "2026-09-06",
-   "t": 102,
-   "s": 103,
-   "sub": 110,
-   "lv": "",
-   "d": 0.75,
-   "tr": 12500,
-   "sr": 16000,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "KWD",
-   "trx": 1,
-   "srx": 1,
-   "bc": "KWD",
-   "bcost": 9375,
-   "bchg": 12000,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 117,
-   "date": "2026-09-09",
-   "t": 101,
-   "s": 105,
-   "sub": 109,
-   "lv": "",
-   "d": 1,
-   "tr": 60000,
-   "sr": 90000,
-   "st": "No Show",
-   "tc": "EGP",
-   "sc": "EGP",
-   "trx": 0.0064,
-   "srx": 0.0064,
-   "bc": "KWD",
-   "bcost": 384,
-   "bchg": 576,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 118,
-   "date": "2026-10-07",
-   "t": 102,
-   "s": 107,
-   "sub": 110,
-   "lv": "",
-   "d": 1.3,
-   "tr": 12500,
-   "sr": 33333,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "USD",
-   "trx": 1,
-   "srx": 0.307,
-   "bc": "KWD",
-   "bcost": 16250,
-   "bchg": 13303,
-   "rt": "Manual",
-   "notes": ""
-  },
-  {
-   "id": 119,
-   "date": "2026-10-01",
-   "t": 100,
-   "s": 104,
-   "sub": 108,
-   "lv": "",
-   "d": 2,
-   "tr": 10000,
-   "sr": 45000,
-   "st": "Completed",
-   "tc": "KWD",
-   "sc": "SAR",
-   "trx": 1,
-   "srx": 0.081,
-   "bc": "KWD",
-   "bcost": 20000,
-   "bchg": 7290,
-   "rt": "Manual",
-   "notes": ""
-  }
- ],
- "sp": [
-  {
-   "id": 120,
-   "p": 103,
-   "date": "2026-08-05",
-   "cur": "KWD",
-   "amt": 20000,
-   "rx": 1,
-   "rt": "Same",
-   "bamt": 20000,
-   "bc": "KWD",
-   "meth": "Cash",
-   "notes": ""
-  },
-  {
-   "id": 121,
-   "p": 104,
-   "date": "2026-08-11",
-   "cur": "SAR",
-   "amt": 60000,
-   "rx": 0.082,
-   "rt": "Manual",
-   "bamt": 4920,
-   "bc": "KWD",
-   "meth": "Bank",
-   "notes": ""
-  },
-  {
-   "id": 122,
-   "p": 105,
-   "date": "2026-08-13",
-   "cur": "EGP",
-   "amt": 100000,
-   "rx": 0.0064,
-   "rt": "Manual",
-   "bamt": 640,
-   "bc": "KWD",
-   "meth": "Cash",
-   "notes": ""
-  },
-  {
-   "id": 123,
-   "p": 107,
-   "date": "2026-10-08",
-   "cur": "USD",
-   "amt": 12345,
-   "rx": 0.307,
-   "rt": "Manual",
-   "bamt": 3790,
-   "bc": "KWD",
-   "meth": "Bank",
-   "notes": ""
-  },
-  {
-   "id": 124,
-   "p": 106,
-   "date": "2026-09-03",
-   "cur": "KWD",
-   "amt": 10000,
-   "rx": 1,
-   "rt": "Same",
-   "bamt": 10000,
-   "bc": "KWD",
-   "meth": "KNET",
-   "notes": ""
-  }
- ],
- "tp": [
-  {
-   "id": 125,
-   "p": 100,
-   "date": "2026-08-15",
-   "cur": "KWD",
-   "amt": 10000,
-   "rx": 1,
-   "rt": "Same",
-   "bamt": 10000,
-   "bc": "KWD",
-   "meth": "Cash",
-   "notes": "",
-   "src": "Live",
-   "srcd": "",
-   "lk": 0
-  },
-  {
-   "id": 126,
-   "p": 101,
-   "date": "2026-08-20",
-   "cur": "EGP",
-   "amt": 120000,
-   "rx": 0.0064,
-   "rt": "Manual",
-   "bamt": 768,
-   "bc": "KWD",
-   "meth": "Bank",
-   "notes": "",
-   "src": "Live",
-   "srcd": "",
-   "lk": 0
-  },
-  {
-   "id": 127,
-   "p": 102,
-   "date": "2026-09-10",
-   "cur": "KWD",
-   "amt": 5000,
-   "rx": 1,
-   "rt": "Same",
-   "bamt": 5000,
-   "bc": "KWD",
-   "meth": "Cash",
-   "notes": "",
-   "src": "Other",
-   "srcd": "DEV bonus",
-   "lk": 0
-  },
-  {
-   "id": 128,
-   "p": 100,
-   "date": "2026-07-01",
-   "cur": "KWD",
-   "amt": 3000,
-   "rx": 1,
-   "rt": "Same",
-   "bamt": 3000,
-   "bc": "KWD",
-   "meth": "Cash",
-   "notes": ""
-  }
- ],
- "tt": [
-  {
-   "id": 150,
-   "sched": "rec",
-   "wt": "Live",
-   "date": "2026-08-03",
-   "day": "Monday",
-   "dw": 1,
-   "a": "2026-08-03",
-   "b": "",
-   "st": "16:00",
-   "en": "18:00",
-   "t": 100,
-   "lv": "",
-   "s": [
-    103,
-    104
-   ],
-   "sub": "DEV Math",
-   "notes": "",
-   "ex": {
-    "2026-08-10": {
-     "done": 1
-    },
-    "2026-08-17": {
-     "cancelled": 1
-    }
-   }
-  },
-  {
-   "id": 151,
-   "sched": "one",
-   "wt": "Live",
-   "date": "2026-10-05",
-   "day": "Monday",
-   "st": "10:00",
-   "en": "11:00",
-   "t": 102,
-   "lv": "",
-   "s": [
-    106
-   ],
-   "sub": "DEV Chemistry",
-   "notes": "",
-   "ex": {},
-   "done": 1
-  }
- ],
- "pr": [
-  {
-   "id": 130,
-   "name": "DEV Project Alpha",
-   "sub": "",
-   "subj": 129,
-   "uni": "DEV Univ",
-   "t": 100,
-   "s": 103,
-   "lv": "",
-   "status": "In Progress",
-   "cur": "KWD",
-   "rev": 100000,
-   "share": 40,
-   "rx": 1,
-   "rt": "Manual",
-   "bc": "KWD",
-   "start": "2026-08-15",
-   "due": "",
-   "paid0": 10000,
-   "notes": ""
-  },
-  {
-   "id": 132,
-   "name": "DEV Project Beta",
-   "sub": "",
-   "subj": 131,
-   "uni": "DEV Univ",
-   "t": 101,
-   "s": 105,
-   "lv": "",
-   "status": "In Progress",
-   "cur": "EGP",
-   "rev": 500000,
-   "share": 30,
-   "rx": 0.0064,
-   "rt": "Manual",
-   "bc": "KWD",
-   "start": "2026-09-01",
-   "due": "",
-   "paid0": 0,
-   "notes": ""
-  },
-  {
-   "id": 134,
-   "name": "DEV Project Gamma",
-   "sub": "",
-   "subj": 133,
-   "uni": "DEV Univ",
-   "t": 102,
-   "s": 106,
-   "lv": "",
-   "status": "Cancelled",
-   "cur": "KWD",
-   "rev": 50000,
-   "share": 50,
-   "rx": 1,
-   "rt": "Manual",
-   "bc": "KWD",
-   "start": "2026-09-05",
-   "due": "",
-   "paid0": 0,
-   "notes": ""
-  },
-  {
-   "id": 136,
-   "name": "DEV Project Delta",
-   "sub": "",
-   "subj": 135,
-   "uni": "DEV Univ",
-   "t": 102,
-   "s": 107,
-   "lv": "",
-   "status": "In Progress",
-   "cur": "USD",
-   "rev": 12345,
-   "share": 35,
-   "rx": 0.307,
-   "rt": "Manual",
-   "bc": "KWD",
-   "start": "2026-10-03",
-   "due": "",
-   "paid0": 1111,
-   "notes": ""
-  }
- ],
- "pp": [
-  {
-   "id": 137,
-   "pr": 130,
-   "date": "2026-09-12",
-   "amt": 20000,
-   "meth": "Bank",
-   "notes": ""
-  },
-  {
-   "id": 138,
-   "pr": 132,
-   "date": "2026-10-02",
-   "amt": 100000,
-   "meth": "Cash",
-   "notes": ""
-  }
- ],
- "rc": [
-  {
-   "id": 140,
-   "name": "DEV Course A",
-   "sub": "",
-   "subj": 139,
-   "uni": "DEV Univ",
-   "inst": 102,
-   "lv": "",
-   "cur": "KWD",
-   "rx": 1,
-   "rt": "Manual",
-   "bc": "KWD",
-   "cost": 5000,
-   "price": 30000,
-   "n": 3,
-   "share": 30,
-   "date": "2026-08-20",
-   "notes": ""
-  },
-  {
-   "id": 142,
-   "name": "DEV Course B",
-   "sub": "",
-   "subj": 141,
-   "uni": "DEV Univ",
-   "inst": 101,
-   "lv": "",
-   "cur": "SAR",
-   "rx": 0.082,
-   "rt": "Manual",
-   "bc": "KWD",
-   "cost": 0,
-   "price": 100000,
-   "n": 2,
-   "share": 25,
-   "date": "2026-09-15",
-   "notes": ""
-  },
-  {
-   "id": 144,
-   "name": "DEV Course C",
-   "sub": "",
-   "subj": 143,
-   "uni": "DEV Univ",
-   "inst": 100,
-   "lv": "",
-   "cur": "USD",
-   "rx": 0.307,
-   "rt": "Manual",
-   "bc": "KWD",
-   "cost": 777,
-   "price": 12345,
-   "n": 1,
-   "share": 30,
-   "date": "2026-10-04",
-   "notes": ""
-  }
- ],
- "re": [
-  {
-   "id": 145,
-   "rc": 144,
-   "s": 107,
-   "date": "2026-10-05",
-   "price": 12345,
-   "paid": 7777
-  },
-  {
-   "id": 146,
-   "rc": 140,
-   "s": 103,
-   "date": "2026-08-21",
-   "price": 30000,
-   "paid": 30000
-  },
-  {
-   "id": 147,
-   "rc": 140,
-   "s": 106,
-   "date": "2026-08-22",
-   "price": 30000,
-   "paid": 10000
-  },
-  {
-   "id": 148,
-   "rc": 142,
-   "s": 104,
-   "date": "2026-09-16",
-   "price": 100000,
-   "paid": 0
-  }
- ],
- "rm": [
-  {
-   "id": 149,
-   "name": "DEV send lectures",
-   "rc": 140,
-   "days": [
-    1,
-    4
-   ],
-   "time": "18:00",
-   "a": "2026-08-20",
-   "b": "",
-   "f": "weekly"
-  }
- ],
- "rd": {
-  "149|2026-09-07": 1
- }
-}`, "/app/package.json": `{
-  "name": "aplus-hub-localhost",
-  "version": "3.0.0",
-  "private": true,
-  "description": "A+ Hub Academy management system, running locally on Node.js + SQLite. No cloud dependency.",
-  "engines": { "node": ">=22.5.0" },
-  "scripts": {
-    "start": "node --no-warnings src/server.js",
-    "start:synthetic": "node scripts/start-synthetic.js",
-    "build:public": "node tools/make-public.js",
-    "migrate:dry-run": "node --no-warnings scripts/migrate-legacy.js",
-    "backup": "node --no-warnings scripts/backup.js",
-    "restore": "node --no-warnings scripts/restore.js",
-    "verify": "node --no-warnings scripts/verify-db.js",
-    "test": "node tools/run-all.js",
-    "test:legacy": "node tools/run-all.js"
-  },
-  "devDependencies": {}
-}
-`, "/app/preview/schema.sql": `-- Additive browser-preview schema; original academy schema/version remains unchanged.
-CREATE TABLE IF NOT EXISTS preview_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS preview_student_accounts(
- id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
- display_name TEXT NOT NULL, student_id INTEGER NOT NULL REFERENCES students(id),
- password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS preview_student_sessions(token_hash TEXT PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES preview_student_accounts(id),expires_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS preview_requests(
- id INTEGER PRIMARY KEY AUTOINCREMENT,request_key TEXT NOT NULL UNIQUE,kind TEXT NOT NULL,
- actor TEXT NOT NULL,student_id INTEGER REFERENCES students(id),record TEXT NOT NULL,
- status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN('Pending','Approved','Rejected')),
- reason TEXT NOT NULL,created_at TEXT NOT NULL,decided_at TEXT,decided_by TEXT,result TEXT
-);
-CREATE TABLE IF NOT EXISTS preview_shares(
- id INTEGER PRIMARY KEY AUTOINCREMENT,student_id INTEGER NOT NULL REFERENCES students(id),
- teacher_id INTEGER REFERENCES teachers(id),kind TEXT NOT NULL,source_id INTEGER NOT NULL,
- title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',url TEXT NOT NULL DEFAULT '',due_on TEXT,
- released INTEGER NOT NULL DEFAULT 0 CHECK(released IN(0,1)),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
- UNIQUE(student_id,kind,source_id,title)
-);
-CREATE TABLE IF NOT EXISTS preview_submissions(
- id INTEGER PRIMARY KEY AUTOINCREMENT,share_id INTEGER NOT NULL REFERENCES preview_shares(id),
- student_id INTEGER NOT NULL REFERENCES students(id),body TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',
- created_at TEXT NOT NULL,updated_at TEXT NOT NULL, UNIQUE(share_id,student_id)
-);
-CREATE TABLE IF NOT EXISTS preview_feedback(
- id INTEGER PRIMARY KEY AUTOINCREMENT,submission_id INTEGER NOT NULL UNIQUE REFERENCES preview_submissions(id),
- body TEXT NOT NULL,published INTEGER NOT NULL DEFAULT 0 CHECK(published IN(0,1)),updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS preview_notifications(
- id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL,recipient_kind TEXT NOT NULL CHECK(recipient_kind IN('Student','Teacher')),
- recipient_id INTEGER NOT NULL,kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,
- UNIQUE(event_key,recipient_kind,recipient_id)
-);
+`, "/app/public/team-login.html": '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A+ Hub · Team sign in</title><style>body{margin:0;background:#101e33;color:#edf4ff;font:16px system-ui;display:grid;min-height:100vh;place-items:center}.card{background:#1b304d;border:1px solid #395477;border-radius:18px;padding:32px;width:min(420px,85vw)}h1{margin-top:0}label{display:block;margin:16px 0}input,button{box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #6882a5;background:#102139;color:white;font:inherit}button{background:#82b8f3;color:#102139;font-weight:700;cursor:pointer}small{color:#c0d2e7}#error{color:#ffb8b8;white-space:pre-wrap}#setup{display:none}</style></head><body><main class="card"><h1>A+ Hub</h1><h2 id="heading">Team sign in</h2><p id="context">Your account controls which academy records you can access.</p><form id="login"><label>Username<input id="username" autocomplete="username" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div id="setup"><label>Administrator display name<input id="display"></label><label>Setup code from the server console<input id="code" autocomplete="off"></label><small>Choose your own administrator password, with at least 12 characters. No default production password exists.</small></div><p id="error" role="alert"></p><button id="submit">Sign in</button></form></main><script src="/team-login.js"></script><div id="review-banner" dir="rtl" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fef3c7;color:#713f12;border:1px solid #d97706;border-radius:8px;padding:8px 12px;font:14px system-ui;pointer-events:none">نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000</div></body></html>\r\n', "/app/public/team-login.js": `'use strict';\r
+let setup=false;const field=id=>document.getElementById(id);\r
+fetch('/api/auth/status').then(r=>r.json()).then(r=>{if(r.user){location.replace('/');return;}setup=r.needsSetup;if(setup){field('setup').style.display='block';field('heading').textContent='Create the first administrator';field('submit').textContent='Create administrator';field('context').textContent='Enter the setup code shown in the server console to connect the first administrator.'}}).catch(()=>field('error').textContent='The local server is not available.');\r
+field('login').onsubmit=async event=>{event.preventDefault();field('submit').disabled=true;field('error').textContent='';try{const body={username:field('username').value,password:field('password').value};if(setup)Object.assign(body,{display_name:field('display').value,setupCode:field('code').value});const response=await fetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-APlus-Token':document.querySelector('meta[name=aplus-token]').content},body:JSON.stringify(body)}),result=await response.json();if(!response.ok)throw Error(result.error||'Could not sign in.');if(setup){setup=false;field('setup').style.display='none';field('heading').textContent='Administrator created — sign in';field('submit').textContent='Sign in';field('password').value='';}else location.replace('/');}catch(error){field('error').textContent=error.message;}finally{field('submit').disabled=false;}};\r
+`, "/app/fixtures/synthetic-legacy.json": `{\r
+ "t": [\r
+  {\r
+   "id": 1,\r
+   "name": "DEV Legacy Teacher",\r
+   "rate": 10000\r
+  }\r
+ ],\r
+ "s": [\r
+  {\r
+   "id": 2,\r
+   "name": "DEV Legacy Student"\r
+  }\r
+ ],\r
+ "sub": [],\r
+ "l": [\r
+  {\r
+   "id": 3,\r
+   "date": "2026-01-05",\r
+   "t": 1,\r
+   "s": 2,\r
+   "sub": "x",\r
+   "d": 2,\r
+   "tr": 10000,\r
+   "sr": 15000,\r
+   "st": "Completed",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "sp": [\r
+  {\r
+   "id": 4,\r
+   "p": 2,\r
+   "date": "2026-01-06",\r
+   "amt": 20000,\r
+   "meth": "Cash"\r
+  }\r
+ ],\r
+ "tp": [\r
+  {\r
+   "id": 5,\r
+   "p": 1,\r
+   "date": "2026-01-07",\r
+   "amt": 5000,\r
+   "meth": "Cash"\r
+  }\r
+ ],\r
+ "set": {\r
+  "name": "DEV Legacy",\r
+  "tr": "10",\r
+  "sr": "15"\r
+ },\r
+ "id": 6\r
+}`, "/app/fixtures/synthetic-v5.json": `{\r
+ "v": 5,\r
+ "id": 152,\r
+ "set": {\r
+  "name": "DEV A+ Hub (synthetic)",\r
+  "tr": "10",\r
+  "sr": "15",\r
+  "base": "KWD"\r
+ },\r
+ "cur": [\r
+  {\r
+   "c": "EGP",\r
+   "n": "Egyptian Pound"\r
+  },\r
+  {\r
+   "c": "KWD",\r
+   "n": "Kuwaiti Dinar"\r
+  },\r
+  {\r
+   "c": "SAR",\r
+   "n": "Saudi Riyal"\r
+  },\r
+  {\r
+   "c": "USD",\r
+   "n": "US Dollar"\r
+  }\r
+ ],\r
+ "rates": {\r
+  "EGP": {\r
+   "r": 0.0064,\r
+   "t": "2026-01-01T00:00:00.000Z",\r
+   "type": "Manual"\r
+  },\r
+  "SAR": {\r
+   "r": 0.082,\r
+   "t": "2026-01-01T00:00:00.000Z",\r
+   "type": "Manual"\r
+  },\r
+  "USD": {\r
+   "r": 0.307,\r
+   "t": "2026-01-01T00:00:00.000Z",\r
+   "type": "Manual"\r
+  }\r
+ },\r
+ "t": [\r
+  {\r
+   "id": 100,\r
+   "name": "DEV Teacher 01",\r
+   "phone": "000",\r
+   "email": "",\r
+   "spec": "DEV",\r
+   "cur": "KWD",\r
+   "rate": 10000,\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 101,\r
+   "name": "DEV Teacher 02",\r
+   "phone": "000",\r
+   "email": "",\r
+   "spec": "DEV",\r
+   "cur": "EGP",\r
+   "rate": 60000,\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 102,\r
+   "name": "DEV Teacher 03",\r
+   "phone": "000",\r
+   "email": "",\r
+   "spec": "DEV",\r
+   "cur": "KWD",\r
+   "rate": 12500,\r
+   "status": "Active",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "s": [\r
+  {\r
+   "id": 103,\r
+   "name": "DEV Student 01",\r
+   "uni": "DEV Univ",\r
+   "country": "",\r
+   "major": "",\r
+   "lv": "Undergraduate",\r
+   "cur": "KWD",\r
+   "phone": "",\r
+   "email": "",\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 104,\r
+   "name": "DEV Student 02",\r
+   "uni": "DEV Univ",\r
+   "country": "",\r
+   "major": "",\r
+   "lv": "High School",\r
+   "cur": "SAR",\r
+   "phone": "",\r
+   "email": "",\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 105,\r
+   "name": "DEV Student 03",\r
+   "uni": "DEV Univ",\r
+   "country": "",\r
+   "major": "",\r
+   "lv": "Postgraduate",\r
+   "cur": "EGP",\r
+   "phone": "",\r
+   "email": "",\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 106,\r
+   "name": "DEV Student 04",\r
+   "uni": "DEV Univ",\r
+   "country": "",\r
+   "major": "",\r
+   "lv": "",\r
+   "cur": "KWD",\r
+   "phone": "",\r
+   "email": "",\r
+   "status": "Active",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 107,\r
+   "name": "DEV Student 05",\r
+   "uni": "DEV Univ",\r
+   "country": "",\r
+   "major": "",\r
+   "lv": "High School",\r
+   "cur": "USD",\r
+   "phone": "",\r
+   "email": "",\r
+   "status": "Active",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "sub": [\r
+  {\r
+   "id": 108,\r
+   "name": "DEV Math",\r
+   "type": "Live",\r
+   "uni": "DEV Univ",\r
+   "inst": 100,\r
+   "studs": [\r
+    103,\r
+    104\r
+   ]\r
+  },\r
+  {\r
+   "id": 109,\r
+   "name": "DEV Physics",\r
+   "type": "Live",\r
+   "uni": "DEV Univ",\r
+   "inst": 101,\r
+   "studs": [\r
+    105\r
+   ]\r
+  },\r
+  {\r
+   "id": 110,\r
+   "name": "DEV Chemistry",\r
+   "type": "Live",\r
+   "uni": "DEV Univ",\r
+   "inst": 102,\r
+   "studs": [\r
+    106,\r
+    103\r
+   ]\r
+  },\r
+  {\r
+   "id": 129,\r
+   "name": "DEV Project Alpha",\r
+   "type": "Project",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 131,\r
+   "name": "DEV Project Beta",\r
+   "type": "Project",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 133,\r
+   "name": "DEV Project Gamma",\r
+   "type": "Project",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 135,\r
+   "name": "DEV Project Delta",\r
+   "type": "Project",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 139,\r
+   "name": "DEV Course A",\r
+   "type": "Recorded",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 141,\r
+   "name": "DEV Course B",\r
+   "type": "Recorded",\r
+   "uni": "DEV Univ"\r
+  },\r
+  {\r
+   "id": 143,\r
+   "name": "DEV Course C",\r
+   "type": "Recorded",\r
+   "uni": "DEV Univ"\r
+  }\r
+ ],\r
+ "l": [\r
+  {\r
+   "id": 111,\r
+   "date": "2026-08-03",\r
+   "t": 100,\r
+   "s": 103,\r
+   "sub": 108,\r
+   "lv": "",\r
+   "d": 2,\r
+   "tr": 10000,\r
+   "sr": 15000,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "KWD",\r
+   "trx": 1,\r
+   "srx": 1,\r
+   "bc": "KWD",\r
+   "bcost": 20000,\r
+   "bchg": 30000,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 112,\r
+   "date": "2026-08-10",\r
+   "t": 100,\r
+   "s": 104,\r
+   "sub": 108,\r
+   "lv": "",\r
+   "d": 1.5,\r
+   "tr": 10000,\r
+   "sr": 45000,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "SAR",\r
+   "trx": 1,\r
+   "srx": 0.082,\r
+   "bc": "KWD",\r
+   "bcost": 15000,\r
+   "bchg": 5535,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 113,\r
+   "date": "2026-08-12",\r
+   "t": 101,\r
+   "s": 105,\r
+   "sub": 109,\r
+   "lv": "",\r
+   "d": 2,\r
+   "tr": 60000,\r
+   "sr": 90000,\r
+   "st": "Completed",\r
+   "tc": "EGP",\r
+   "sc": "EGP",\r
+   "trx": 0.0064,\r
+   "srx": 0.0064,\r
+   "bc": "KWD",\r
+   "bcost": 768,\r
+   "bchg": 1152,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 114,\r
+   "date": "2026-09-02",\r
+   "t": 102,\r
+   "s": 106,\r
+   "sub": 110,\r
+   "lv": "",\r
+   "d": 1,\r
+   "tr": 12500,\r
+   "sr": 18000,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "KWD",\r
+   "trx": 1,\r
+   "srx": 1,\r
+   "bc": "KWD",\r
+   "bcost": 12500,\r
+   "bchg": 18000,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 115,\r
+   "date": "2026-09-04",\r
+   "t": 100,\r
+   "s": 103,\r
+   "sub": 108,\r
+   "lv": "",\r
+   "d": 1,\r
+   "tr": 10000,\r
+   "sr": 15000,\r
+   "st": "Cancelled",\r
+   "tc": "KWD",\r
+   "sc": "KWD",\r
+   "trx": 1,\r
+   "srx": 1,\r
+   "bc": "KWD",\r
+   "bcost": 10000,\r
+   "bchg": 15000,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 116,\r
+   "date": "2026-09-06",\r
+   "t": 102,\r
+   "s": 103,\r
+   "sub": 110,\r
+   "lv": "",\r
+   "d": 0.75,\r
+   "tr": 12500,\r
+   "sr": 16000,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "KWD",\r
+   "trx": 1,\r
+   "srx": 1,\r
+   "bc": "KWD",\r
+   "bcost": 9375,\r
+   "bchg": 12000,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 117,\r
+   "date": "2026-09-09",\r
+   "t": 101,\r
+   "s": 105,\r
+   "sub": 109,\r
+   "lv": "",\r
+   "d": 1,\r
+   "tr": 60000,\r
+   "sr": 90000,\r
+   "st": "No Show",\r
+   "tc": "EGP",\r
+   "sc": "EGP",\r
+   "trx": 0.0064,\r
+   "srx": 0.0064,\r
+   "bc": "KWD",\r
+   "bcost": 384,\r
+   "bchg": 576,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 118,\r
+   "date": "2026-10-07",\r
+   "t": 102,\r
+   "s": 107,\r
+   "sub": 110,\r
+   "lv": "",\r
+   "d": 1.3,\r
+   "tr": 12500,\r
+   "sr": 33333,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "USD",\r
+   "trx": 1,\r
+   "srx": 0.307,\r
+   "bc": "KWD",\r
+   "bcost": 16250,\r
+   "bchg": 13303,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 119,\r
+   "date": "2026-10-01",\r
+   "t": 100,\r
+   "s": 104,\r
+   "sub": 108,\r
+   "lv": "",\r
+   "d": 2,\r
+   "tr": 10000,\r
+   "sr": 45000,\r
+   "st": "Completed",\r
+   "tc": "KWD",\r
+   "sc": "SAR",\r
+   "trx": 1,\r
+   "srx": 0.081,\r
+   "bc": "KWD",\r
+   "bcost": 20000,\r
+   "bchg": 7290,\r
+   "rt": "Manual",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "sp": [\r
+  {\r
+   "id": 120,\r
+   "p": 103,\r
+   "date": "2026-08-05",\r
+   "cur": "KWD",\r
+   "amt": 20000,\r
+   "rx": 1,\r
+   "rt": "Same",\r
+   "bamt": 20000,\r
+   "bc": "KWD",\r
+   "meth": "Cash",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 121,\r
+   "p": 104,\r
+   "date": "2026-08-11",\r
+   "cur": "SAR",\r
+   "amt": 60000,\r
+   "rx": 0.082,\r
+   "rt": "Manual",\r
+   "bamt": 4920,\r
+   "bc": "KWD",\r
+   "meth": "Bank",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 122,\r
+   "p": 105,\r
+   "date": "2026-08-13",\r
+   "cur": "EGP",\r
+   "amt": 100000,\r
+   "rx": 0.0064,\r
+   "rt": "Manual",\r
+   "bamt": 640,\r
+   "bc": "KWD",\r
+   "meth": "Cash",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 123,\r
+   "p": 107,\r
+   "date": "2026-10-08",\r
+   "cur": "USD",\r
+   "amt": 12345,\r
+   "rx": 0.307,\r
+   "rt": "Manual",\r
+   "bamt": 3790,\r
+   "bc": "KWD",\r
+   "meth": "Bank",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 124,\r
+   "p": 106,\r
+   "date": "2026-09-03",\r
+   "cur": "KWD",\r
+   "amt": 10000,\r
+   "rx": 1,\r
+   "rt": "Same",\r
+   "bamt": 10000,\r
+   "bc": "KWD",\r
+   "meth": "KNET",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "tp": [\r
+  {\r
+   "id": 125,\r
+   "p": 100,\r
+   "date": "2026-08-15",\r
+   "cur": "KWD",\r
+   "amt": 10000,\r
+   "rx": 1,\r
+   "rt": "Same",\r
+   "bamt": 10000,\r
+   "bc": "KWD",\r
+   "meth": "Cash",\r
+   "notes": "",\r
+   "src": "Live",\r
+   "srcd": "",\r
+   "lk": 0\r
+  },\r
+  {\r
+   "id": 126,\r
+   "p": 101,\r
+   "date": "2026-08-20",\r
+   "cur": "EGP",\r
+   "amt": 120000,\r
+   "rx": 0.0064,\r
+   "rt": "Manual",\r
+   "bamt": 768,\r
+   "bc": "KWD",\r
+   "meth": "Bank",\r
+   "notes": "",\r
+   "src": "Live",\r
+   "srcd": "",\r
+   "lk": 0\r
+  },\r
+  {\r
+   "id": 127,\r
+   "p": 102,\r
+   "date": "2026-09-10",\r
+   "cur": "KWD",\r
+   "amt": 5000,\r
+   "rx": 1,\r
+   "rt": "Same",\r
+   "bamt": 5000,\r
+   "bc": "KWD",\r
+   "meth": "Cash",\r
+   "notes": "",\r
+   "src": "Other",\r
+   "srcd": "DEV bonus",\r
+   "lk": 0\r
+  },\r
+  {\r
+   "id": 128,\r
+   "p": 100,\r
+   "date": "2026-07-01",\r
+   "cur": "KWD",\r
+   "amt": 3000,\r
+   "rx": 1,\r
+   "rt": "Same",\r
+   "bamt": 3000,\r
+   "bc": "KWD",\r
+   "meth": "Cash",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "tt": [\r
+  {\r
+   "id": 150,\r
+   "sched": "rec",\r
+   "wt": "Live",\r
+   "date": "2026-08-03",\r
+   "day": "Monday",\r
+   "dw": 1,\r
+   "a": "2026-08-03",\r
+   "b": "",\r
+   "st": "16:00",\r
+   "en": "18:00",\r
+   "t": 100,\r
+   "lv": "",\r
+   "s": [\r
+    103,\r
+    104\r
+   ],\r
+   "sub": "DEV Math",\r
+   "notes": "",\r
+   "ex": {\r
+    "2026-08-10": {\r
+     "done": 1\r
+    },\r
+    "2026-08-17": {\r
+     "cancelled": 1\r
+    }\r
+   }\r
+  },\r
+  {\r
+   "id": 151,\r
+   "sched": "one",\r
+   "wt": "Live",\r
+   "date": "2026-10-05",\r
+   "day": "Monday",\r
+   "st": "10:00",\r
+   "en": "11:00",\r
+   "t": 102,\r
+   "lv": "",\r
+   "s": [\r
+    106\r
+   ],\r
+   "sub": "DEV Chemistry",\r
+   "notes": "",\r
+   "ex": {},\r
+   "done": 1\r
+  }\r
+ ],\r
+ "pr": [\r
+  {\r
+   "id": 130,\r
+   "name": "DEV Project Alpha",\r
+   "sub": "",\r
+   "subj": 129,\r
+   "uni": "DEV Univ",\r
+   "t": 100,\r
+   "s": 103,\r
+   "lv": "",\r
+   "status": "In Progress",\r
+   "cur": "KWD",\r
+   "rev": 100000,\r
+   "share": 40,\r
+   "rx": 1,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "start": "2026-08-15",\r
+   "due": "",\r
+   "paid0": 10000,\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 132,\r
+   "name": "DEV Project Beta",\r
+   "sub": "",\r
+   "subj": 131,\r
+   "uni": "DEV Univ",\r
+   "t": 101,\r
+   "s": 105,\r
+   "lv": "",\r
+   "status": "In Progress",\r
+   "cur": "EGP",\r
+   "rev": 500000,\r
+   "share": 30,\r
+   "rx": 0.0064,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "start": "2026-09-01",\r
+   "due": "",\r
+   "paid0": 0,\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 134,\r
+   "name": "DEV Project Gamma",\r
+   "sub": "",\r
+   "subj": 133,\r
+   "uni": "DEV Univ",\r
+   "t": 102,\r
+   "s": 106,\r
+   "lv": "",\r
+   "status": "Cancelled",\r
+   "cur": "KWD",\r
+   "rev": 50000,\r
+   "share": 50,\r
+   "rx": 1,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "start": "2026-09-05",\r
+   "due": "",\r
+   "paid0": 0,\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 136,\r
+   "name": "DEV Project Delta",\r
+   "sub": "",\r
+   "subj": 135,\r
+   "uni": "DEV Univ",\r
+   "t": 102,\r
+   "s": 107,\r
+   "lv": "",\r
+   "status": "In Progress",\r
+   "cur": "USD",\r
+   "rev": 12345,\r
+   "share": 35,\r
+   "rx": 0.307,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "start": "2026-10-03",\r
+   "due": "",\r
+   "paid0": 1111,\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "pp": [\r
+  {\r
+   "id": 137,\r
+   "pr": 130,\r
+   "date": "2026-09-12",\r
+   "amt": 20000,\r
+   "meth": "Bank",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 138,\r
+   "pr": 132,\r
+   "date": "2026-10-02",\r
+   "amt": 100000,\r
+   "meth": "Cash",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "rc": [\r
+  {\r
+   "id": 140,\r
+   "name": "DEV Course A",\r
+   "sub": "",\r
+   "subj": 139,\r
+   "uni": "DEV Univ",\r
+   "inst": 102,\r
+   "lv": "",\r
+   "cur": "KWD",\r
+   "rx": 1,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "cost": 5000,\r
+   "price": 30000,\r
+   "n": 3,\r
+   "share": 30,\r
+   "date": "2026-08-20",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 142,\r
+   "name": "DEV Course B",\r
+   "sub": "",\r
+   "subj": 141,\r
+   "uni": "DEV Univ",\r
+   "inst": 101,\r
+   "lv": "",\r
+   "cur": "SAR",\r
+   "rx": 0.082,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "cost": 0,\r
+   "price": 100000,\r
+   "n": 2,\r
+   "share": 25,\r
+   "date": "2026-09-15",\r
+   "notes": ""\r
+  },\r
+  {\r
+   "id": 144,\r
+   "name": "DEV Course C",\r
+   "sub": "",\r
+   "subj": 143,\r
+   "uni": "DEV Univ",\r
+   "inst": 100,\r
+   "lv": "",\r
+   "cur": "USD",\r
+   "rx": 0.307,\r
+   "rt": "Manual",\r
+   "bc": "KWD",\r
+   "cost": 777,\r
+   "price": 12345,\r
+   "n": 1,\r
+   "share": 30,\r
+   "date": "2026-10-04",\r
+   "notes": ""\r
+  }\r
+ ],\r
+ "re": [\r
+  {\r
+   "id": 145,\r
+   "rc": 144,\r
+   "s": 107,\r
+   "date": "2026-10-05",\r
+   "price": 12345,\r
+   "paid": 7777\r
+  },\r
+  {\r
+   "id": 146,\r
+   "rc": 140,\r
+   "s": 103,\r
+   "date": "2026-08-21",\r
+   "price": 30000,\r
+   "paid": 30000\r
+  },\r
+  {\r
+   "id": 147,\r
+   "rc": 140,\r
+   "s": 106,\r
+   "date": "2026-08-22",\r
+   "price": 30000,\r
+   "paid": 10000\r
+  },\r
+  {\r
+   "id": 148,\r
+   "rc": 142,\r
+   "s": 104,\r
+   "date": "2026-09-16",\r
+   "price": 100000,\r
+   "paid": 0\r
+  }\r
+ ],\r
+ "rm": [\r
+  {\r
+   "id": 149,\r
+   "name": "DEV send lectures",\r
+   "rc": 140,\r
+   "days": [\r
+    1,\r
+    4\r
+   ],\r
+   "time": "18:00",\r
+   "a": "2026-08-20",\r
+   "b": "",\r
+   "f": "weekly"\r
+  }\r
+ ],\r
+ "rd": {\r
+  "149|2026-09-07": 1\r
+ }\r
+}`, "/app/package.json": `{\r
+  "name": "aplus-hub-localhost",\r
+  "version": "3.0.0",\r
+  "private": true,\r
+  "description": "A+ Hub Academy management system, running locally on Node.js + SQLite. No cloud dependency.",\r
+  "engines": { "node": ">=22.5.0" },\r
+  "scripts": {\r
+    "start": "node --no-warnings src/server.js",\r
+    "start:synthetic": "node scripts/start-synthetic.js",\r
+    "build:public": "node tools/make-public.js",\r
+    "migrate:dry-run": "node --no-warnings scripts/migrate-legacy.js",\r
+    "backup": "node --no-warnings scripts/backup.js",\r
+    "restore": "node --no-warnings scripts/restore.js",\r
+    "verify": "node --no-warnings scripts/verify-db.js",\r
+    "test": "node tools/run-all.js",\r
+    "test:legacy": "node tools/run-all.js"\r
+  },\r
+  "devDependencies": {}\r
+}\r
+`, "/app/preview/schema.sql": `-- Additive browser-preview schema; original academy schema/version remains unchanged.\r
+CREATE TABLE IF NOT EXISTS preview_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);\r
+CREATE TABLE IF NOT EXISTS preview_student_accounts(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,\r
+ display_name TEXT NOT NULL, student_id INTEGER NOT NULL REFERENCES students(id),\r
+ password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1 CHECK(active IN(0,1)),created_at TEXT NOT NULL\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_student_sessions(token_hash TEXT PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES preview_student_accounts(id),expires_at TEXT NOT NULL);\r
+CREATE TABLE IF NOT EXISTS preview_requests(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,request_key TEXT NOT NULL UNIQUE,kind TEXT NOT NULL,\r
+ actor TEXT NOT NULL,student_id INTEGER REFERENCES students(id),record TEXT NOT NULL,\r
+ status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN('Pending','Approved','Rejected')),\r
+ reason TEXT NOT NULL,created_at TEXT NOT NULL,decided_at TEXT,decided_by TEXT,result TEXT\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_shares(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,student_id INTEGER NOT NULL REFERENCES students(id),\r
+ teacher_id INTEGER REFERENCES teachers(id),kind TEXT NOT NULL,source_id INTEGER NOT NULL,\r
+ title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',url TEXT NOT NULL DEFAULT '',due_on TEXT,\r
+ released INTEGER NOT NULL DEFAULT 0 CHECK(released IN(0,1)),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,\r
+ UNIQUE(student_id,kind,source_id,title)\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_submissions(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,share_id INTEGER NOT NULL REFERENCES preview_shares(id),\r
+ student_id INTEGER NOT NULL REFERENCES students(id),body TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',\r
+ created_at TEXT NOT NULL,updated_at TEXT NOT NULL, UNIQUE(share_id,student_id)\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_feedback(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,submission_id INTEGER NOT NULL UNIQUE REFERENCES preview_submissions(id),\r
+ body TEXT NOT NULL,published INTEGER NOT NULL DEFAULT 0 CHECK(published IN(0,1)),updated_at TEXT NOT NULL\r
+);\r
+CREATE TABLE IF NOT EXISTS preview_notifications(\r
+ id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL,recipient_kind TEXT NOT NULL CHECK(recipient_kind IN('Student','Teacher')),\r
+ recipient_id INTEGER NOT NULL,kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,\r
+ UNIQUE(event_key,recipient_kind,recipient_id)\r
+);\r
 CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,actor TEXT NOT NULL,result TEXT NOT NULL);` };
   });
 
@@ -42159,7 +42159,22 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       }
       const contracts = (s) => MAN.read(db(), { role: "Admin" }, clock()).contracts.filter((c) => c.student_id === s).map((c) => ({ ...c, installments: c.installments.map((i) => ({ id: i.id, due_on: i.due_on, amount: i.amount, paid: i.paid, remaining: i.remaining, reason: i.note, status: c.status === "Cancelled" ? "Cancelled" : i.remaining === 0 ? "Paid" : i.overdue ? "Overdue" : i.paid > 0 ? "Partially paid" : i.due_on === require_cairo().today(clock()) ? "Due" : "Upcoming" })) }));
       function studentStatement(st, s, opt) {
-        return { ...F.student(st, s, { ...opt, contracts: contracts(s), receipts: db().prepare("SELECT * FROM billing_receipts").all(), usage: db().prepare("SELECT * FROM package_usage").all() }), installments: contracts(s).map(({ id, title, total, currency, received, remaining, installments, unplanned, status }) => ({ id, title, total, currency, received, remaining, installments, unplanned, status })) };
+        return { ...F.student(st, s, { ...opt, contracts: contracts(s), receipts: db().prepare("SELECT * FROM billing_receipts").all(), usage: db().prepare("SELECT * FROM package_usage").all() }), installments: contracts(s).map((c) => {
+          const source = c.source_kind === "Project" ? st.pr.find((p) => p.id === c.target_id) : c.source_kind === "Recorded" ? st.rc.find((course) => st.re.some((e) => e.id === c.target_id && e.rc === course.id)) : null;
+          const value = (n) => c.currency === "KWD" ? n : source ? F.kwd(source, n, c.currency, Math.round(n * source.rx), source.rx).value : null;
+          return {
+            id: c.id,
+            title: c.title,
+            total: value(c.total),
+            currency: "KWD",
+            received: value(c.received),
+            remaining: value(c.remaining),
+            unplanned: value(c.unplanned),
+            status: c.status,
+            conversionComplete: c.currency === "KWD" || value(c.total) !== null,
+            installments: c.installments.map((i) => ({ ...i, amount: value(i.amount), paid: value(i.paid), remaining: value(i.remaining) }))
+          };
+        }) };
       }
       const opts = (url) => ({ from: url.searchParams.get("from") || "", to: url.searchParams.get("to") || "" });
       function request(u, kind, record, key, reason, student) {
@@ -42222,12 +42237,12 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
               fail(409, "Username already used by a student.");
             if (p === "/api/management" && method === "POST" && u?.role === "Accountant") {
               const input = parse(), r = input.record || {};
-              if (input.kind === "installment" && r.id) {
-                const old = db().prepare("SELECT * FROM billing_installments WHERE id=?").get(r.id);
-                if (!old)
+              if (input.kind === "installment" && (r.id || db().prepare("SELECT id FROM billing_installments WHERE contract_id=?").get(r.contract_id || 0))) {
+                const old = r.id ? db().prepare("SELECT * FROM billing_installments WHERE id=?").get(r.id) : null;
+                if (r.id && !old)
                   fail(404, "Installment not found.");
-                const c = contractsForId(old.contract_id);
-                return response({ ok: true, pending: true, request: request(u, "installment", r, input.request_key || "installment:" + r.id + ":" + input.baseRev, "Accountant requested installment change", c.student_id) });
+                const c = contractsForId(old?.contract_id || r.contract_id);
+                return response({ ok: true, pending: true, request: request(u, "installment", r, input.request_key || "installment:" + (r.id || r.contract_id) + ":" + input.baseRev, "Accountant requested installment change", c.student_id) });
               }
               if (input.kind === "contract" && r.id)
                 return response({ ok: true, pending: true, request: request(u, "contract", r, input.request_key || "contract:" + r.id + ":" + input.baseRev, "Accountant requested agreement change", contractsForId(r.id).student_id) });
@@ -42241,6 +42256,10 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
               return response({ ok: true, ...educational(assemble(db()), sid(u, url)) });
             if (p === "/api/preview/student-statement")
               return response({ ok: true, ...studentStatement(assemble(db()), sid(u, url), opts(url)) });
+            if (p === "/api/preview/plans") {
+              finance(u);
+              return response({ ok: true, installments: contracts(sid(u, url)) });
+            }
             if (p === "/api/preview/teacher-statement")
               return response({ ok: true, ...F.teacher(db(), assemble(db()), tid(u, url), opts(url)) });
             if (p === "/api/preview/accounts") {
@@ -42482,6 +42501,335 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
     module.exports = { install, response };
   });
 
+  // aplus-preview/extensions/backups.js
+  var require_backups = __commonJS(function(exports, module) {
+    var fs = require_fs();
+    var crypto2 = require_crypto2();
+    var { open, migrate, SCHEMA_VERSION } = require_db();
+    var B = require_backup();
+    var TEAM = require_team();
+    var AUDIT = require_audit();
+    var { assemble } = require_state();
+    var { forState } = require_ledger_server();
+    var { response } = require_service();
+    var MAX = 16 * 1024 * 1024;
+    var FORMAT = "aplus-full-database";
+    var sha = (bytes) => crypto2.createHash("sha256").update(bytes).digest("hex");
+    var uid = () => crypto2.randomBytes(16).toString("hex");
+    var fail = (status, message) => {
+      throw Object.assign(new Error(message), { code: status });
+    };
+    var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    var admin = (u) => {
+      if (!u || u.role !== "Admin")
+        fail(u ? 403 : 401, "Administrator access required.");
+    };
+    function install(getCtx, schema, { actor, token, clock = () => new Date } = {}) {
+      let staged = null;
+      const ctx = () => getCtx();
+      const fingerprint2 = () => sha(JSON.stringify(B.fingerprint(ctx().db)));
+      const has = (db, t) => !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(t);
+      const activeAdmins = (db) => has(db, "team_users") ? db.prepare("SELECT id,username FROM team_users WHERE role='Admin' AND active=1").all() : [];
+      const check = (db) => {
+        if (db.prepare("PRAGMA integrity_check").all().some((r) => r.integrity_check !== "ok") || db.prepare("PRAGMA foreign_key_check").all().length)
+          fail(422, "Database integrity or foreign-key verification failed.");
+      };
+      const summary = (db) => {
+        const st = assemble(db), ledger = forState(st);
+        return {
+          counts: Object.fromEntries(Object.entries(B.fingerprint(db)).map(([name, table]) => [name, table.rows])),
+          schemaVersion: db.prepare("SELECT max(version) v FROM schema_migrations").get().v,
+          currencies: ledger.studentRows(st).map((r) => ({ student: r.s, currency: r.cur, charged: r.charged.total, received: r.received.total, net: r.net })),
+          teachers: ledger.teacherRows(st).map((r) => ({ teacher: r.t, currency: r.cur, earned: r.earned.total, paid: r.paid.total, remaining: r.remaining.total })),
+          accounts: has(db, "team_users") ? db.prepare("SELECT role,count(*) count FROM team_users GROUP BY role").all() : [],
+          studentAccounts: has(db, "preview_student_accounts") ? db.prepare("SELECT count(*) n FROM preview_student_accounts").get().n : 0
+        };
+      };
+      const historyPath = () => ctx().backupDir + "/transfer-history.json";
+      const history = () => {
+        try {
+          return JSON.parse(fs.readFileSync(historyPath(), "utf8"));
+        } catch (_) {
+          return [];
+        }
+      };
+      const recordHistory = (event) => fs.writeFileSync(historyPath(), JSON.stringify([...history(), event]));
+      const captureSidecars = (file) => {
+        const configFile = ctx().file + ".config.json", sidecars = {};
+        if (fs.existsSync(configFile))
+          sidecars.config = JSON.parse(fs.readFileSync(configFile, "utf8"));
+        sidecars.transferHistory = history();
+        fs.writeFileSync(file + ".sidecars.json", JSON.stringify(sidecars));
+        return sidecars;
+      };
+      function packageFile(file, manifest) {
+        const sidecars = fs.existsSync(file + ".sidecars.json") ? JSON.parse(fs.readFileSync(file + ".sidecars.json", "utf8")) : {};
+        return {
+          format: FORMAT,
+          formatVersion: 1,
+          manifest: {
+            ...manifest,
+            applicationVersion: "3.0.0",
+            extensionVersion: 1,
+            sidecarsSha256: sha(JSON.stringify(sidecars)),
+            externalFilesIncluded: false,
+            exclusions: ["External attachments are links, not embedded files.", "Older backup files and server deployment secrets are not included.", "Browser UI preferences and active sessions are not portable login credentials."]
+          },
+          database: fs.readFileSync(file).toString("base64"),
+          sidecars
+        };
+      }
+      function exportFull(u) {
+        admin(u);
+        const manifest = B.create(ctx(), "transfer", { noAudit: true }), file = ctx().backupDir + "/" + manifest.name;
+        captureSidecars(file);
+        const data = packageFile(file, manifest);
+        if (fs.statSync(file).size > MAX)
+          fail(413, "Database exceeds the 16 MiB preview transfer limit. Use server-backed migration tools.");
+        AUDIT.log(ctx().db, { actor: u.username, action: "export", entity: "preview-database", detail: manifest.name, after: { sha256: manifest.sha256 } });
+        return { ok: true, filename: manifest.name.replace(".sqlite", ".aplus-backup.json"), package: data };
+      }
+      function validate2(u, input) {
+        admin(u);
+        if (staged) {
+          try {
+            fs.rmSync(staged.file, { force: true });
+          } catch (_) {}
+          staged = null;
+        }
+        let bytes, manifest = null, sidecars = {};
+        if (input.format === FORMAT) {
+          if (input.formatVersion !== 1)
+            fail(422, "Unsupported backup package version.");
+          if (typeof input.database !== "string" || input.database.length > Math.ceil(MAX / 3) * 4)
+            fail(413, "Backup exceeds the preview limit.");
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.database) || input.database.length % 4)
+            fail(422, "Invalid database encoding.");
+          bytes = Buffer.from(input.database, "base64");
+          manifest = input.manifest;
+          sidecars = input.sidecars || {};
+          if (!manifest || manifest.bytes !== bytes.length || manifest.sha256 !== sha(bytes))
+            fail(422, "Backup checksum or size mismatch. Nothing was changed.");
+          if (manifest.extensionVersion !== 1)
+            fail(422, "Unsupported preview extension version.");
+          if (Object.keys(sidecars).some((k) => !["config", "transferHistory"].includes(k)))
+            fail(422, "Unknown backup sidecar.");
+          if (manifest.sidecarsSha256 !== sha(JSON.stringify(sidecars)))
+            fail(422, "Backup settings checksum mismatch.");
+          if (sidecars.config && require_config().validate(sidecars.config).length)
+            fail(422, "Invalid backup configuration.");
+          if (sidecars.transferHistory && (!Array.isArray(sidecars.transferHistory) || sidecars.transferHistory.length > 1e4))
+            fail(422, "Invalid transfer history.");
+        } else if (input.format === "sqlite" && typeof input.database === "string") {
+          if (input.database.length > Math.ceil(MAX / 3) * 4)
+            fail(413, "Backup exceeds the preview limit.");
+          bytes = Buffer.from(input.database, "base64");
+        } else
+          fail(422, "Choose a full A+ Hub backup package or a SQLite backup, not a JSON state export or ZIP archive.");
+        if (!bytes.length || bytes.length > MAX || bytes.subarray(0, 16).toString("latin1") !== "SQLite format 3\x00")
+          fail(422, "Not a supported SQLite database.");
+        const file = "/tmp/aplus-import-" + uid() + ".sqlite";
+        fs.writeFileSync(file, bytes);
+        let d;
+        try {
+          const v = B.validate(file, { expectTables: manifest?.tables });
+          if (!v.ok)
+            fail(422, "Backup validation failed: " + v.problems.join("; "));
+          d = open(file);
+          check(d);
+          const sourceTables = B.fingerprint(d), sourceVersion = d.prepare("SELECT max(version) v FROM schema_migrations").get().v;
+          if (sourceVersion > SCHEMA_VERSION)
+            fail(422, "This backup needs a newer application version.");
+          const missingExtensions = !has(d, "preview_student_accounts");
+          migrate(d);
+          d.exec(schema);
+          check(d);
+          const incoming = summary(d), needsAdmin = activeAdmins(d).length === 0;
+          const invalid = has(d, "team_users") ? d.prepare("SELECT password_hash FROM team_users").all().some((a) => !/^([a-f0-9]{32}):([a-f0-9]{128})$/i.test(a.password_hash)) : false;
+          if (invalid)
+            fail(422, "An imported staff password hash is invalid.");
+          const missingLink = d.prepare("SELECT a.id FROM preview_student_accounts a LEFT JOIN students s ON s.id=a.student_id WHERE s.id IS NULL").all();
+          if (missingLink.length)
+            fail(422, "Student account links are invalid.");
+          if (d.prepare("SELECT u.id FROM team_users u LEFT JOIN teachers t ON t.id=u.teacher_id WHERE u.role='Teacher' AND t.id IS NULL").all().length)
+            fail(422, "Teacher account links are invalid.");
+          if (d.prepare("SELECT a.id FROM preview_student_accounts a JOIN team_users u ON u.username=a.username").all().length)
+            fail(422, "Staff and student usernames must be distinct.");
+          if (d.prepare("SELECT password_hash FROM preview_student_accounts").all().some((a) => !/^([a-f0-9]{32}):([a-f0-9]{128})$/i.test(a.password_hash)))
+            fail(422, "An imported student password hash is invalid.");
+          staged = { file, checksum: sha(bytes), input, validationId: uid(), baseline: fingerprint2(), until: clock().getTime() + 600000, actor: u.username, sourceTables, sourceVersion, summary: incoming, sidecars, needsAdmin };
+          return {
+            ok: true,
+            validationId: staged.validationId,
+            checksum: staged.checksum,
+            sourceVersion,
+            targetVersion: SCHEMA_VERSION,
+            needsMigration: sourceVersion < SCHEMA_VERSION,
+            needsAdmin,
+            missingExtensions,
+            sourceTables,
+            current: summary(ctx().db),
+            incoming,
+            warnings: [
+              "REPLACE: this replaces the current browser database; no merge is performed.",
+              "This preview stores data in this browser only. Other devices will not receive it.",
+              "All imported sessions will be invalidated. Existing account passwords will be preserved.",
+              ...missingExtensions ? ["New portal tables are added empty. No DEV records will be added."] : [],
+              ...sidecars.config ? ["Machine-specific backup-directory settings are excluded from browser activation."] : []
+            ]
+          };
+        } catch (e) {
+          fs.rmSync(file, { force: true });
+          throw e;
+        } finally {
+          if (d)
+            d.close();
+        }
+      }
+      function prepare(u, r) {
+        admin(u);
+        if (!staged || r.validationId !== staged.validationId || staged.actor !== u.username || staged.until < clock().getTime())
+          fail(409, "Validation expired. Validate the backup again.");
+        if (r.confirm !== true || r.replace !== "REPLACE")
+          fail(422, "Explicit replacement confirmation is required.");
+        if (staged.sourceVersion < SCHEMA_VERSION && r.allowMigration !== true)
+          fail(422, "Approve migration of the staging copy before continuing.");
+        if (fingerprint2() !== staged.baseline)
+          fail(409, "Current data changed since validation. Validate again before replacing it.");
+        let d = open(staged.file);
+        try {
+          if (staged.needsAdmin) {
+            const a = r.administrator || {};
+            TEAM.createUser(d, { username: a.username, display_name: a.display_name, password: a.password, role: "Admin", active: 1 }, u.username);
+          }
+          if (!activeAdmins(d).length)
+            fail(422, "The restored database needs an active administrator.");
+          d.prepare("INSERT OR REPLACE INTO preview_meta VALUES('student-demo-v1','1')").run();
+          d.prepare("INSERT OR REPLACE INTO preview_meta VALUES('imported-database','1')").run();
+          d.exec("DELETE FROM user_sessions; DELETE FROM preview_student_sessions;");
+          d.prepare("DELETE FROM preview_meta WHERE key LIKE 'login:%'").run();
+          check(d);
+          const current = summary(d);
+          if (!same(current.currencies, staged.summary.currencies) || !same(current.teachers, staged.summary.teachers))
+            fail(422, "Financial verification failed.");
+        } finally {
+          d.close();
+        }
+        const safety = B.create(ctx(), "preimport", { noAudit: true });
+        captureSidecars(ctx().backupDir + "/" + safety.name);
+        const safetyPackage = packageFile(ctx().backupDir + "/" + safety.name, safety);
+        return { stage: staged, safety, safetyPackage, u };
+      }
+      function replace(prepared) {
+        const { stage, safety, u } = prepared, live = ctx().file, hold = "/tmp/aplus-hold-" + uid() + ".sqlite";
+        if (stage !== staged)
+          fail(409, "Staging data changed.");
+        ctx().db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        fs.copyFileSync(live, hold);
+        const configFile = live + ".config.json", oldConfig = fs.existsSync(configFile) ? fs.readFileSync(configFile) : null;
+        const oldHistory = fs.existsSync(historyPath()) ? fs.readFileSync(historyPath()) : null;
+        let switched = false;
+        const undo = () => {
+          try {
+            ctx().db.close();
+          } catch (_) {}
+          for (const suffix of ["-wal", "-shm"])
+            fs.rmSync(live + suffix, { force: true });
+          fs.copyFileSync(hold, live);
+          ctx().db = open(live);
+          if (oldConfig)
+            fs.writeFileSync(configFile, oldConfig);
+          else
+            fs.rmSync(configFile, { force: true });
+          if (oldHistory)
+            fs.writeFileSync(historyPath(), oldHistory);
+          else
+            fs.rmSync(historyPath(), { force: true });
+        };
+        try {
+          ctx().db.close();
+          for (const suffix of ["-wal", "-shm"])
+            fs.rmSync(live + suffix, { force: true });
+          fs.copyFileSync(stage.file, live);
+          ctx().db = open(live);
+          switched = true;
+          check(ctx().db);
+          if (stage.sidecars.config) {
+            const config = { ...stage.sidecars.config };
+            delete config.secondBackupDir;
+            fs.writeFileSync(configFile, JSON.stringify(config));
+          } else
+            fs.rmSync(configFile, { force: true });
+          const event = { at: clock().toISOString(), actor: u.username, action: "restore", checksum: stage.checksum, sourceVersion: stage.sourceVersion, targetVersion: SCHEMA_VERSION, safetyBackup: safety.name };
+          AUDIT.log(ctx().db, { actor: u.username, action: "restore", entity: "preview-database", detail: "Validated full database replacement", after: event });
+          fs.writeFileSync(historyPath(), JSON.stringify(stage.sidecars.transferHistory || []));
+          recordHistory(event);
+        } catch (e) {
+          try {
+            undo();
+          } catch (rollback) {
+            e.message += "; rollback failed: " + rollback.message;
+          }
+          throw e;
+        }
+        return {
+          rollback: () => {
+            if (switched) {
+              undo();
+              switched = false;
+            }
+          },
+          commit: () => {
+            staged = null;
+            for (const file of [hold, stage.file])
+              try {
+                fs.rmSync(file, { force: true });
+              } catch (_) {}
+          },
+          result: { ok: true, safetyBackup: safety.name, checksum: stage.checksum, signInRequired: true }
+        };
+      }
+      function handler(method, path, headers, body) {
+        if (!path.startsWith("/api/preview/backups"))
+          return null;
+        try {
+          const u = actor(headers);
+          admin(u);
+          if (method === "GET" && path === "/api/preview/backups")
+            return response({ ok: true, history: history(), backups: B.list(ctx()), limitBytes: MAX });
+          if (method !== "POST")
+            fail(405, "Method not allowed.");
+          if (headers["x-aplus-token"] !== token || !/^application\/json/.test(headers["content-type"] || ""))
+            fail(403, "Reload before transferring data.");
+          if (typeof body === "string" && body.length > 24 * 1024 * 1024)
+            fail(413, "Backup package is too large.");
+          const r = typeof body === "string" ? JSON.parse(body) : {};
+          if (path === "/api/preview/backups/export")
+            return response(exportFull(u));
+          if (path === "/api/preview/backups/validate")
+            return response(validate2(u, r));
+          if (path === "/api/preview/backups/download") {
+            if (!B.NAME.test(r.name))
+              fail(422, "Invalid backup name.");
+            const f = ctx().backupDir + "/" + r.name;
+            if (!fs.existsSync(f))
+              fail(404, "Backup not found.");
+            const v = B.validate(f);
+            if (!v.ok)
+              fail(422, "Backup failed verification.");
+            const manifest = fs.existsSync(f + ".json") ? JSON.parse(fs.readFileSync(f + ".json", "utf8")) : { sha256: sha(fs.readFileSync(f)), bytes: fs.statSync(f).size, tables: v.tables, schemaVersion: v.schemaVersion };
+            return response({ ok: true, filename: r.name.replace(".sqlite", ".aplus-backup.json"), package: packageFile(f, manifest) });
+          }
+          fail(404, "Unknown database transfer operation.");
+        } catch (e) {
+          return response({ ok: false, error: e.message }, Number.isInteger(e.code) ? e.code : 422);
+        }
+      }
+      return { handler, prepare, replace, history };
+    }
+    module.exports = { install, MAX, FORMAT };
+  });
+
   // aplus-preview/extensions/ui.js
   var require_ui = __commonJS(function(exports, module) {
     function studentPage(original, token, user) {
@@ -42510,7 +42858,15 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       const button = (id, en, ar, icon = "") => '<button class="b2" type="button" id="' + id + '">' + icon + esc(tr(en, ar)) + "</button>";
       const table = (headers, rows) => '<div class="tw"><table><thead><tr>' + headers.map((x) => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + (rows.length ? rows.map((r) => "<tr>" + r.map((x) => "<td>" + x + "</td>").join("") + "</tr>").join("") : '<tr><td colspan="' + headers.length + '">' + tr("No records", "لا توجد سجلات") + "</td></tr>") + "</tbody></table></div>";
       const text = (v) => "<span data-ui-user-content>" + esc(v) + "</span>";
-      const link = (u) => u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + tr("Open link", "فتح الرابط") + "</a>" : "";
+      const link = (u) => {
+        try {
+          if (new URL(u).protocol !== "https:")
+            return "";
+        } catch (_) {
+          return "";
+        }
+        return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + tr("Open link", "فتح الرابط") + "</a>";
+      };
       const field = (name, en, ar, type = "text", value = "") => "<label>" + esc(tr(en, ar)) + '<input name="' + name + '" type="' + type + '" value="' + esc(value) + '" ' + (type === "password" ? 'autocomplete="new-password"' : "") + "></label>";
       let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null;
       const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"], ["account", "Account details", "تفاصيل الحساب"]] : [
@@ -42638,7 +42994,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         return '<form id="extension-account-form"><div class="fg">' + field("id", "Account ID (blank for new)", "رقم الحساب (فارغ للجديد)", "number") + field("username", "Username", "اسم المستخدم") + field("display_name", "Display name", "الاسم الظاهر") + "<label>" + tr("Linked student", "الطالب المرتبط") + '<select name="student_id">' + a.students.map((s) => '<option value="' + s.id + '">' + esc(s.name) + "</option>").join("") + "</select></label>" + field("password", "Password (12+ characters)", "كلمة المرور (١٢ حرفاً أو أكثر)", "password") + "<label>" + tr("Status", "الحالة") + '<select name="active"><option value="1">' + tr("Active", "نشط") + '</option><option value="0">' + tr("Disabled", "معطل") + '</option></select></label></div><button class="b" type="submit">' + tr("Save account", "حفظ الحساب") + "</button></form>" + table([tr("ID", "الرقم"), tr("Username", "اسم المستخدم"), tr("Student", "الطالب"), tr("Status", "الحالة")], a.accounts.map((x) => [text(x.id), text(x.username), text(a.students.find((s) => s.id === x.student_id)?.name), text(x.active ? tr("Active", "نشط") : tr("Disabled", "معطل"))]));
       }
       function plans() {
-        const prefix = picker("student"), s = api("student-statement?student=" + selection);
+        const prefix = picker("student"), s = api("plans?student=" + selection);
         return '<div class="bar">' + prefix + "</div>" + installments(s) + '<form id="extension-plan-form"><div class="fg">' + field("id", "Installment ID (blank for new)", "رقم القسط (فارغ للجديد)", "number") + "<label>" + tr("Existing obligation", "الالتزام القائم") + '<select name="contract_id">' + s.installments.map((c) => '<option value="' + c.id + '">' + esc(c.title) + " #" + c.id + "</option>").join("") + "</select></label>" + field("due_on", "Due date", "تاريخ الاستحقاق", "date") + field("amount", "Amount (original currency)", "المبلغ (العملة الأصلية)", "number") + field("reason", "Student-facing reason", "السبب الظاهر للطالب") + '</div><button class="b" type="submit">' + tr("Submit plan", "إرسال الخطة") + "</button></form>";
       }
       const notificationsText = (k) => ({ PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
@@ -42762,6 +43118,14 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         selection = "";
         render();
       }, statement: () => statement };
+      new MutationObserver(() => {
+        if (student)
+          return;
+        document.getElementById("extension-nav")?.remove();
+        nav();
+        if (document.getElementById("extension-view"))
+          render();
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
     }
     module.exports = { studentPage, mount };
   });
@@ -42840,6 +43204,8 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         }
       }
       const extension = require_service().install(db, fs.readFileSync("/app/preview/schema.sql", "utf8"), { token: server.token, clock, cookieName: COOKIE });
+      const backups = require_backups().install(() => server.ctx, fs.readFileSync("/app/preview/schema.sql", "utf8"), { actor: extension.actor, token: server.token, clock });
+      let transferring = false;
       let jar = cookie;
       function applySetCookie(v) {
         if (!v)
@@ -42864,8 +43230,14 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         for (const [k, v] of Object.entries(h))
           normalized[k.toLowerCase()] = v;
         const write = !["GET", "HEAD"].includes(String(method).toUpperCase());
+        if (transferring && write)
+          return require_service().response({ ok: false, error: "Database transfer in progress. Please wait." }, 409);
+        if (url === "/api/restore" && write)
+          return require_service().response({ ok: false, error: "Use Settings → Data & Backups to validate and restore a full backup." }, 409);
         const before = write ? require_state().assemble(db()) : null;
-        let r = extension.handler(String(method).toUpperCase(), url, normalized, body);
+        let r = backups.handler(String(method).toUpperCase(), url, normalized, body);
+        if (!r)
+          r = extension.handler(String(method).toUpperCase(), url, normalized, body);
         if (!r)
           r = callHandler(handler, method, url, h, body);
         if (write && r.status >= 200 && r.status < 300 && before)
@@ -42879,6 +43251,41 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
         if (r.headers["set-cookie"])
           applySetCookie(r.headers["set-cookie"]);
         return r;
+      }
+      async function restoreBackup(parameters, headers, persist) {
+        if (transferring)
+          throw new Error("A database transfer is already running.");
+        if (headers?.["x-aplus-token"] !== server.token || typeof persist !== "function")
+          throw new Error("Reload before importing.");
+        const normalized = { cookie: jar };
+        const user = extension.actor(normalized);
+        const prepared = backups.prepare(user, parameters);
+        transferring = true;
+        server.sched.stop();
+        let transaction, oldJar = jar;
+        try {
+          await persist();
+          transaction = backups.replace(prepared);
+          jar = "";
+          onCookie("");
+          await persist();
+          transaction.commit();
+          return { ...transaction.result, safetyPackage: prepared.safetyPackage };
+        } catch (error) {
+          if (transaction)
+            transaction.rollback();
+          jar = oldJar;
+          onCookie(jar);
+          try {
+            await persist();
+          } catch (storageError) {
+            error.message += " Browser storage could not be verified; download the safety backup before closing this tab. " + storageError.message;
+          }
+          throw error;
+        } finally {
+          transferring = false;
+          server.sched.start();
+        }
       }
       function snapshotFiles() {
         try {
@@ -42901,7 +43308,19 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
             walk(d);
         return out;
       }
-      return { dispatch, snapshot: snapshotFiles, server, created, cookie: () => jar, accounts: PREVIEW_ACCOUNTS, password: PREVIEW_PASSWORD, stop: () => server.close() };
+      return {
+        dispatch,
+        restoreBackup,
+        snapshot: snapshotFiles,
+        server,
+        created,
+        cookie: () => jar,
+        accounts: PREVIEW_ACCOUNTS,
+        password: PREVIEW_PASSWORD,
+        stop: () => server.close(),
+        transferring: () => transferring,
+        imported: () => !!db().prepare("SELECT value FROM preview_meta WHERE key='imported-database'").get()
+      };
     }
     module.exports = { createRuntime, PREVIEW_ACCOUNTS, PREVIEW_PASSWORD, DB_FILE };
   });
@@ -45174,6 +45593,150 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
     }
   });
 
+  // aplus-preview/extensions/backups-ui.js
+  var require_backups_ui = __commonJS(function(exports, module) {
+    function mount() {
+      const rt = window.__APLUS_PREVIEW__;
+      const auth = JSON.parse(rt.dispatch("GET", "/api/auth/status").text());
+      if (auth.user?.role !== "Admin")
+        return;
+      const labels = new Map, originalText = new WeakMap;
+      const tr = (en, ar) => {
+        labels.set(en, { en, ar });
+        labels.set(ar, { en, ar });
+        return document.documentElement.lang === "ar" ? ar : en;
+      };
+      const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      const headers = () => ({ "content-type": "application/json", "x-aplus-token": document.querySelector('meta[name="aplus-token"]')?.content });
+      const api = (action, data) => {
+        const r = rt.dispatch(data ? "POST" : "GET", "/api/preview/backups" + action, data ? headers() : {}, data ? JSON.stringify(data) : undefined);
+        const b = JSON.parse(r.text());
+        if (!b.ok)
+          throw Error(b.error);
+        return b;
+      };
+      const download = (data, name) => {
+        const u = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(u), 1e4);
+      };
+      let validation = null, packageData = null;
+      function attach() {
+        const active = document.querySelector('#nv [data-route="Settings"].on');
+        const view = document.getElementById("v");
+        if (!active || !view || view.querySelector("#database-transfer"))
+          return;
+        const section = document.createElement("section");
+        section.id = "database-transfer";
+        section.className = "cd";
+        section.setAttribute("data-ui-user-content", "");
+        section.innerHTML = "<h2>" + tr("Data & Backups", "البيانات والنسخ الاحتياطية") + "</h2><p>" + tr("Full SQLite backup, including accounts and portal tables. Admin only. Files contain sensitive academy information.", "نسخة SQLite كاملة تشمل الحسابات وجداول البوابة. للمدير فقط. الملف يحتوي على بيانات الأكاديمية الحساسة.") + '</p><p class="neg">' + tr("This preview stores data in this browser only. Import replaces its data; it does not synchronize devices.", "هذه المعاينة تحفظ البيانات داخل هذا المتصفح فقط. الاستيراد يستبدل بياناته ولا يزامن الأجهزة.") + '</p><div class="bar"><button type="button" class="b" id="database-export">' + tr("Export full backup", "تصدير نسخة كاملة") + "</button><label>" + tr("Choose backup (.json or .sqlite; up to 16 MiB database)", "اختيار نسخة (.json أو .sqlite؛ القاعدة بحد أقصى ١٦ ميجابايت)") + '<input type="file" id="database-file" accept=".json,.sqlite,.sqlite3,.db"></label><button type="button" class="b2" id="database-validate">' + tr("Validate & preview", "فحص ومعاينة") + '</button></div><p role="status" id="database-status"></p><div id="database-preview"></div><div id="database-history"></div>';
+        view.append(section);
+        const status = (message) => {
+          section.querySelector("#database-status").textContent = message;
+        };
+        const act = (id, fn) => {
+          section.querySelector(id).onclick = async () => {
+            try {
+              await fn();
+            } catch (e) {
+              status(e.message);
+            }
+          };
+        };
+        act("#database-export", async () => {
+          const result = api("/export", {});
+          await window.__APLUS_SAVE__?.();
+          download(result.package, result.filename);
+          status(tr("Full backup prepared. Keep it in a private location.", "تم تجهيز النسخة الكاملة. احتفظ بها في مكان خاص."));
+          showHistory();
+        });
+        act("#database-validate", async () => {
+          validation = null;
+          packageData = null;
+          const file = section.querySelector("#database-file").files[0];
+          if (!file)
+            throw Error(tr("Choose a backup first.", "اختر نسخة أولًا."));
+          if (file.size > 24 * 1024 * 1024)
+            throw Error(tr("File exceeds the preview limit.", "الملف يتجاوز حد المعاينة."));
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          if (new TextDecoder("latin1").decode(bytes.subarray(0, 15)) === "SQLite format 3") {
+            let text = "";
+            for (let i = 0;i < bytes.length; i += 32768)
+              text += String.fromCharCode(...bytes.subarray(i, i + 32768));
+            packageData = { format: "sqlite", database: btoa(text) };
+          } else
+            packageData = JSON.parse(new TextDecoder().decode(bytes));
+          validation = api("/validate", packageData);
+          const v = validation, keys = Object.keys(v.incoming.counts), rows = keys.map((k) => "<tr><td>" + esc(k) + "</td><td>" + esc(v.current.counts[k] ?? 0) + "</td><td>" + esc(v.incoming.counts[k]) + "</td></tr>").join("");
+          section.querySelector("#database-preview").innerHTML = "<h3>" + tr("Validation preview — no active data changed", "نتيجة الفحص — لم تتغير البيانات الحالية") + "</h3><p>SHA-256: <code>" + esc(v.checksum) + "</code></p><p>" + tr("Schema", "الإصدار") + ": " + v.sourceVersion + " → " + v.targetVersion + "</p><ul>" + v.warnings.map((x) => "<li>" + esc(x) + "</li>").join("") + '</ul><div class="tw"><table><thead><tr><th>' + tr("Record", "السجل") + "</th><th>" + tr("Current", "الحالي") + "</th><th>" + tr("Imported", "المستورد") + "</th></tr></thead><tbody>" + rows + "</tbody></table></div><details><summary>" + tr("Financial verification by original currency", "التحقق المالي حسب العملة الأصلية") + '</summary><pre style="white-space:pre-wrap;max-height:300px;overflow:auto">' + esc(JSON.stringify({ current: v.current.currencies, incoming: v.incoming.currencies, teacherCurrent: v.current.teachers, teacherIncoming: v.incoming.teachers }, null, 2)) + "</pre></details>" + (v.needsMigration ? '<label><input type="checkbox" id="database-migration"> ' + tr("Approve upgrading only the staging copy", "أوافق على ترقية النسخة المؤقتة فقط") + "</label>" : "") + (v.needsAdmin ? "<fieldset><legend>" + tr("Legacy backup has no active Admin — provision one", "النسخة القديمة لا تحتوي على مدير نشط — أنشئ حسابًا") + "</legend><label>" + tr("Username", "اسم المستخدم") + '<input id="database-admin-user" autocomplete="off"></label><label>' + tr("Display name", "الاسم") + '<input id="database-admin-name"></label><label>' + tr("New password (12–200 characters)", "كلمة مرور جديدة (١٢–٢٠٠ حرف)") + '<input type="password" id="database-admin-password" autocomplete="new-password"></label></fieldset>' : "") + '<label><input type="checkbox" id="database-confirm"> ' + tr("I understand this REPLACES the destination. A verified safety copy will be saved first.", "أفهم أن هذا يستبدل بيانات الوجهة، وسيتم حفظ نسخة أمان متحقق منها أولًا.") + '</label><button type="button" class="b" id="database-import">' + tr("Import validated backup", "استيراد النسخة المفحوصة") + "</button>";
+          status(tr("Validation passed. Review counts, amounts and warnings before confirming.", "نجح الفحص. راجع الأعداد والمبالغ والتنبيهات قبل التأكيد."));
+          act("#database-import", async () => {
+            if (!section.querySelector("#database-confirm").checked)
+              throw Error(tr("Confirm replacement first.", "أكد الاستبدال أولًا."));
+            const parameters = {
+              validationId: v.validationId,
+              confirm: true,
+              replace: "REPLACE",
+              allowMigration: !!section.querySelector("#database-migration")?.checked,
+              administrator: v.needsAdmin ? { username: section.querySelector("#database-admin-user").value, display_name: section.querySelector("#database-admin-name").value, password: section.querySelector("#database-admin-password").value } : undefined
+            };
+            const button = section.querySelector("#database-import");
+            button.disabled = true;
+            status(tr("Saving verified safety backup and restoring… Keep this tab open.", "جارٍ حفظ نسخة الأمان والاسترجاع… اترك الصفحة مفتوحة."));
+            try {
+              const result = await window.__APLUS_RESTORE__(parameters);
+              download(result.safetyPackage, result.safetyBackup.replace(".sqlite", ".aplus-backup.json"));
+              status(tr("Restored and saved. Sign in again with an imported account.", "تم الاسترجاع والحفظ. سجل الدخول بحساب من النسخة المستوردة."));
+              section.querySelector("#database-preview").innerHTML = '<a class="b" href="/">' + tr("Return to sign in", "العودة لتسجيل الدخول") + "</a>";
+            } finally {
+              button.disabled = false;
+            }
+          });
+        });
+        function showHistory() {
+          const data = api("");
+          const el = section.querySelector("#database-history");
+          el.innerHTML = "<h3>" + tr("Available backups and restore history", "النسخ المتاحة وسجل الاسترجاع") + "</h3>" + data.backups.map((b) => "<p>" + esc(b.name) + ' <button type="button" class="b2" data-backup="' + esc(b.name) + '">' + tr("Download", "تنزيل") + "</button></p>").join("") + '<pre style="white-space:pre-wrap">' + esc(JSON.stringify(data.history, null, 2)) + "</pre>";
+          el.querySelectorAll("[data-backup]").forEach((button) => button.onclick = () => {
+            try {
+              const r = api("/download", { name: button.dataset.backup });
+              download(r.package, r.filename);
+            } catch (e) {
+              status(e.message);
+            }
+          });
+        }
+        showHistory();
+      }
+      new MutationObserver(attach).observe(document.getElementById("v"), { childList: true });
+      new MutationObserver(() => {
+        const section = document.getElementById("database-transfer");
+        if (!section)
+          return;
+        const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+        let node;
+        while (node = walker.nextNode()) {
+          const raw = originalText.get(node) || node.nodeValue;
+          const pair = labels.get(raw.trim());
+          if (pair) {
+            originalText.set(node, raw);
+            node.nodeValue = raw.replace(raw.trim(), pair[document.documentElement.lang === "ar" ? "ar" : "en"]);
+          }
+        }
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+      document.addEventListener("click", (event) => {
+        if (event.target.closest('[data-route="Settings"]'))
+          setTimeout(attach, 0);
+      });
+      attach();
+    }
+    module.exports = { mount };
+  });
+
   // aplus-preview/runtime/browser.js
   globalThis.Buffer = globalThis.Buffer || (init_buffer(), __toCommonJS(exports_buffer)).Buffer;
   globalThis.process = globalThis.process || { env: {}, platform: "browser", version: "v22.0.0", versions: {}, nextTick: (f, ...a) => Promise.resolve().then(() => f(...a)), exit() {}, on() {}, cwd: () => "/app" };
@@ -45279,8 +45842,12 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
     });
     window.__APLUS_PREVIEW__ = rt;
     let saveTimer = null, saving = Promise.resolve();
+    let lastStamp = Date.now();
+    const capture = () => ({ at: lastStamp = Math.max(Date.now(), lastStamp + 1), zip: pack(rt.snapshot()) });
     const save = () => {
-      const rec = { at: Date.now(), zip: pack(rt.snapshot()) };
+      if (rt.transferring())
+        return saving;
+      const rec = capture();
       try {
         localStorage.setItem(LS_KEY, JSON.stringify({ at: rec.at, zip: b64.enc(rec.zip) }));
       } catch (_) {
@@ -45291,6 +45858,22 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       saving = saving.then(() => idbPut(rec)).catch((e) => console.error("[A+ Hub preview] could not save", e));
       return saving;
     };
+    const saveStrict = async () => {
+      clearTimeout(saveTimer);
+      await saving;
+      const rec = capture(), old = localStorage.getItem(LS_KEY);
+      localStorage.setItem(LS_KEY, JSON.stringify({ at: rec.at, zip: b64.enc(rec.zip) }));
+      try {
+        await idbPut(rec);
+      } catch (error) {
+        if (old === null)
+          localStorage.removeItem(LS_KEY);
+        else
+          localStorage.setItem(LS_KEY, old);
+        throw error;
+      }
+    };
+    window.__APLUS_RESTORE__ = (parameters) => rt.restoreBackup(parameters, { "x-aplus-token": document.querySelector('meta[name="aplus-token"]')?.content }, saveStrict);
     const scheduleSave = () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(save, 300);
@@ -45467,6 +46050,11 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       box.id = "aplus-preview-badge";
       box.setAttribute("style", "position:fixed;z-index:2147483647;bottom:8px;left:8px;max-width:min(420px,92vw);font:12px/1.4 system-ui,sans-serif;background:#fff7d6;color:#3b2f00;border:1px solid #c9a227;border-radius:8px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25);direction:ltr;text-align:left");
       const login = !!document.getElementById("login");
+      if (rt.imported()) {
+        box.innerHTML = "<b>LOCAL BROWSER PREVIEW · معاينة محلية داخل المتصفح</b><div>Imported data is stored only in this browser, without server-side access protection or device synchronization. Keep a private backup. · البيانات المستوردة محفوظة في هذا المتصفح فقط دون حماية سيرفر أو مزامنة أجهزة. احتفظ بنسخة خاصة.</div>";
+        document.body.appendChild(box);
+        return;
+      }
       box.innerHTML = "<b>EXPERIMENTAL PREVIEW · SYNTHETIC TEST DATA ONLY</b> · بيانات تجريبية وهمية" + ' <button type="button" id="aplus-preview-more" style="all:revert;font:inherit;cursor:pointer;margin-left:4px">' + (login ? "hide" : "details") + "</button>" + '<div id="aplus-preview-details" style="display:' + (login ? "block" : "none") + ';margin-top:4px">Runs entirely in this browser tab; not shared and not a deployment. Test accounts (password <code>' + rt.password + "</code>): " + rt.accounts.map((a) => "<code>" + a.username + "</code> (" + a.role + ")").join(", ") + '. <button type="button" id="aplus-preview-reset" style="all:revert;font:inherit;cursor:pointer">Reset synthetic data</button></div>';
       document.body.appendChild(box);
       box.querySelector("#aplus-preview-more").onclick = () => {
@@ -45499,6 +46087,7 @@ CREATE TABLE IF NOT EXISTS preview_operation_keys(request_key TEXT PRIMARY KEY,a
       });
       previewBadge();
       require_ui().mount();
+      require_backups_ui().mount();
     };
     if (document.readyState === "loading")
       document.addEventListener("DOMContentLoaded", after);
