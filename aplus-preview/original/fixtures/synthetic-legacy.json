@@ -1,0 +1,54 @@
+{
+ "t": [
+  {
+   "id": 1,
+   "name": "DEV Legacy Teacher",
+   "rate": 10000
+  }
+ ],
+ "s": [
+  {
+   "id": 2,
+   "name": "DEV Legacy Student"
+  }
+ ],
+ "sub": [],
+ "l": [
+  {
+   "id": 3,
+   "date": "2026-01-05",
+   "t": 1,
+   "s": 2,
+   "sub": "x",
+   "d": 2,
+   "tr": 10000,
+   "sr": 15000,
+   "st": "Completed",
+   "notes": ""
+  }
+ ],
+ "sp": [
+  {
+   "id": 4,
+   "p": 2,
+   "date": "2026-01-06",
+   "amt": 20000,
+   "meth": "Cash"
+  }
+ ],
+ "tp": [
+  {
+   "id": 5,
+   "p": 1,
+   "date": "2026-01-07",
+   "amt": 5000,
+   "meth": "Cash"
+  }
+ ],
+ "set": {
+  "name": "DEV Legacy",
+  "tr": "10",
+  "sr": "15"
+ },
+ "id": 6
+}

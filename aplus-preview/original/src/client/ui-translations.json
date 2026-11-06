@@ -1,0 +1,3522 @@
+[
+  [
+    "Workspace",
+    "مساحة العمل"
+  ],
+  [
+    "Academy workspace",
+    "إدارة الأكاديمية"
+  ],
+  [
+    "Academy overview",
+    "نظرة عامة على الأكاديمية"
+  ],
+  [
+    "Dashboard",
+    "لوحة التحكم"
+  ],
+  [
+    "Daily Desk",
+    "المتابعة اليومية"
+  ],
+  [
+    "Timetable",
+    "جدول المواعيد"
+  ],
+  [
+    "Scheduling",
+    "الجدولة"
+  ],
+  [
+    "Students",
+    "الطلاب"
+  ],
+  [
+    "Teachers",
+    "المدرسون"
+  ],
+  [
+    "Academy",
+    "الأكاديمية"
+  ],
+  [
+    "Finance",
+    "المالية"
+  ],
+  [
+    "Operations",
+    "التشغيل"
+  ],
+  [
+    "Administration",
+    "الإدارة"
+  ],
+  [
+    "Subjects",
+    "المواد والخدمات"
+  ],
+  [
+    "Lessons",
+    "الحصص المباشرة"
+  ],
+  [
+    "Lessons (Live)",
+    "الحصص المباشرة"
+  ],
+  [
+    "Recorded Courses",
+    "الكورسات المسجلة"
+  ],
+  [
+    "Projects",
+    "المشاريع"
+  ],
+  [
+    "Payments",
+    "المدفوعات"
+  ],
+  [
+    "Reports",
+    "التقارير المالية"
+  ],
+  [
+    "Cash Flow",
+    "التدفقات النقدية"
+  ],
+  [
+    "Settings",
+    "الإعدادات"
+  ],
+  [
+    "Registrations",
+    "التسجيلات"
+  ],
+  [
+    "Attendance & Notes",
+    "الحضور والملاحظات"
+  ],
+  [
+    "Follow-up Tasks",
+    "مهام المتابعة"
+  ],
+  [
+    "Billing",
+    "الباقات والتحصيل"
+  ],
+  [
+    "Delivery",
+    "التسليمات"
+  ],
+  [
+    "Team",
+    "فريق العمل"
+  ],
+  [
+    "Teacher Preview",
+    "معاينة حساب المدرس"
+  ],
+  [
+    "Treasury",
+    "الخزائن والمصروفات"
+  ],
+  [
+    "Batch Payments",
+    "الدفعات المجمعة"
+  ],
+  [
+    "Financial Summary",
+    "الملخص المالي"
+  ],
+  [
+    "My Schedule",
+    "جدولي"
+  ],
+  [
+    "My Subjects",
+    "موادي"
+  ],
+  [
+    "My Projects",
+    "مشاريعي"
+  ],
+  [
+    "Search workspace",
+    "البحث في النظام"
+  ],
+  [
+    "Search pages and people",
+    "البحث في الصفحات والأشخاص"
+  ],
+  [
+    "Search a page, teacher or student…",
+    "ابحث عن صفحة أو مدرس أو طالب…"
+  ],
+  [
+    "No matching pages or people.",
+    "لا توجد صفحات أو أشخاص مطابقون."
+  ],
+  [
+    "No matching pages or people",
+    "لا توجد صفحات أو أشخاص مطابقون"
+  ],
+  [
+    "Page",
+    "صفحة"
+  ],
+  [
+    "Teacher",
+    "مدرس"
+  ],
+  [
+    "Student",
+    "طالب"
+  ],
+  [
+    "Toggle navigation",
+    "فتح أو إغلاق القائمة"
+  ],
+  [
+    "Close navigation",
+    "إغلاق القائمة"
+  ],
+  [
+    "Account menu",
+    "قائمة الحساب"
+  ],
+  [
+    "Sign out",
+    "تسجيل الخروج"
+  ],
+  [
+    "Admin",
+    "المدير"
+  ],
+  [
+    "Accountant",
+    "المحاسب"
+  ],
+  [
+    "Coordinator",
+    "المنسق"
+  ],
+  [
+    "Close",
+    "إغلاق"
+  ],
+  [
+    "Cancel",
+    "إلغاء"
+  ],
+  [
+    "Save",
+    "حفظ"
+  ],
+  [
+    "OK",
+    "موافق"
+  ],
+  [
+    "Clear",
+    "مسح"
+  ],
+  [
+    "Clear filters",
+    "مسح الفلاتر"
+  ],
+  [
+    "Previous",
+    "السابق"
+  ],
+  [
+    "Next",
+    "التالي"
+  ],
+  [
+    "Search this table…",
+    "البحث في هذا الجدول…"
+  ],
+  [
+    "All statuses",
+    "كل الحالات"
+  ],
+  [
+    "Actions",
+    "الإجراءات"
+  ],
+  [
+    "Edit",
+    "تعديل"
+  ],
+  [
+    "Delete",
+    "حذف"
+  ],
+  [
+    "Open",
+    "مفتوح"
+  ],
+  [
+    "Review",
+    "مراجعة"
+  ],
+  [
+    "Details",
+    "التفاصيل"
+  ],
+  [
+    "Required",
+    "مطلوب"
+  ],
+  [
+    "Record details",
+    "تفاصيل السجل"
+  ],
+  [
+    "Notice",
+    "تنبيه"
+  ],
+  [
+    "General details",
+    "البيانات الأساسية"
+  ],
+  [
+    "Schedule & timing",
+    "المواعيد والتوقيت"
+  ],
+  [
+    "Rates & financial details",
+    "الأسعار والبيانات المالية"
+  ],
+  [
+    "Additional notes",
+    "ملاحظات إضافية"
+  ],
+  [
+    "Source",
+    "المصدر"
+  ],
+  [
+    "Date",
+    "التاريخ"
+  ],
+  [
+    "Name",
+    "الاسم"
+  ],
+  [
+    "Phone",
+    "الهاتف"
+  ],
+  [
+    "Email",
+    "البريد الإلكتروني"
+  ],
+  [
+    "Specialization",
+    "التخصص"
+  ],
+  [
+    "Default Cost/hr",
+    "الأجر الافتراضي للساعة"
+  ],
+  [
+    "Status",
+    "الحالة"
+  ],
+  [
+    "University",
+    "الجامعة"
+  ],
+  [
+    "Country",
+    "الدولة"
+  ],
+  [
+    "Major",
+    "التخصص الدراسي"
+  ],
+  [
+    "Level",
+    "المستوى"
+  ],
+  [
+    "Phone / WhatsApp",
+    "الهاتف / واتساب"
+  ],
+  [
+    "Balance",
+    "الرصيد"
+  ],
+  [
+    "Subject",
+    "المادة"
+  ],
+  [
+    "Instructor",
+    "المدرس"
+  ],
+  [
+    "Student(s)",
+    "الطلاب"
+  ],
+  [
+    "Hours",
+    "الساعات"
+  ],
+  [
+    "Teacher Rate",
+    "سعر ساعة المدرس"
+  ],
+  [
+    "Student Rate",
+    "سعر ساعة الطالب"
+  ],
+  [
+    "Teacher Cost",
+    "أجر المدرس"
+  ],
+  [
+    "Charge",
+    "التكلفة على الطالب"
+  ],
+  [
+    "Margin",
+    "هامش الربح"
+  ],
+  [
+    "Amount",
+    "المبلغ"
+  ],
+  [
+    "Rate",
+    "سعر التحويل"
+  ],
+  [
+    "Method",
+    "الطريقة"
+  ],
+  [
+    "Notes",
+    "الملاحظات"
+  ],
+  [
+    "Paid",
+    "المدفوع"
+  ],
+  [
+    "Accrued",
+    "المستحق"
+  ],
+  [
+    "Earned",
+    "المستحق"
+  ],
+  [
+    "Remaining",
+    "المتبقي"
+  ],
+  [
+    "Outstanding",
+    "المتبقي للتحصيل"
+  ],
+  [
+    "Charged",
+    "إجمالي الرسوم"
+  ],
+  [
+    "Currency",
+    "العملة"
+  ],
+  [
+    "Type",
+    "النوع"
+  ],
+  [
+    "Time",
+    "الوقت"
+  ],
+  [
+    "Day",
+    "اليوم"
+  ],
+  [
+    "From",
+    "من"
+  ],
+  [
+    "To",
+    "إلى"
+  ],
+  [
+    "All teachers",
+    "كل المدرسين"
+  ],
+  [
+    "All students",
+    "كل الطلاب"
+  ],
+  [
+    "All subjects",
+    "كل المواد"
+  ],
+  [
+    "All levels",
+    "كل المستويات"
+  ],
+  [
+    "All currencies",
+    "كل العملات"
+  ],
+  [
+    "All work types",
+    "كل أنواع العمل"
+  ],
+  [
+    "From date",
+    "من تاريخ"
+  ],
+  [
+    "To date",
+    "إلى تاريخ"
+  ],
+  [
+    "Subject Name",
+    "اسم المادة"
+  ],
+  [
+    "Teacher Name",
+    "اسم المدرس"
+  ],
+  [
+    "Student Name",
+    "اسم الطالب"
+  ],
+  [
+    "Phone Number",
+    "رقم الهاتف"
+  ],
+  [
+    "Search teachers by name",
+    "البحث باسم المدرس"
+  ],
+  [
+    "Search students by name",
+    "البحث باسم الطالب"
+  ],
+  [
+    "Search subjects",
+    "البحث في المواد"
+  ],
+  [
+    "Search",
+    "بحث"
+  ],
+  [
+    "Default Hourly Cost",
+    "أجر الساعة الافتراضي"
+  ],
+  [
+    "Payment Currency",
+    "عملة الدفع"
+  ],
+  [
+    "Billing Currency",
+    "عملة الفاتورة"
+  ],
+  [
+    "University (pick one already used, or type a new one)",
+    "الجامعة (اختر جامعة مسجلة أو اكتب اسمًا جديدًا)"
+  ],
+  [
+    "Major / Specialization",
+    "التخصص الدراسي"
+  ],
+  [
+    "Academic Level",
+    "المستوى الدراسي"
+  ],
+  [
+    "Add Teacher",
+    "إضافة مدرس"
+  ],
+  [
+    "Edit Teacher",
+    "تعديل مدرس"
+  ],
+  [
+    "+ Add Teacher",
+    "+ إضافة مدرس"
+  ],
+  [
+    "Add Student",
+    "إضافة طالب"
+  ],
+  [
+    "Edit Student",
+    "تعديل طالب"
+  ],
+  [
+    "+ Add Student",
+    "+ إضافة طالب"
+  ],
+  [
+    "+ Add New Subject",
+    "+ إضافة مادة جديدة"
+  ],
+  [
+    "Add New Subject",
+    "إضافة مادة جديدة"
+  ],
+  [
+    "Add Lesson",
+    "إضافة حصة"
+  ],
+  [
+    "Edit Lesson",
+    "تعديل حصة"
+  ],
+  [
+    "+ Add Lesson",
+    "+ إضافة حصة"
+  ],
+  [
+    "Add Project",
+    "إضافة مشروع"
+  ],
+  [
+    "Edit Project",
+    "تعديل مشروع"
+  ],
+  [
+    "+ Add Project",
+    "+ إضافة مشروع"
+  ],
+  [
+    "+ Add Recorded Course",
+    "+ إضافة كورس مسجل"
+  ],
+  [
+    "Add Recorded Course",
+    "إضافة كورس مسجل"
+  ],
+  [
+    "Edit Recorded Course",
+    "تعديل كورس مسجل"
+  ],
+  [
+    "+ Add Reminder",
+    "+ إضافة تذكير"
+  ],
+  [
+    "Add Reminder",
+    "إضافة تذكير"
+  ],
+  [
+    "Add Student Payment",
+    "إضافة دفعة طالب"
+  ],
+  [
+    "Add Teacher Payment",
+    "إضافة دفعة مدرس"
+  ],
+  [
+    "+ Student Payment",
+    "+ دفعة طالب"
+  ],
+  [
+    "+ Teacher Payment",
+    "+ دفعة مدرس"
+  ],
+  [
+    "+ Record Payment",
+    "+ تسجيل دفعة"
+  ],
+  [
+    "+ Add Entry",
+    "+ إضافة موعد"
+  ],
+  [
+    "Add Timetable Entry",
+    "إضافة موعد في الجدول"
+  ],
+  [
+    "Edit Timetable Entry",
+    "تعديل موعد في الجدول"
+  ],
+  [
+    "+ Availability",
+    "+ أوقات التوافر"
+  ],
+  [
+    "+ Book lesson",
+    "+ حجز حصة"
+  ],
+  [
+    "+ Waiting-list request",
+    "+ طلب في قائمة الانتظار"
+  ],
+  [
+    "Find available slots",
+    "البحث عن مواعيد متاحة"
+  ],
+  [
+    "Teacher availability",
+    "أوقات توافر المدرس"
+  ],
+  [
+    "Book a lesson",
+    "حجز حصة"
+  ],
+  [
+    "Waiting-list request",
+    "طلب في قائمة الانتظار"
+  ],
+  [
+    "+ Activate agreement",
+    "+ تفعيل اتفاق"
+  ],
+  [
+    "Activate a package / collection agreement",
+    "تفعيل باقة أو اتفاق تحصيل"
+  ],
+  [
+    "+ Register student",
+    "+ تسجيل طالب"
+  ],
+  [
+    "Register student in a service",
+    "تسجيل طالب في خدمة"
+  ],
+  [
+    "+ New task",
+    "+ مهمة جديدة"
+  ],
+  [
+    "New follow-up task",
+    "مهمة متابعة جديدة"
+  ],
+  [
+    "+ Project milestone",
+    "+ مرحلة مشروع"
+  ],
+  [
+    "+ Course material",
+    "+ مادة كورس"
+  ],
+  [
+    "Project milestone / delivery",
+    "مرحلة مشروع / تسليم"
+  ],
+  [
+    "Recorded-course material delivery",
+    "تسليم محتوى كورس مسجل"
+  ],
+  [
+    "+ Create account",
+    "+ إنشاء حساب"
+  ],
+  [
+    "Create team account",
+    "إنشاء حساب فريق"
+  ],
+  [
+    "Edit team account",
+    "تعديل حساب فريق"
+  ],
+  [
+    "Keep it",
+    "الإبقاء عليه"
+  ],
+  [
+    "Archive (set Inactive)",
+    "أرشفة (تعيين غير نشط)"
+  ],
+  [
+    "Active",
+    "نشط"
+  ],
+  [
+    "Inactive",
+    "غير نشط"
+  ],
+  [
+    "Completed",
+    "مكتمل"
+  ],
+  [
+    "Cancelled",
+    "ملغى"
+  ],
+  [
+    "Rescheduled",
+    "أُعيدت جدولته"
+  ],
+  [
+    "No Show",
+    "لم يحضر"
+  ],
+  [
+    "Pending",
+    "قيد الانتظار"
+  ],
+  [
+    "In Progress",
+    "قيد التنفيذ"
+  ],
+  [
+    "Approved",
+    "معتمد"
+  ],
+  [
+    "Planned",
+    "مخطط"
+  ],
+  [
+    "Sent",
+    "تم الإرسال"
+  ],
+  [
+    "Confirmed",
+    "مؤكد"
+  ],
+  [
+    "Done",
+    "منجز"
+  ],
+  [
+    "Skipped",
+    "متجاوز"
+  ],
+  [
+    "Scheduled",
+    "مجدول"
+  ],
+  [
+    "Disabled",
+    "معطل"
+  ],
+  [
+    "Closed",
+    "مغلق"
+  ],
+  [
+    "Partially Paid",
+    "مدفوع جزئيًا"
+  ],
+  [
+    "Credit",
+    "رصيد دائن"
+  ],
+  [
+    "Overpaid",
+    "مدفوع بالزيادة"
+  ],
+  [
+    "Overdue",
+    "متأخر"
+  ],
+  [
+    "Cash",
+    "نقدي"
+  ],
+  [
+    "Bank",
+    "بنك"
+  ],
+  [
+    "Wallet",
+    "محفظة"
+  ],
+  [
+    "Bank Transfer",
+    "تحويل بنكي"
+  ],
+  [
+    "Other",
+    "أخرى"
+  ],
+  [
+    "Live",
+    "حصص مباشرة"
+  ],
+  [
+    "Recorded",
+    "مسجل"
+  ],
+  [
+    "Recorded Course",
+    "كورس مسجل"
+  ],
+  [
+    "Project",
+    "مشروع"
+  ],
+  [
+    "Live Sessions",
+    "الحصص المباشرة"
+  ],
+  [
+    "Project Name",
+    "اسم المشروع"
+  ],
+  [
+    "Course Name",
+    "اسم الكورس"
+  ],
+  [
+    "Service Type",
+    "نوع الخدمة"
+  ],
+  [
+    "Payment Source",
+    "مصدر الدفعة"
+  ],
+  [
+    "Payment Date",
+    "تاريخ الدفع"
+  ],
+  [
+    "Start Date",
+    "تاريخ البداية"
+  ],
+  [
+    "Due Date",
+    "موعد التسليم"
+  ],
+  [
+    "Date of Birth",
+    "تاريخ الميلاد"
+  ],
+  [
+    "Start",
+    "البداية"
+  ],
+  [
+    "End",
+    "النهاية"
+  ],
+  [
+    "Location",
+    "المكان"
+  ],
+  [
+    "Duration",
+    "المدة"
+  ],
+  [
+    "High School",
+    "الثانوي"
+  ],
+  [
+    "Undergraduate",
+    "جامعي"
+  ],
+  [
+    "Postgraduate",
+    "دراسات عليا"
+  ],
+  [
+    "Student charge currency",
+    "عملة رسوم الطالب"
+  ],
+  [
+    "Teacher cost currency",
+    "عملة أجر المدرس"
+  ],
+  [
+    "Currency applies to: student charge",
+    "العملة تخص: رسوم الطالب"
+  ],
+  [
+    "Total Students",
+    "إجمالي الطلاب"
+  ],
+  [
+    "Total Teachers",
+    "إجمالي المدرسين"
+  ],
+  [
+    "Total Lessons",
+    "إجمالي الحصص"
+  ],
+  [
+    "Total Teaching Hours",
+    "إجمالي ساعات التدريس"
+  ],
+  [
+    "Total Hours",
+    "إجمالي الساعات"
+  ],
+  [
+    "Total Revenue",
+    "إجمالي الإيراد"
+  ],
+  [
+    "Total Costs",
+    "إجمالي التكاليف"
+  ],
+  [
+    "Total A+ Profit",
+    "إجمالي ربح الأكاديمية"
+  ],
+  [
+    "Live Profit",
+    "ربح الحصص المباشرة"
+  ],
+  [
+    "Project Profit",
+    "ربح المشاريع"
+  ],
+  [
+    "Recorded Profit",
+    "ربح الكورسات المسجلة"
+  ],
+  [
+    "Avg Profit / Live Lesson",
+    "متوسط ربح الحصة المباشرة"
+  ],
+  [
+    "Student Outstanding Balances",
+    "الأرصدة المستحقة على الطلاب"
+  ],
+  [
+    "This Month's Revenue",
+    "إيراد هذا الشهر"
+  ],
+  [
+    "This Month's Costs",
+    "تكاليف هذا الشهر"
+  ],
+  [
+    "This Month's Profit",
+    "ربح هذا الشهر"
+  ],
+  [
+    "TOTAL A+ ACADEMY PROFIT",
+    "إجمالي ربح الأكاديمية"
+  ],
+  [
+    "TOTAL TEACHER PROFIT",
+    "إجمالي ربح أعمال المدرسين"
+  ],
+  [
+    "EGP Profit",
+    "الربح بالجنيه المصري"
+  ],
+  [
+    "KWD Profit",
+    "الربح بالدينار الكويتي"
+  ],
+  [
+    "Profit",
+    "الربح"
+  ],
+  [
+    "Costs / shares",
+    "التكاليف / النسب"
+  ],
+  [
+    "Revenue",
+    "الإيراد"
+  ],
+  [
+    "Mixed-currency lessons: revenue",
+    "حصص بعملات مختلفة: الإيراد"
+  ],
+  [
+    "Mixed-currency lessons: cost",
+    "حصص بعملات مختلفة: التكلفة"
+  ],
+  [
+    "Profit (same-currency)",
+    "الربح (بنفس العملة)"
+  ],
+  [
+    "Upcoming timetable",
+    "المواعيد القادمة"
+  ],
+  [
+    "Upcoming recorded-course reminders (next 7 days)",
+    "تذكيرات الكورسات المسجلة (السبعة أيام القادمة)"
+  ],
+  [
+    "Student outstanding balances (live + recorded + projects)",
+    "مستحقات الطلاب (حصص + كورسات مسجلة + مشاريع)"
+  ],
+  [
+    "Additional financial & teaching metrics",
+    "مؤشرات مالية وتعليمية إضافية"
+  ],
+  [
+    "Analytics · revenue, costs & teaching activity",
+    "التحليلات · الإيراد والتكلفة ونشاط التدريس"
+  ],
+  [
+    "Recent student & teacher payments",
+    "آخر دفعات الطلاب والمدرسين"
+  ],
+  [
+    "Person",
+    "الاسم"
+  ],
+  [
+    "Direction",
+    "الاتجاه"
+  ],
+  [
+    "Amount · original",
+    "المبلغ · العملة الأصلية"
+  ],
+  [
+    "Received",
+    "وارد"
+  ],
+  [
+    "Paid out",
+    "صادر"
+  ],
+  [
+    "Student payment",
+    "دفعة طالب"
+  ],
+  [
+    "Unassigned",
+    "غير موزعة"
+  ],
+  [
+    "General",
+    "عام"
+  ],
+  [
+    "TOTAL",
+    "الإجمالي"
+  ],
+  [
+    "Note",
+    "ملاحظة"
+  ],
+  [
+    "Accrued (EGP)",
+    "المستحق (EGP)"
+  ],
+  [
+    "Paid (EGP)",
+    "المدفوع (EGP)"
+  ],
+  [
+    "Remaining (EGP)",
+    "المتبقي (EGP)"
+  ],
+  [
+    "Excess paid",
+    "دفع زائد"
+  ],
+  [
+    "Overpaid overall",
+    "إجمالي مدفوع زائد"
+  ],
+  [
+    "Unassigned (older payments)",
+    "غير موزعة (دفعات قديمة)"
+  ],
+  [
+    "Balance by original currency",
+    "الرصيد حسب العملة الأصلية"
+  ],
+  [
+    "Cross-currency settlements",
+    "تسويات بين العملات"
+  ],
+  [
+    "Financial summary (all work types)",
+    "الملخص المالي (كل أنواع العمل)"
+  ],
+  [
+    "Weekly timetable (fixed, no dates)",
+    "الجدول الأسبوعي الثابت"
+  ],
+  [
+    "Recent & completed (last 30 days)",
+    "الحديث والمكتمل (آخر ٣٠ يومًا)"
+  ],
+  [
+    "Payments to this teacher",
+    "دفعات هذا المدرس"
+  ],
+  [
+    "Payments from this student",
+    "دفعات هذا الطالب"
+  ],
+  [
+    "Lesson history",
+    "سجل الحصص"
+  ],
+  [
+    "← All teachers",
+    "← كل المدرسين"
+  ],
+  [
+    "← All students",
+    "← كل الطلاب"
+  ],
+  [
+    "Revenue Generated",
+    "الإيراد الناتج"
+  ],
+  [
+    "Academy Profit",
+    "ربح الأكاديمية"
+  ],
+  [
+    "Total Earned (all work)",
+    "إجمالي المستحق (كل الأعمال)"
+  ],
+  [
+    "Lesson earnings only",
+    "مستحقات الحصص فقط"
+  ],
+  [
+    "Paid to Teacher",
+    "المدفوع للمدرس"
+  ],
+  [
+    "Total Paid",
+    "إجمالي المدفوع"
+  ],
+  [
+    "Total Charged",
+    "إجمالي الرسوم"
+  ],
+  [
+    "Live charges",
+    "رسوم الحصص"
+  ],
+  [
+    "Recorded course charges",
+    "رسوم الكورسات المسجلة"
+  ],
+  [
+    "Project charges",
+    "رسوم المشاريع"
+  ],
+  [
+    "Teacher Costs",
+    "تكاليف المدرسين"
+  ],
+  [
+    "Avg Revenue / hr",
+    "متوسط إيراد الساعة"
+  ],
+  [
+    "Avg Cost / hr",
+    "متوسط تكلفة الساعة"
+  ],
+  [
+    "Avg Profit / hr",
+    "متوسط ربح الساعة"
+  ],
+  [
+    "Student payments (money received)",
+    "دفعات الطلاب (وارد)"
+  ],
+  [
+    "Student balances",
+    "أرصدة الطلاب"
+  ],
+  [
+    "Teacher payments (money paid out)",
+    "دفعات المدرسين (صادر)"
+  ],
+  [
+    "Teacher balances",
+    "أرصدة المدرسين"
+  ],
+  [
+    "Earned (all work)",
+    "المستحق (كل الأعمال)"
+  ],
+  [
+    "By original currency",
+    "حسب العملة الأصلية"
+  ],
+  [
+    "Ledger checks…",
+    "مراجعة السجل المالي…"
+  ],
+  [
+    "Payment Method",
+    "طريقة الدفع"
+  ],
+  [
+    "Link to a specific lesson / course / project (optional)",
+    "ربط بحصة / كورس / مشروع محدد (اختياري)"
+  ],
+  [
+    "— None (whole category) —",
+    "— بدون تحديد (كل الفئة) —"
+  ],
+  [
+    "None",
+    "بدون"
+  ],
+  [
+    "— Select —",
+    "— اختر —"
+  ],
+  [
+    "— Select teacher —",
+    "— اختر مدرسًا —"
+  ],
+  [
+    "— Select student —",
+    "— اختر طالبًا —"
+  ],
+  [
+    "Engineer",
+    "المدرس / المهندس"
+  ],
+  [
+    "Engineer Share",
+    "نسبة المدرس / المهندس"
+  ],
+  [
+    "A+ Profit",
+    "ربح الأكاديمية"
+  ],
+  [
+    "Instructor Share",
+    "نسبة المدرس"
+  ],
+  [
+    "Price",
+    "السعر"
+  ],
+  [
+    "Cost",
+    "التكلفة"
+  ],
+  [
+    "Students (Ctrl/Cmd-click for several)",
+    "الطلاب (Ctrl/Cmd لاختيار أكثر من طالب)"
+  ],
+  [
+    "Instructor / Engineer",
+    "المدرس / المهندس"
+  ],
+  [
+    "Teacher / Engineer",
+    "المدرس / المهندس"
+  ],
+  [
+    "Teacher Currency",
+    "عملة المدرس"
+  ],
+  [
+    "Teacher Hourly Cost",
+    "أجر ساعة المدرس"
+  ],
+  [
+    "Student Currency",
+    "عملة الطالب"
+  ],
+  [
+    "Student Hourly Price",
+    "سعر ساعة الطالب"
+  ],
+  [
+    "Profit Share (%)",
+    "نسبة المستحق (%)"
+  ],
+  [
+    "Revenue / Price",
+    "الإيراد / السعر"
+  ],
+  [
+    "Paid so far",
+    "المدفوع حتى الآن"
+  ],
+  [
+    "Student price",
+    "سعر الطالب"
+  ],
+  [
+    "Total",
+    "الإجمالي"
+  ],
+  [
+    "Enrolments",
+    "التسجيلات"
+  ],
+  [
+    "Course",
+    "الكورس"
+  ],
+  [
+    "Reminder",
+    "التذكير"
+  ],
+  [
+    "Today",
+    "اليوم"
+  ],
+  [
+    "Weekly",
+    "أسبوعي"
+  ],
+  [
+    "Monthly",
+    "شهري"
+  ],
+  [
+    "weekly",
+    "أسبوعي"
+  ],
+  [
+    "monthly",
+    "شهري"
+  ],
+  [
+    "daily",
+    "يومي"
+  ],
+  [
+    "custom",
+    "فترة مخصصة"
+  ],
+  [
+    "Monday",
+    "الاثنين"
+  ],
+  [
+    "Tuesday",
+    "الثلاثاء"
+  ],
+  [
+    "Wednesday",
+    "الأربعاء"
+  ],
+  [
+    "Thursday",
+    "الخميس"
+  ],
+  [
+    "Friday",
+    "الجمعة"
+  ],
+  [
+    "Saturday",
+    "السبت"
+  ],
+  [
+    "Sunday",
+    "الأحد"
+  ],
+  [
+    "DONE",
+    "تم التنفيذ"
+  ],
+  [
+    "RESCHEDULE",
+    "إعادة جدولة"
+  ],
+  [
+    "Reschedule",
+    "إعادة جدولة"
+  ],
+  [
+    "Undo",
+    "تراجع"
+  ],
+  [
+    "From time",
+    "من الساعة"
+  ],
+  [
+    "To time",
+    "إلى الساعة"
+  ],
+  [
+    "Teacher(s)",
+    "المدرسون"
+  ],
+  [
+    "Title",
+    "العنوان"
+  ],
+  [
+    "Owner",
+    "المسؤول"
+  ],
+  [
+    "Responsible person",
+    "الشخص المسؤول"
+  ],
+  [
+    "Priority",
+    "الأولوية"
+  ],
+  [
+    "Due date",
+    "تاريخ الاستحقاق"
+  ],
+  [
+    "Follow-up date",
+    "تاريخ المتابعة"
+  ],
+  [
+    "Lesson date",
+    "تاريخ الحصة"
+  ],
+  [
+    "Task",
+    "المهمة"
+  ],
+  [
+    "Task title",
+    "عنوان المهمة"
+  ],
+  [
+    "Description",
+    "الوصف"
+  ],
+  [
+    "Contact",
+    "التواصل"
+  ],
+  [
+    "Service",
+    "الخدمة"
+  ],
+  [
+    "Service registration",
+    "تسجيل خدمة"
+  ],
+  [
+    "Attendance",
+    "الحضور"
+  ],
+  [
+    "Lesson Notes",
+    "ملاحظات الحصة"
+  ],
+  [
+    "Present",
+    "حاضر"
+  ],
+  [
+    "Absent",
+    "غائب"
+  ],
+  [
+    "Late",
+    "متأخر"
+  ],
+  [
+    "Excused",
+    "بعذر"
+  ],
+  [
+    "Scheduled date",
+    "التاريخ المحدد"
+  ],
+  [
+    "Low",
+    "منخفضة"
+  ],
+  [
+    "Normal",
+    "عادية"
+  ],
+  [
+    "High",
+    "مرتفعة"
+  ],
+  [
+    "Urgent",
+    "عاجلة"
+  ],
+  [
+    "View all lessons",
+    "عرض كل الحصص"
+  ],
+  [
+    "Scheduling & Teacher Availability",
+    "الجدولة وأوقات توافر المدرسين"
+  ],
+  [
+    "Packages, Installments & Collection",
+    "الباقات والأقساط والتحصيل"
+  ],
+  [
+    "Service Registrations",
+    "تسجيلات الخدمات"
+  ],
+  [
+    "Attendance & Lesson Notes",
+    "الحضور وملاحظات الحصص"
+  ],
+  [
+    "Projects & Recorded-course Delivery",
+    "تسليمات المشاريع والكورسات المسجلة"
+  ],
+  [
+    "Team Accounts & Permissions",
+    "حسابات الفريق والصلاحيات"
+  ],
+  [
+    "Username",
+    "اسم المستخدم"
+  ],
+  [
+    "Display name",
+    "اسم العرض"
+  ],
+  [
+    "Role",
+    "الصلاحية"
+  ],
+  [
+    "Linked teacher",
+    "المدرس المرتبط"
+  ],
+  [
+    "Account status",
+    "حالة الحساب"
+  ],
+  [
+    "Recent activity",
+    "آخر النشاط"
+  ],
+  [
+    "Who",
+    "المستخدم"
+  ],
+  [
+    "Action",
+    "الإجراء"
+  ],
+  [
+    "Record",
+    "السجل"
+  ],
+  [
+    "Detail",
+    "التفاصيل"
+  ],
+  [
+    "Academy name",
+    "اسم الأكاديمية"
+  ],
+  [
+    "Academy Base Currency",
+    "عملة حسابات الأكاديمية الأساسية"
+  ],
+  [
+    "Default teacher rate/hr",
+    "أجر ساعة المدرس الافتراضي"
+  ],
+  [
+    "Default student rate/hr",
+    "سعر ساعة الطالب الافتراضي"
+  ],
+  [
+    "Project profit is recognised",
+    "يُحتسب ربح المشروع"
+  ],
+  [
+    "Exchange rates count as out of date after (hours)",
+    "تعتبر أسعار الصرف قديمة بعد (ساعات)"
+  ],
+  [
+    "Save settings",
+    "حفظ الإعدادات"
+  ],
+  [
+    "Exchange Rates",
+    "أسعار الصرف"
+  ],
+  [
+    "Refresh rates",
+    "تحديث أسعار الصرف"
+  ],
+  [
+    "Refresh live rates",
+    "تحديث أسعار الصرف المباشرة"
+  ],
+  [
+    "Original currencies",
+    "العملات الأصلية"
+  ],
+  [
+    "Converted view",
+    "العرض المحول"
+  ],
+  [
+    "Original-currency view (default).",
+    "عرض العملات الأصلية (الافتراضي)."
+  ],
+  [
+    "Totals by original currency",
+    "الإجماليات حسب العملة الأصلية"
+  ],
+  [
+    "Open Reports",
+    "فتح التقارير"
+  ],
+  [
+    "Open Cash Flow",
+    "فتح التدفقات النقدية"
+  ],
+  [
+    "Backups (on this computer)",
+    "النسخ الاحتياطية (على هذا الجهاز)"
+  ],
+  [
+    "Create backup now",
+    "إنشاء نسخة احتياطية الآن"
+  ],
+  [
+    "Download financial JSON export",
+    "تنزيل التصدير المالي JSON"
+  ],
+  [
+    "Download administrative JSON",
+    "تنزيل البيانات الإدارية JSON"
+  ],
+  [
+    "Backup",
+    "النسخة الاحتياطية"
+  ],
+  [
+    "Created",
+    "تاريخ الإنشاء"
+  ],
+  [
+    "Records",
+    "السجلات"
+  ],
+  [
+    "Restore…",
+    "استعادة…"
+  ],
+  [
+    "Export Full Report (.xlsx)",
+    "تصدير التقرير الكامل (.xlsx)"
+  ],
+  [
+    "Work by currency",
+    "الأعمال حسب العملة"
+  ],
+  [
+    "Cash by currency",
+    "النقدية حسب العملة"
+  ],
+  [
+    "Teacher report",
+    "تقرير المدرسين"
+  ],
+  [
+    "Student report",
+    "تقرير الطلاب"
+  ],
+  [
+    "Live lessons",
+    "الحصص المباشرة"
+  ],
+  [
+    "All-work ledger",
+    "سجل كل الأعمال"
+  ],
+  [
+    "Payment report",
+    "تقرير الدفعات"
+  ],
+  [
+    "All lessons (all dates)",
+    "كل الحصص (كل التواريخ)"
+  ],
+  [
+    "Monthly Cash Flow Report",
+    "تقرير التدفقات النقدية الشهري"
+  ],
+  [
+    "Currency → KWD rate",
+    "سعر تحويل العملة إلى KWD"
+  ],
+  [
+    "Cash flow",
+    "التدفق النقدي"
+  ],
+  [
+    "Rate type",
+    "نوع السعر"
+  ],
+  [
+    "Last updated",
+    "آخر تحديث"
+  ],
+  [
+    "Rate unavailable",
+    "سعر التحويل غير متاح"
+  ],
+  [
+    "EGP rate unavailable",
+    "سعر الجنيه المصري غير متاح"
+  ],
+  [
+    "Egyptian Pound",
+    "جنيه مصري"
+  ],
+  [
+    "Kuwaiti Dinar",
+    "دينار كويتي"
+  ],
+  [
+    "Saudi Riyal",
+    "ريال سعودي"
+  ],
+  [
+    "Qatari Riyal",
+    "ريال قطري"
+  ],
+  [
+    "UAE Dirham",
+    "درهم إماراتي"
+  ],
+  [
+    "Bahraini Dinar",
+    "دينار بحريني"
+  ],
+  [
+    "Omani Rial",
+    "ريال عماني"
+  ],
+  [
+    "US Dollar",
+    "دولار أمريكي"
+  ],
+  [
+    "Page title",
+    "عنوان الصفحة"
+  ],
+  [
+    "Skip to content",
+    "تخطي إلى المحتوى"
+  ],
+  [
+    "Open dashboard reminders",
+    "فتح تذكيرات لوحة التحكم"
+  ],
+  [
+    "No rows match these table filters. Clear the search to see all records.",
+    "لا توجد صفوف مطابقة. امسح البحث لعرض كل السجلات."
+  ],
+  [
+    "Table search and pagination affect displayed rows only. Financial totals and exports keep their existing page filters.",
+    "البحث وتقسيم الصفحات يخصان الصفوف المعروضة فقط. الإجماليات والتصدير يحتفظان بفلاتر الصفحة الأصلية."
+  ],
+  [
+    "Nothing here yet — use the Add button.",
+    "لا توجد سجلات بعد — استخدم زر الإضافة."
+  ],
+  [
+    "No teachers found.",
+    "لا يوجد مدرسون مطابقون."
+  ],
+  [
+    "No students found.",
+    "لا يوجد طلاب مطابقون."
+  ],
+  [
+    "No projects yet.",
+    "لا توجد مشاريع بعد."
+  ],
+  [
+    "No lessons match.",
+    "لا توجد حصص مطابقة."
+  ],
+  [
+    "No data in this period.",
+    "لا توجد بيانات في هذه الفترة."
+  ],
+  [
+    "No classes scheduled in the next 14 days.",
+    "لا توجد حصص مجدولة خلال ١٤ يومًا قادمة."
+  ],
+  [
+    "No reminders due in the next 7 days.",
+    "لا توجد تذكيرات مستحقة خلال ٧ أيام قادمة."
+  ],
+  [
+    "No outstanding balances.",
+    "لا توجد أرصدة مستحقة."
+  ],
+  [
+    "No recorded student or teacher payments yet.",
+    "لا توجد دفعات طلاب أو مدرسين مسجلة بعد."
+  ],
+  [
+    "Your academy at a glance. People, teaching and finances in one place.",
+    "أكاديميتك بنظرة واحدة. الطلاب والمدرسون والحصص والمالية في مكان واحد."
+  ],
+  [
+    "Manage your teaching team, assigned work and financial accounts.",
+    "إدارة فريق التدريس والأعمال المسندة والحسابات المالية."
+  ],
+  [
+    "Keep student records, learning activity and balances organized.",
+    "تنظيم بيانات الطلاب ونشاطهم الدراسي وأرصدتهم."
+  ],
+  [
+    "Live lessons, recorded learning and project services.",
+    "الحصص المباشرة والكورسات المسجلة وخدمات المشاريع."
+  ],
+  [
+    "Review delivered sessions, rates and recorded lesson activity.",
+    "مراجعة الحصص المنفذة والأسعار ونشاط التدريس المسجل."
+  ],
+  [
+    "Manage project work, delivery and its recorded finances.",
+    "إدارة أعمال المشاريع وتسليماتها وحساباتها المسجلة."
+  ],
+  [
+    "Courses, enrolments and recorded learning in one workspace.",
+    "الكورسات والتسجيلات والتعلم المسجل في مكان واحد."
+  ],
+  [
+    "Recorded receipts and payouts, with original currencies preserved.",
+    "المقبوضات والمدفوعات المسجلة مع الاحتفاظ بالعملات الأصلية."
+  ],
+  [
+    "Plan your week and manage each scheduled session.",
+    "خطط لأسبوعك وأدر كل موعد مسجل."
+  ],
+  [
+    "Explore financial performance with clear currency and period controls.",
+    "استعرض الأداء المالي مع تحديد العملة والفترة بوضوح."
+  ],
+  [
+    "Follow dated receipts and payments, separated by currency.",
+    "متابعة المقبوضات والمدفوعات المؤرخة لكل عملة على حدة."
+  ],
+  [
+    "Manage academy preferences, exchange rates and verified backups.",
+    "إدارة إعدادات الأكاديمية وأسعار الصرف والنسخ الاحتياطية المتحققة."
+  ],
+  [
+    "Preview the workspace each teacher sees, with their own records only.",
+    "معاينة حساب كل مدرس وسجلاته الخاصة فقط."
+  ],
+  [
+    "Accounts, operating expenses and statement reconciliation.",
+    "الحسابات والمصروفات التشغيلية ومطابقة كشوف الحساب."
+  ],
+  [
+    "Review eligible hours and record one consolidated teacher payment.",
+    "مراجعة الساعات المستحقة وتسجيل دفعة مجمعة للمدرس."
+  ],
+  [
+    "Revenue, costs and service profit use the existing saved-rate converted figures. Service profit is before operating expenses. Existing page filters still apply; people counts cover the academy.",
+    "الإيرادات والتكاليف وربح الخدمات حسب الحسابات المحولة الحالية. ربح الخدمات قبل المصروفات التشغيلية. فلاتر الصفحة سارية، وأعداد الأشخاص تشمل الأكاديمية."
+  ],
+  [
+    "All dates · latest six recorded student and teacher payments, independent of dashboard filters. Original amounts and currencies. Other service payments remain in their existing accounts.",
+    "كل التواريخ · آخر ست دفعات طلاب ومدرسين، مستقلة عن فلاتر لوحة التحكم. المبالغ بعملاتها الأصلية. دفعات الخدمات الأخرى موجودة في حساباتها الحالية."
+  ],
+  [
+    "Development workspace",
+    "نسخة التطوير"
+  ],
+  [
+    "3005 · Independent review data",
+    "3005 · بيانات تجربة مستقلة"
+  ],
+  [
+    "REVIEW · 3005",
+    "تجربة · 3005"
+  ],
+  [
+    "Review version — 3005 — Changes here do not affect the working version on 3000",
+    "نسخة تجربة — 3005 — التعديلات هنا لا تصل لنسخة الشغل على 3000"
+  ],
+  [
+    "DONE on a Live session opens a form to record the actual lesson (saved in Lessons; no payment is recorded); other session types are simply marked completed. Either way only that one session is affected and it stays in the history. DELETE lets you move that one session to a new date/time — it never removes the weekly schedule.",
+    "تنفيذ الحصة المباشرة يفتح نموذجًا لتسجيلها في الحصص دون تسجيل أي دفعة. الأنواع الأخرى تُعلّم كمكتملة فقط. التغيير يخص هذا الموعد وحده مع الاحتفاظ بسجله، ونقل موعده لا يحذف الجدول الأسبوعي."
+  ],
+  [
+    "Each row foots: Revenue − Costs = Profit + (mixed-currency revenue − mixed-currency cost). Services whose student charge and teacher cost are in different currencies are left out of Profit (their profit exists only in the converted view) but their revenue and cost are shown here so nothing is hidden.",
+    "لكل صف: الإيراد − التكلفة = الربح + (إيراد العملات المختلفة − تكلفتها). الخدمات التي تختلف فيها عملة الطالب عن المدرس لا تُضاف لربح نفس العملة؛ يظهر ربحها في العرض المحول، وتظل إيراداتها وتكاليفها ظاهرة هنا."
+  ],
+  [
+    "The charts and cards below combine currencies using the rate saved on each record (converted view).",
+    "الرسوم والمؤشرات التالية تجمع العملات باستخدام سعر الصرف المحفوظ بكل سجل (العرض المحول)."
+  ],
+  [
+    "+ Follow-up task",
+    "+ مهمة متابعة"
+  ],
+  [
+    "+ Service registration",
+    "+ تسجيل خدمة"
+  ],
+  [
+    "Record attendance / lesson notes",
+    "تسجيل الحضور / ملاحظات الحصة"
+  ],
+  [
+    "Open timetable",
+    "فتح جدول المواعيد"
+  ],
+  [
+    "Tasks due today or overdue",
+    "مهام اليوم والمهام المتأخرة"
+  ],
+  [
+    "No tasks in this selection.",
+    "لا توجد مهام ضمن الاختيارات."
+  ],
+  [
+    "Today’s scheduled sessions",
+    "المواعيد المجدولة اليوم"
+  ],
+  [
+    "Today’s lesson records",
+    "سجلات حصص اليوم"
+  ],
+  [
+    "No lesson records dated today. Scheduled sessions appear above until recorded in Lessons.",
+    "لا توجد حصص مسجلة بتاريخ اليوم. تظل المواعيد بالأعلى حتى تسجيلها في الحصص."
+  ],
+  [
+    "Unexcused absences · last 7 days",
+    "غياب دون عذر · آخر ٧ أيام"
+  ],
+  [
+    "No recorded unexcused absences in the last 7 days.",
+    "لا يوجد غياب دون عذر مسجل خلال آخر ٧ أيام."
+  ],
+  [
+    "Record an outcome when you complete a follow-up. Full SQLite backups include registrations, attendance, lesson notes and tasks. The administrative JSON export is a reference copy; use verified database backups for recovery.",
+    "سجل نتيجة المتابعة عند إتمامها. النسخ الكاملة لقاعدة SQLite تشمل التسجيلات والحضور وملاحظات الحصص والمهام. التصدير الإداري JSON نسخة مرجعية؛ استخدم النسخ المتحققة لقاعدة البيانات للاستعادة."
+  ],
+  [
+    "Completed sessions (history)",
+    "المواعيد المكتملة (السجل)"
+  ],
+  [
+    "Bookings and confirmations",
+    "الحجوزات والتأكيدات"
+  ],
+  [
+    "Weekly availability",
+    "أوقات التوافر الأسبوعية"
+  ],
+  [
+    "Waiting list",
+    "قائمة الانتظار"
+  ],
+  [
+    "No managed bookings yet. Existing timetable records remain on Timetable.",
+    "لا توجد حجوزات جديدة بعد. المواعيد القديمة ما زالت في جدول المواعيد."
+  ],
+  [
+    "No availability recorded. Add a window before creating a booking.",
+    "لم تُسجل أوقات توافر. أضف فترة توافر قبل إنشاء الحجز."
+  ],
+  [
+    "No waiting-list requests.",
+    "لا توجد طلبات في قائمة الانتظار."
+  ],
+  [
+    "Bookings are checked against teacher availability, the existing timetable, other bookings and timed completed lessons. Booking a slot creates no charge. Changes to date, time, student or teacher clear recorded confirmations.",
+    "يفحص الحجز أوقات توافر المدرس والجدول والحجوزات الأخرى والحصص المنفذة ذات التوقيت. الحجز لا ينشئ رسومًا. تغيير التاريخ أو التوقيت أو الطالب أو المدرس يلغي التأكيدات المسجلة."
+  ],
+  [
+    "One list for Live subjects, Recorded Courses and Projects. Recorded courses and projects are also managed in their own pages; they are the same records.",
+    "قائمة موحدة للمواد المباشرة والكورسات المسجلة والمشاريع. إدارة الكورسات والمشاريع من صفحاتها تستخدم نفس السجلات دون تكرار."
+  ],
+  [
+    "Course Cost",
+    "تكلفة الكورس"
+  ],
+  [
+    "Reminders (e.g. Send Recorded Lectures)",
+    "التذكيرات (مثل إرسال المحاضرات المسجلة)"
+  ],
+  [
+    "What reminders do:",
+    "وظيفة التذكيرات:"
+  ],
+  [
+    "a reminder appears on this screen while A+ Hub is open in your browser (checked about once a minute, using the Africa/Cairo time and date). Nothing is sent by e-mail, SMS or phone notification, and nothing is delivered while the app or the computer is closed; a reminder that came due within the last 7 days while the app was closed is shown once when you next open it. For alerts outside the app, import the calendar file",
+    "يظهر التذكير أثناء فتح النظام في المتصفح، ويُفحص تقريبًا كل دقيقة بتوقيت القاهرة. لا تُرسل رسائل بريد أو SMS أو إشعارات هاتف، ولا يعمل أثناء إغلاق التطبيق أو الجهاز. يظهر التذكير المستحق خلال آخر ٧ أيام عند فتح النظام. للتنبيه خارج النظام، استورد ملف التقويم"
+  ],
+  [
+    "into your own calendar application.",
+    "إلى تطبيق التقويم الخاص بك."
+  ],
+  [
+    "Days",
+    "الأيام"
+  ],
+  [
+    "Repeat",
+    "التكرار"
+  ],
+  [
+    "Coming up (next 30 days)",
+    "القادم (خلال ٣٠ يومًا)"
+  ],
+  [
+    "Nothing due in the next 30 days.",
+    "لا توجد استحقاقات خلال ٣٠ يومًا."
+  ],
+  [
+    "Original currencies (default)",
+    "العملات الأصلية (الافتراضي)"
+  ],
+  [
+    "never added together",
+    "لا تُجمع معًا أبدًا"
+  ],
+  [
+    "A. Work by original currency (revenue, cost, profit - never combined across currencies)",
+    "أ. الأعمال بالعملة الأصلية (الإيراد والتكلفة والربح — دون جمع العملات المختلفة)"
+  ],
+  [
+    "Live Revenue",
+    "إيراد الحصص المباشرة"
+  ],
+  [
+    "Live Teacher Cost",
+    "أجور مدرس الحصص المباشرة"
+  ],
+  [
+    "Live Profit - lessons billed and paid in the same currency",
+    "ربح الحصص المحصلة والمدفوعة بنفس العملة"
+  ],
+  [
+    "Mixed-currency Lessons: Revenue, not in profit",
+    "حصص بعملات مختلفة: إيراد لا يدخل في ربح نفس العملة"
+  ],
+  [
+    "Mixed-currency Lessons: Teacher Cost, not in profit",
+    "حصص بعملات مختلفة: تكلفة مدرس لا تدخل في ربح نفس العملة"
+  ],
+  [
+    "Project Revenue",
+    "إيراد المشاريع"
+  ],
+  [
+    "Project Teacher Share",
+    "نسبة مدرس المشاريع"
+  ],
+  [
+    "Course Revenue",
+    "إيراد الكورسات"
+  ],
+  [
+    "Course Share",
+    "نسبة مدرس الكورسات"
+  ],
+  [
+    "Course Profit",
+    "ربح الكورسات"
+  ],
+  [
+    "B. Cash by original currency (dated receipts and payments; opening balances shown separately). With a Work Type filter only the allocated part of a student receipt and teacher payments with a recorded source are counted; unallocated receipts and unassigned payments have no work type and are excluded, never given an invented one. Refunds carry no method or work type and are excluded when either filter is set",
+    "ب. النقدية بالعملة الأصلية (المقبوضات والمدفوعات المؤرخة، والافتتاحي منفصل). عند فلترة نوع العمل تُحسب الأجزاء المخصصة من دفعات الطلاب ودفعات المدرسين ذات المصدر المسجل فقط. غير الموزع يُستبعد دون تخمين مصدر. المبالغ المستردة لا تحمل طريقة أو نوع عمل وتُستبعد عند استخدام أي منهما."
+  ],
+  [
+    "Student Payments in Period",
+    "دفعات الطلاب خلال الفترة"
+  ],
+  [
+    "Project Payments in Period",
+    "دفعات المشاريع خلال الفترة"
+  ],
+  [
+    "Total Dated Receipts",
+    "إجمالي المقبوضات المؤرخة"
+  ],
+  [
+    "Teacher Payments in Period",
+    "دفعات المدرسين خلال الفترة"
+  ],
+  [
+    "Net Dated Cash",
+    "صافي النقدية المؤرخة"
+  ],
+  [
+    "NOT DATED CASH - Project Opening Paid",
+    "مبلغ غير مؤرخ — مدفوع افتتاحي للمشاريع"
+  ],
+  [
+    "NOT DATED CASH - Course Enrolment Paid, running total",
+    "مبلغ غير مؤرخ — إجمالي مدفوع تسجيل الكورسات"
+  ],
+  [
+    "C. Teachers by currency",
+    "ج. المدرسون حسب العملة"
+  ],
+  [
+    "Earned in Period",
+    "المستحق خلال الفترة"
+  ],
+  [
+    "Paid in Period",
+    "المدفوع خلال الفترة"
+  ],
+  [
+    "Balance All-Time, same currency",
+    "رصيد كل الفترات بنفس العملة"
+  ],
+  [
+    "D. Students by currency",
+    "د. الطلاب حسب العملة"
+  ],
+  [
+    "Charges in Period",
+    "رسوم الفترة"
+  ],
+  [
+    "Dated Payments in Period",
+    "الدفعات المؤرخة خلال الفترة"
+  ],
+  [
+    "D. Lesson Report (Live)",
+    "د. تقرير الحصص المباشرة"
+  ],
+  [
+    "Subject Type",
+    "نوع المادة"
+  ],
+  [
+    "Work Type",
+    "نوع العمل"
+  ],
+  [
+    "Student Charge",
+    "رسوم الطالب"
+  ],
+  [
+    "Teacher Exchange Rate",
+    "سعر صرف المدرس"
+  ],
+  [
+    "Student Exchange Rate",
+    "سعر صرف الطالب"
+  ],
+  [
+    "Rate Type",
+    "نوع سعر الصرف"
+  ],
+  [
+    "Base Currency",
+    "العملة الأساسية"
+  ],
+  [
+    "Start Time",
+    "وقت البداية"
+  ],
+  [
+    "End Time",
+    "وقت النهاية"
+  ],
+  [
+    "Project Report",
+    "تقرير المشاريع"
+  ],
+  [
+    "Recorded Course Report",
+    "تقرير الكورسات المسجلة"
+  ],
+  [
+    "All-Work Ledger (original + converted)",
+    "سجل كل الأعمال (الأصلي + المحول)"
+  ],
+  [
+    "Original Currency",
+    "العملة الأصلية"
+  ],
+  [
+    "Original Amount",
+    "المبلغ الأصلي"
+  ],
+  [
+    "Exchange Rate",
+    "سعر الصرف"
+  ],
+  [
+    "Converted Amount",
+    "المبلغ المحول"
+  ],
+  [
+    "Payment",
+    "الدفعة"
+  ],
+  [
+    "Source Detail",
+    "تفاصيل المصدر"
+  ],
+  [
+    "Work-type applicability",
+    "ارتباط نوع العمل"
+  ],
+  [
+    "Timetable in period",
+    "المواعيد خلال الفترة"
+  ],
+  [
+    "Schedule",
+    "الجدول"
+  ],
+  [
+    "Payments in period (with a student filter: that student's receipts and the teacher payments linked to that student's lessons only; with a work-type filter, receipts without an allocation and payments without a source are listed and labelled)",
+    "دفعات الفترة (عند فلترة طالب: مقبوضاته ودفعات المدرس المرتبطة بحصصه فقط. عند فلترة نوع العمل، تُعرض الدفعات غير الموزعة أو دون مصدر مع توضيح حالتها)."
+  ],
+  [
+    "kept in the currency it was paid in",
+    "تظل بالعملة التي دُفعت بها"
+  ],
+  [
+    "Month",
+    "الشهر"
+  ],
+  [
+    "Export to Excel (.xlsx)",
+    "تصدير إلى Excel (.xlsx)"
+  ],
+  [
+    "Cash movement by currency",
+    "حركة النقدية حسب العملة"
+  ],
+  [
+    "Received from students",
+    "المقبوض من الطلاب"
+  ],
+  [
+    "Paid to teachers",
+    "المدفوع للمدرسين"
+  ],
+  [
+    "Net movement (before other expenses)",
+    "صافي الحركة (قبل المصروفات الأخرى)"
+  ],
+  [
+    "1. Cash received from students",
+    "١. المقبوضات من الطلاب"
+  ],
+  [
+    "By work type",
+    "حسب نوع العمل"
+  ],
+  [
+    "None in this month.",
+    "لا توجد عمليات هذا الشهر."
+  ],
+  [
+    "By payment method",
+    "حسب طريقة الدفع"
+  ],
+  [
+    "Transactions",
+    "الحركات"
+  ],
+  [
+    "No student payments in this month.",
+    "لا توجد دفعات طلاب هذا الشهر."
+  ],
+  [
+    "2. Payments made to teachers",
+    "٢. المدفوعات للمدرسين"
+  ],
+  [
+    "By payment source",
+    "حسب مصدر الدفعة"
+  ],
+  [
+    "By teacher",
+    "حسب المدرس"
+  ],
+  [
+    "Related service",
+    "الخدمة المرتبطة"
+  ],
+  [
+    "3. Net cash movement",
+    "٣. صافي حركة النقدية"
+  ],
+  [
+    "Student receipts",
+    "مقبوضات الطلاب"
+  ],
+  [
+    "Teacher payments",
+    "دفعات المدرسين"
+  ],
+  [
+    "Net before other expenses",
+    "الصافي قبل المصروفات الأخرى"
+  ],
+  [
+    "4. Opening and closing cash balance",
+    "٤. رصيد النقدية الافتتاحي والختامي"
+  ],
+  [
+    "Cash, bank accounts and wallets are not tracked in this system, so an opening balance, other cash movements and an actual closing balance cannot be determined.",
+    "هذا التقرير القديم لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا أو حركات نقدية أخرى."
+  ],
+  [
+    "Charges minus payments",
+    "الرسوم ناقص المدفوعات"
+  ],
+  [
+    ". A negative figure means the student has paid more than was charged in that currency (credit).",
+    ". الرقم السالب يعني أن الطالب دفع أكثر من الرسوم بنفس العملة (رصيد دائن)."
+  ],
+  [
+    "Paid (incl. undated opening paid)",
+    "المدفوع (يشمل الافتتاحي غير المؤرخ)"
+  ],
+  [
+    "of which undated opening paid",
+    "منه مدفوع افتتاحي غير مؤرخ"
+  ],
+  [
+    "of which Unassigned source",
+    "منه مصدر غير موزع"
+  ],
+  [
+    "Measure",
+    "المؤشر"
+  ],
+  [
+    "Difference",
+    "الفرق"
+  ],
+  [
+    "Change",
+    "التغير"
+  ],
+  [
+    "8. Data checks",
+    "٨. فحوص البيانات"
+  ],
+  [
+    "• Other academy expenses and other cash movements are not recorded in this system, so they are not included. Net cash movement is receipts minus teacher payments only, per currency.",
+    "• المصروفات الأخرى والحركات الأخرى لا تدخل في هذا التقرير القديم. صافي الحركة هنا هو المقبوضات ناقص دفعات المدرسين لكل عملة."
+  ],
+  [
+    "• Cash, bank or wallet balances are not tracked, so an opening or closing cash balance cannot be determined.",
+    "• هذا التقرير لا يتتبع أرصدة الخزائن والبنوك والمحافظ؛ لذلك لا يحدد افتتاحيًا أو ختاميًا فعليًا."
+  ],
+  [
+    "• Ageing of outstanding balances needs one currency to allocate payments across charges, so it is only available in the converted view.",
+    "• تحليل أعمار الديون يحتاج عملة واحدة لتوزيع الدفعات على الرسوم، وهو متاح في العرض المحول فقط."
+  ],
+  [
+    "Live packages are charged as lessons are delivered, using the agreed package price split across sessions. Collection in advance appears as student credit until delivery. Project/course agreements refer to their existing charges. No agreement creates a duplicate charge or payment.",
+    "تُحتسب رسوم الباقات عند تنفيذ الحصص بتوزيع السعر المتفق عليه عليها. التحصيل المسبق يظهر كرصيد دائن للطالب حتى التنفيذ. اتفاقات المشاريع والكورسات تشير لرسومها الحالية ولا تنشئ رسومًا أو دفعات مكررة."
+  ],
+  [
+    "Issued receipts",
+    "الإيصالات الصادرة"
+  ],
+  [
+    "No receipts issued through agreements yet.",
+    "لم تصدر إيصالات من الاتفاقات بعد."
+  ],
+  [
+    "Administrative follow-up only. These records do not create charges, payments or change teacher earnings. Existing lessons have no attendance or summary until you record one.",
+    "للمتابعة الإدارية فقط. هذه السجلات لا تنشئ رسومًا أو دفعات ولا تغير مستحقات المدرس. لا يُفترض حضور أو ملخص للحصص القديمة قبل تسجيله."
+  ],
+  [
+    "No matching registrations. Add registrations as new agreements are made; historical agreements are not guessed.",
+    "لا توجد تسجيلات مطابقة. أضف التسجيل عند الاتفاق الجديد؛ لا تُخمن الاتفاقات القديمة."
+  ],
+  [
+    "Attendance describes the student’s participation. It does not change the lesson’s financial status. To record a scheduled session first, use Timetable → DONE.",
+    "الحضور يصف مشاركة الطالب ولا يغير الحالة المالية للحصة. لتسجيل موعد مجدول أولًا، استخدم جدول المواعيد ← تم التنفيذ."
+  ],
+  [
+    "No lessons in this selection. Choose another date or view all lessons.",
+    "لا توجد حصص ضمن الاختيارات. اختر تاريخًا آخر أو اعرض كل الحصص."
+  ],
+  [
+    "Every follow-up has a responsible person, a due date and an outcome. No message is sent automatically.",
+    "لكل متابعة مسؤول وتاريخ استحقاق ونتيجة. لا تُرسل رسائل تلقائيًا."
+  ],
+  [
+    "Track deliverables, revision requests and materials sent. A Sent record does not prove viewing or understanding; no message is sent automatically. Links open externally only when you choose them.",
+    "تابع التسليمات وطلبات التعديل والمواد المرسلة. حالة تم الإرسال لا تعني المشاهدة أو الفهم، ولا تُرسل رسالة تلقائيًا. الروابط الخارجية تُفتح عند اختيارها فقط."
+  ],
+  [
+    "Project milestones",
+    "مراحل المشاريع"
+  ],
+  [
+    "No project milestones yet.",
+    "لا توجد مراحل مشاريع بعد."
+  ],
+  [
+    "Revision requests",
+    "طلبات التعديل"
+  ],
+  [
+    "No revision requests.",
+    "لا توجد طلبات تعديل."
+  ],
+  [
+    "Recorded-course materials",
+    "مواد الكورسات المسجلة"
+  ],
+  [
+    "No recorded-course deliveries planned.",
+    "لا توجد تسليمات كورسات مسجلة مخططة."
+  ],
+  [
+    "Admin: full management. Coordinator: scheduling, registrations and delivery, without financial access. Accountant: collection and financial records, without team administration. Teacher: their own students, lessons, availability and deliveries. Role changes and disabling an account end its sessions. Only administration approves project delivery.",
+    "المدير: إدارة كاملة. المنسق: الجدولة والتسجيلات والتسليم دون وصول مالي. المحاسب: التحصيل والسجلات المالية دون إدارة الفريق. المدرس: طلابه وحصصه وتوافره وتسليماته فقط. تغيير الصلاحية أو تعطيل الحساب ينهي جلساته. الإدارة وحدها تعتمد تسليم المشروع."
+  ],
+  [
+    "Defaults only pre-fill new lessons; rates can always be changed per lesson. Data is stored in the local A+ Hub database on this computer.",
+    "الإعدادات الافتراضية تملأ الحصص الجديدة فقط، ويمكن تغيير أسعار كل حصة. البيانات محفوظة في قاعدة النظام المحلية على هذا الجهاز."
+  ],
+  [
+    "SQLite backups include registrations, attendance, lesson summaries and follow-up tasks. The older financial JSON export does not include those records; administrative JSON is a reference export, not a database restore. Restore first makes a safety backup of the current data, verifies the chosen backup, and rolls everything back if a step fails.",
+    "نسخ SQLite تشمل التسجيلات والحضور وملخصات الحصص ومهام المتابعة. التصدير المالي JSON القديم لا يشملها، والتصدير الإداري مرجع وليس نسخة استعادة. الاستعادة تنشئ نسخة أمان أولًا وتتحقق من النسخة المختارة وتتراجع بالكامل عند فشل أي خطوة."
+  ],
+  [
+    "Rates are never invented: if a rate is unavailable, enter it manually. Each transaction stores the rate used when it was recorded, so changing rates later never alters old records.",
+    "لا يُخمن سعر الصرف: أدخله يدويًا إن لم يتوفر. تحتفظ كل عملية بسعرها عند التسجيل؛ تغيير الأسعار لاحقًا لا يغير السجلات القديمة."
+  ],
+  [
+    "+ Add currency",
+    "+ إضافة عملة"
+  ],
+  [
+    "Current Rate",
+    "سعر الصرف الحالي"
+  ],
+  [
+    "Last Updated",
+    "آخر تحديث"
+  ],
+  [
+    "Manual rate",
+    "سعر يدوي"
+  ],
+  [
+    "Set",
+    "تعيين"
+  ],
+  [
+    "The same all-time totals and category calculations as the existing administration Financial Summary. Only its EGP columns are exposed here. This display conversion does not change recorded payments or create a currency settlement.",
+    "نفس إجماليات كل الفترات وطريقة حساب الفئات في ملخص الإدارة. المعروض هنا أعمدة الجنيه المصري فقط، والتحويل للعرض لا يغير دفعات ولا ينشئ تسوية عملة."
+  ],
+  [
+    "Net profit after operating expenses",
+    "صافي الربح بعد المصروفات التشغيلية"
+  ],
+  [
+    "Service profit before expenses",
+    "ربح الخدمات قبل المصروفات"
+  ],
+  [
+    "Recorded operating expenses",
+    "المصروفات المسجلة"
+  ],
+  [
+    "Net profit",
+    "صافي الربح"
+  ],
+  [
+    "All-time totals under the existing service accounting rules. Each expense is counted once when recorded, whether paid or not. Other profit figures on this page are before operating expenses. Opening balances and internal transfers are not revenue.",
+    "إجماليات كل الفترات وفق قواعد احتساب الخدمات الحالية. المصروف يُحتسب مرة واحدة عند تسجيله، سواء سُدد أم لا. أرقام الأرباح الأخرى في الصفحة قبل المصروفات التشغيلية. الأرصدة الافتتاحية والتحويلات الداخلية لا تُعد إيرادًا."
+  ],
+  [
+    "Expenses, accounts & reconciliation",
+    "المصروفات والخزائن والمطابقة"
+  ],
+  [
+    "Batch Payments — student hours",
+    "Batch Payments — دفعة مجمّعة لساعات طالب"
+  ],
+  [
+    "Select teacher, student and period. Payment uses saved completed-lesson costs, not the current hourly rate. One payment is linked automatically to the lessons or portions it covers. All amounts are EGP.",
+    "اختر المدرس والطالب والفترة. السداد حسب تكلفة الحصص المنفذة المحفوظة، وليس سعر الساعة الحالي. دفعة واحدة مرتبطة تلقائيًا بالحصة أو أجزاء الحصص التي تغطيها. كل المبالغ بالجنيه المصري."
+  ],
+  [
+    "Student",
+    "الطالب"
+  ],
+  [
+    "Calculate hours & amount due",
+    "حساب الساعات والمستحق"
+  ],
+  [
+    "Previous month",
+    "الشهر السابق"
+  ],
+  [
+    "Admin and Accountant only. Linking an original payment identifies its cash account without creating another payment. Opening balances are at the start of the chosen day; link only later transactions not already included.",
+    "متاحة للمدير والمحاسب فقط. ربط دفعة أصلية بخزينة يحدد مكان النقد ولا ينشئ دفعة ثانية. الرصيد الافتتاحي في بداية اليوم المختار؛ اربط فقط العمليات اللاحقة غير الداخلة فيه."
+  ],
+  [
+    "Accounts & transactions",
+    "الخزائن والحركات"
+  ],
+  [
+    "Operating expenses",
+    "المصروفات"
+  ],
+  [
+    "Reconciliation",
+    "المطابقة"
+  ],
+  [
+    "+ Account / cashbox",
+    "+ خزينة / حساب"
+  ],
+  [
+    "Transfer between accounts",
+    "تحويل بين حسابين"
+  ],
+  [
+    "No accounts yet. Start with a known opening balance for each account.",
+    "لم تُنشأ خزائن بعد. ابدأ برصيد افتتاحي معلوم لكل حساب."
+  ],
+  [
+    "Original payments without an account",
+    "دفعات أصلية لم تُنسب لخزينة"
+  ],
+  [
+    "These amounts already exist in the financial ledger. Linking them does not repeat collection or payment.",
+    "الأرقام التالية موجودة بالفعل في السجل المالي. ربطها لا يعيد التحصيل أو الصرف."
+  ],
+  [
+    "Reference",
+    "المرجع"
+  ],
+  [
+    "Link to account",
+    "ربط بخزينة"
+  ],
+  [
+    "Transaction history",
+    "سجل الحركات"
+  ],
+  [
+    "No transactions.",
+    "لا توجد حركات."
+  ],
+  [
+    "Teacher workspace preview",
+    "معاينة حساب المدرس"
+  ],
+  [
+    "Read-only preview as seen by the teacher, without student pricing or other teachers’ records.",
+    "عرض للقراءة كما يظهر للمدرس، دون أسعار الطلاب أو بيانات باقي المدرسين."
+  ],
+  [
+    "Schedule",
+    "جدوله"
+  ],
+  [
+    "Subjects",
+    "مواده"
+  ],
+  [
+    "Projects",
+    "مشاريعه"
+  ],
+  [
+    "EGP account",
+    "حسابه بالجنيه"
+  ],
+  [
+    "My schedule & lesson times",
+    "جدولي ومواعيد حصصي"
+  ],
+  [
+    "Existing timetable, new bookings and lesson records in one place. Times are in Cairo time. A booking alone does not mean a lesson was delivered.",
+    "الجدول القديم والحجوزات الجديدة وسجلات الحصص في مكان واحد. المواعيد بتوقيت القاهرة. الحجز وحده لا يعني تنفيذ حصة."
+  ],
+  [
+    "View period",
+    "عرض الفترة"
+  ],
+  [
+    "From — to",
+    "من — إلى"
+  ],
+  [
+    "Work",
+    "العمل"
+  ],
+  [
+    "Subject / work",
+    "المادة / العمل"
+  ],
+  [
+    "My availability & booking confirmations",
+    "أوقات توافري وتأكيد الحجوزات"
+  ],
+  [
+    "Add a cashbox or account",
+    "إضافة خزينة أو حساب"
+  ],
+  [
+    "Account name",
+    "اسم الحساب"
+  ],
+  [
+    "Account type",
+    "نوع الحساب"
+  ],
+  [
+    "Balance at the start of the day",
+    "الرصيد في بداية يوم"
+  ],
+  [
+    "Opening balance",
+    "الرصيد الافتتاحي"
+  ],
+  [
+    "Allow a negative balance",
+    "السماح برصيد سالب"
+  ],
+  [
+    "Record an account transfer — not revenue",
+    "تسجيل تحويل بين الحسابات — لا يُعد إيرادًا"
+  ],
+  [
+    "From account",
+    "من حساب"
+  ],
+  [
+    "To account",
+    "إلى حساب"
+  ],
+  [
+    "Actual transfer date",
+    "تاريخ التحويل الفعلي"
+  ],
+  [
+    "Amount out in source-account currency",
+    "المبلغ الخارج بعملة الحساب الأول"
+  ],
+  [
+    "Amount in in destination-account currency",
+    "المبلغ الداخل بعملة الحساب الثاني"
+  ],
+  [
+    "Transfer reference / description",
+    "مرجع التحويل / البيان"
+  ],
+  [
+    "— Select an account —",
+    "— اختر حسابًا —"
+  ],
+  [
+    "Account",
+    "الحساب"
+  ],
+  [
+    "Type",
+    "النوع"
+  ],
+  [
+    "Currency",
+    "العملة"
+  ],
+  [
+    "From date",
+    "من تاريخ"
+  ],
+  [
+    "Balance",
+    "الرصيد"
+  ],
+  [
+    "Status",
+    "الحالة"
+  ],
+  [
+    "Active",
+    "نشط"
+  ],
+  [
+    "Suspended",
+    "موقوف"
+  ],
+  [
+    "Suspend",
+    "إيقاف"
+  ],
+  [
+    "Activate",
+    "تنشيط"
+  ],
+  [
+    "Amount",
+    "المبلغ"
+  ],
+  [
+    "Direction",
+    "الاتجاه"
+  ],
+  [
+    "Currency not established",
+    "عملة غير مثبتة"
+  ],
+  [
+    "In",
+    "داخل"
+  ],
+  [
+    "Out",
+    "خارج"
+  ],
+  [
+    "All payments are assigned to accounts.",
+    "كل الدفعات منسوبة لحسابات."
+  ],
+  [
+    "Account / currency",
+    "الحساب / العملة"
+  ],
+  [
+    "Type / reference",
+    "النوع / المرجع"
+  ],
+  [
+    "Signed amount",
+    "المبلغ الموقّع"
+  ],
+  [
+    "Description",
+    "البيان"
+  ],
+  [
+    "Cash",
+    "نقدي"
+  ],
+  [
+    "Bank",
+    "بنك"
+  ],
+  [
+    "Wallet",
+    "محفظة"
+  ],
+  [
+    "No",
+    "لا"
+  ],
+  [
+    "Yes — overdraft account",
+    "نعم — حساب بسحب على المكشوف"
+  ],
+  [
+    "Activate account",
+    "تنشيط الحساب"
+  ],
+  [
+    "Suspend zero-balance account",
+    "إيقاف حساب رصيده صفر"
+  ],
+  [
+    "Account in the payment currency",
+    "الحساب بنفس عملة الدفعة"
+  ],
+  [
+    "Correct a payment account — correction history retained",
+    "تصحيح خزينة الدفعة — مع الاحتفاظ بتاريخ التصحيح"
+  ],
+  [
+    "Correct account",
+    "الحساب الصحيح"
+  ],
+  [
+    "Reason for correction",
+    "سبب التصحيح"
+  ],
+  [
+    "Reverse an erroneous entry — not a transfer or refund request",
+    "إلغاء حركة سُجلت بالخطأ — ليس طلب تحويل أو رد أموال"
+  ],
+  [
+    "Document / date",
+    "المستند / التاريخ"
+  ],
+  [
+    "Category / supplier",
+    "الفئة / المورد"
+  ],
+  [
+    "Paid",
+    "المدفوع"
+  ],
+  [
+    "Remaining",
+    "المتبقي"
+  ],
+  [
+    "No recorded expenses.",
+    "لا توجد مصروفات مسجلة."
+  ],
+  [
+    "Record an operating expense — no automatic cash payout",
+    "تسجيل مصروف تشغيلي — دون صرف نقدي تلقائي"
+  ],
+  [
+    "Expense date",
+    "تاريخ المصروف"
+  ],
+  [
+    "Category",
+    "الفئة"
+  ],
+  [
+    "Advertising",
+    "إعلانات"
+  ],
+  [
+    "Software & subscriptions",
+    "برامج واشتراكات"
+  ],
+  [
+    "Transfer fees",
+    "عمولات تحويل"
+  ],
+  [
+    "Rent",
+    "إيجار"
+  ],
+  [
+    "Internet & communications",
+    "إنترنت واتصالات"
+  ],
+  [
+    "Other",
+    "أخرى"
+  ],
+  [
+    "Supplier / payee",
+    "المورد / الجهة"
+  ],
+  [
+    "Supplier invoice number — optional",
+    "رقم فاتورة المورد — اختياري"
+  ],
+  [
+    "Expense description",
+    "وصف المصروف"
+  ],
+  [
+    "Expense currency",
+    "عملة المصروف"
+  ],
+  [
+    "Total expense amount",
+    "إجمالي قيمة المصروف"
+  ],
+  [
+    "Payment account",
+    "حساب الصرف"
+  ],
+  [
+    "Actual payout date",
+    "تاريخ الصرف الفعلي"
+  ],
+  [
+    "Payment reference",
+    "مرجع السداد"
+  ],
+  [
+    "Cancel an unpaid document, keeping its history",
+    "إلغاء مستند غير مسدد مع الاحتفاظ به"
+  ],
+  [
+    "Reason for cancellation",
+    "سبب الإلغاء"
+  ],
+  [
+    "Bank reference",
+    "مرجع البنك"
+  ],
+  [
+    "Import a local bank statement — no external service upload",
+    "استيراد كشف حساب محلي — لا إرسال لخدمة خارجية"
+  ],
+  [
+    "Period start",
+    "بداية الفترة"
+  ],
+  [
+    "Period end",
+    "نهاية الفترة"
+  ],
+  [
+    "Statement opening balance",
+    "رصيد أول الفترة بالكشف"
+  ],
+  [
+    "Statement closing balance",
+    "رصيد آخر الفترة بالكشف"
+  ],
+  [
+    "CSV contents: Date,Amount,Reference,Description",
+    "محتوى CSV: Date,Amount,Reference,Description"
+  ],
+  [
+    "Maximum 150 KB",
+    "الحد الأقصى 150 KB"
+  ],
+  [
+    "Matching transaction",
+    "الحركة المطابقة"
+  ],
+  [
+    "— Select —",
+    "— اختر —"
+  ],
+  [
+    "Unmatch in an open statement",
+    "فك مطابقة في كشف مفتوح"
+  ],
+  [
+    "Approve reconciliation — prevents new entries in the closed period",
+    "اعتماد المطابقة — يمنع حركات جديدة داخل الفترة المقفلة"
+  ],
+  [
+    "Choose teacher, student and a valid period ending no later than today",
+    "اختر المدرس والطالب وفترة صحيحة لا تتجاوز اليوم"
+  ],
+  [
+    "Saved hourly rate — EGP",
+    "أجر الساعة المسجل — ج.م"
+  ],
+  [
+    "Unpaid hours",
+    "الساعات غير المسددة"
+  ],
+  [
+    "Amount — EGP",
+    "المبلغ — ج.م"
+  ],
+  [
+    "No payable hours under these filters.",
+    "لا توجد ساعات مستحقة بهذه الشروط."
+  ],
+  [
+    "Subject",
+    "المادة"
+  ],
+  [
+    "Remaining — EGP",
+    "المتبقي — ج.م"
+  ],
+  [
+    "No lessons.",
+    "لا توجد حصص."
+  ],
+  [
+    "Payment ID",
+    "رقم الدفعة"
+  ],
+  [
+    "Unallocated amount — EGP",
+    "المتبقي للتوزيع — ج.م"
+  ],
+  [
+    "Period",
+    "الفترة"
+  ],
+  [
+    "Hours",
+    "الساعات"
+  ],
+  [
+    "New payment",
+    "دفعة جديدة"
+  ],
+  [
+    "Allocate an earlier payment",
+    "توزيع دفعة قديمة"
+  ],
+  [
+    "No batch payments for this student.",
+    "لا توجد دفعات مجمعة لهذا الطالب."
+  ],
+  [
+    "Hours to pay — allocated oldest first",
+    "الساعات المراد سدادها — توزع على الأقدم أولًا"
+  ],
+  [
+    "Actual payment date",
+    "تاريخ الدفع الفعلي"
+  ],
+  [
+    "EGP rate in the accounting currency — internal recording only",
+    "سعر الجنيه بعملة الحسابات — للتسجيل الداخلي فقط"
+  ],
+  [
+    "Payment method",
+    "طريقة الدفع"
+  ],
+  [
+    "EGP payment account — optional",
+    "خزينة الصرف بالجنيه — اختياري"
+  ],
+  [
+    "Hours exceed the payable amount",
+    "الساعات تتجاوز المستحق"
+  ],
+  [
+    "Amount from the earlier payment allocated to these lessons — EGP",
+    "المبلغ من الدفعة القديمة المخصص لهذه الحصص — ج.م"
+  ],
+  [
+    "Reason for linking the earlier payment to this student and period",
+    "سبب ربط الدفعة السابقة بهذا الطالب والفترة"
+  ],
+  [
+    "Choose a valid period",
+    "اختر فترة صحيحة"
+  ],
+  [
+    "Choose a period of no more than 63 days",
+    "اختر فترة لا تزيد عن 63 يومًا"
+  ],
+  [
+    "Not specified",
+    "غير محدد"
+  ],
+  [
+    "No sessions in the selected period.",
+    "لا توجد مواعيد في الفترة المختارة."
+  ],
+  [
+    "Service type",
+    "نوع الخدمة"
+  ],
+  [
+    "Level",
+    "المستوى"
+  ],
+  [
+    "Students in lessons & subject",
+    "طلاب الحصص والمادة"
+  ],
+  [
+    "Completed lessons",
+    "حصص منفذة"
+  ],
+  [
+    "No subjects assigned yet.",
+    "لا توجد مواد مسندة لك حتى الآن."
+  ],
+  [
+    "Project / subject",
+    "المشروع / المادة"
+  ],
+  [
+    "Start",
+    "البداية"
+  ],
+  [
+    "Due date",
+    "موعد التسليم"
+  ],
+  [
+    "No projects assigned.",
+    "لا توجد مشاريع مسندة لك."
+  ],
+  [
+    "Completed lesson",
+    "حصة منفذة"
+  ],
+  [
+    "Project earnings",
+    "مستحق مشروع"
+  ],
+  [
+    "Recorded-course earnings",
+    "مستحق كورس مسجل"
+  ],
+  [
+    "Payment received",
+    "دفعة مستلمة"
+  ],
+  [
+    "Details",
+    "التفاصيل"
+  ],
+  [
+    "Accrued / equivalent — EGP",
+    "مستحق / معادل — ج.م"
+  ],
+  [
+    "Paid / equivalent — EGP",
+    "مدفوع / معادل — ج.م"
+  ],
+  [
+    "Balance / equivalent — EGP",
+    "الرصيد / معادله — ج.م"
+  ],
+  [
+    "Undated",
+    "بدون تاريخ"
+  ],
+  [
+    "No transactions in the selected period.",
+    "لا توجد حركات خلال الفترة المختارة."
+  ],
+  [
+    "Financial Summary — EGP only",
+    "Financial Summary — الجنيه المصري فقط"
+  ],
+  [
+    "My teaching subjects",
+    "المواد التي أدرّسها"
+  ],
+  [
+    "Subjects assigned to you and those in your lessons, projects and courses.",
+    "المواد المسندة لك والمواد الموجودة في حصصك ومشاريعك وكورساتك."
+  ],
+  [
+    "My project work",
+    "المشاريع التي أعمل عليها"
+  ],
+  [
+    "Your current and previous projects only. Academy pricing and accounts are not shown here.",
+    "مشاريعك الحالية والسابقة فقط. الأسعار وحسابات الأكاديمية لا تظهر هنا."
+  ],
+  [
+    "Delivery milestones & revision requests",
+    "مراحل التسليم وطلبات التعديل"
+  ],
+  [
+    "Transaction details",
+    "تفصيل الحركات"
+  ],
+  [
+    "All transactions",
+    "كل الحركات"
+  ],
+  [
+    "The same teacher’s administration summary, showing EGP columns only. Like administration, the summary covers all dates. Stored accounting-base values are converted using the latest saved EGP rate. This is display-only: it does not change hourly pay or original payments and creates no currency settlement.",
+    "نفس بيانات جدول الإدارة لنفس المدرس، بأعمدة الجنيه فقط. الملخص لكل الفترات مثل جدول الإدارة. الحساب يعتمد على القيم المحفوظة بعملة حسابات الأكاديمية ثم تحويلها للجنيه بآخر سعر محفوظ؛ هذا معادل للعرض فقط، ولا يغير أجر الساعة أو أصل الدفعات ولا يسجل تسوية عملة."
+  ],
+  [
+    "The date filter applies to the transaction details below only; it does not change the all-time summary above. The displayed equivalent may differ from an original EGP transaction if exchange rates changed.",
+    "فلتر التاريخ للتفاصيل التالية فقط؛ لا يغيّر إجمالي الملخص أعلاه. المعادل المعروض قد يختلف عن مبلغ العملية الأصلي بالجنيه عند تغير سعر الصرف."
+  ],
+  [
+    "Rate timestamp — Cairo time:",
+    "تاريخ سعر التحويل — بتوقيت القاهرة:"
+  ],
+  [
+    "A rate is saved, but its timestamp is unavailable.",
+    "سعر التحويل محفوظ، لكن تاريخه غير متاح."
+  ],
+  [
+    "The exchange rate is missing, or records with another accounting-base currency are excluded just as in administration.",
+    "سعر التحويل غير متاح، أو توجد عمليات بعملة أساس مختلفة مستبعدة من الحساب مثل جدول الإدارة."
+  ],
+  [
+    "Subject / Course / Project Name",
+    "اسم المادة / الكورس / المشروع"
+  ],
+  [
+    "Full Course / Project Price",
+    "السعر الكامل للكورس / المشروع"
+  ],
+  [
+    "Teacher / Engineer Profit Share %",
+    "نسبة مستحق المدرس / المهندس %"
+  ],
+  [
+    "Number of Students",
+    "عدد الطلاب"
+  ],
+  [
+    "Project Status",
+    "حالة المشروع"
+  ],
+  [
+    "Amount Paid (so far)",
+    "المدفوع حتى الآن"
+  ],
+  [
+    "Subject (only subjects linked to this student and instructor)",
+    "المادة (المواد المرتبطة بهذا الطالب والمدرس فقط)"
+  ],
+  [
+    "Duration (hours)",
+    "المدة (بالساعات)"
+  ],
+  [
+    "Free / waived session (leave as normal for a paid session)",
+    "حصة مجانية / معفاة (اتركها عادية للحصة المدفوعة)"
+  ],
+  [
+    "Reason for the free / waived session (required, kept in the audit log)",
+    "سبب الحصة المجانية / المعفاة (مطلوب ويحفظ في سجل التدقيق)"
+  ],
+  [
+    "Engineer Profit Share %",
+    "نسبة مستحق المهندس %"
+  ],
+  [
+    "Course Selling Price",
+    "سعر بيع الكورس"
+  ],
+  [
+    "Instructor Share %",
+    "نسبة مستحق المدرس %"
+  ],
+  [
+    "Reminder Name (e.g. Send Recorded Lectures)",
+    "عنوان التذكير (مثل إرسال المحاضرات المسجلة)"
+  ],
+  [
+    "Related Recorded Course",
+    "الكورس المسجل المرتبط"
+  ],
+  [
+    "Day(s) — Ctrl/Cmd-click for several",
+    "الأيام — استخدم Ctrl/Cmd لاختيار أكثر من يوم"
+  ],
+  [
+    "End Date",
+    "تاريخ النهاية"
+  ],
+  [
+    "Repeat Frequency",
+    "معدل التكرار"
+  ],
+  [
+    "Other Payment Source Description",
+    "وصف مصدر الدفعة الأخرى"
+  ],
+  [
+    "Schedule Type",
+    "نوع الجدول"
+  ],
+  [
+    "Date (day is set automatically)",
+    "التاريخ (يُحدد اليوم تلقائيًا)"
+  ],
+  [
+    "Day of the week",
+    "يوم الأسبوع"
+  ],
+  [
+    "Student(s) — Ctrl/Cmd-click for several",
+    "الطلاب — استخدم Ctrl/Cmd لاختيار أكثر من طالب"
+  ],
+  [
+    "Weekday",
+    "يوم الأسبوع"
+  ],
+  [
+    "Available from",
+    "متاح من الساعة"
+  ],
+  [
+    "Available until",
+    "متاح حتى الساعة"
+  ],
+  [
+    "Availability status",
+    "حالة التوافر"
+  ],
+  [
+    "Live subject",
+    "مادة مباشرة"
+  ],
+  [
+    "Session date",
+    "تاريخ الحصة"
+  ],
+  [
+    "Booking status",
+    "حالة الحجز"
+  ],
+  [
+    "Matching completed lesson (required for completion)",
+    "الحصة المنفذة المطابقة (مطلوبة للإتمام)"
+  ],
+  [
+    "Scheduling notes",
+    "ملاحظات الجدولة"
+  ],
+  [
+    "Preferred teacher",
+    "المدرس المفضل"
+  ],
+  [
+    "Preferred days / times",
+    "الأيام / المواعيد المفضلة"
+  ],
+  [
+    "Request status",
+    "حالة الطلب"
+  ],
+  [
+    "Duration in minutes",
+    "المدة بالدقائق"
+  ],
+  [
+    "Find slots",
+    "البحث عن مواعيد"
+  ],
+  [
+    "Agreed total (original currency)",
+    "الإجمالي المتفق عليه (بالعملة الأصلية)"
+  ],
+  [
+    "Number of sessions (1 for projects/courses)",
+    "عدد الحصص (١ للمشاريع / الكورسات)"
+  ],
+  [
+    "Agreement starts",
+    "بداية الاتفاق"
+  ],
+  [
+    "Agreement ends (optional)",
+    "نهاية الاتفاق (اختياري)"
+  ],
+  [
+    "Existing service (leave blank for a new Live package)",
+    "خدمة موجودة (اتركها فارغة لباقة حصص جديدة)"
+  ],
+  [
+    "Registration / service name",
+    "اسم التسجيل / الخدمة"
+  ],
+  [
+    "Subject / service",
+    "المادة / الخدمة"
+  ],
+  [
+    "Responsible teacher",
+    "المدرس المسؤول"
+  ],
+  [
+    "End date (optional)",
+    "تاريخ النهاية (اختياري)"
+  ],
+  [
+    "Registration status",
+    "حالة التسجيل"
+  ],
+  [
+    "Agreement basis (reference only)",
+    "أساس الاتفاق (مرجعي فقط)"
+  ],
+  [
+    "Agreed price (optional; does not charge the student)",
+    "السعر المتفق عليه (اختياري ولا ينشئ رسومًا على الطالب)"
+  ],
+  [
+    "Agreement currency",
+    "عملة الاتفاق"
+  ],
+  [
+    "Planned sessions (optional whole number)",
+    "عدد الحصص المخططة (عدد صحيح اختياري)"
+  ],
+  [
+    "Learning goal / agreement notes",
+    "هدف التعلم / ملاحظات الاتفاق"
+  ],
+  [
+    "Save record",
+    "حفظ السجل"
+  ],
+  [
+    "Task / follow-up",
+    "المهمة / المتابعة"
+  ],
+  [
+    "Task status",
+    "حالة المهمة"
+  ],
+  [
+    "Related student",
+    "الطالب المرتبط"
+  ],
+  [
+    "Related teacher",
+    "المدرس المرتبط"
+  ],
+  [
+    "Related registration",
+    "التسجيل المرتبط"
+  ],
+  [
+    "Description / what needs doing",
+    "الوصف / المطلوب تنفيذه"
+  ],
+  [
+    "Result / outcome (required when Done)",
+    "النتيجة (مطلوبة عند الإتمام)"
+  ],
+  [
+    "Milestone / deliverable",
+    "المرحلة / المطلوب تسليمه"
+  ],
+  [
+    "Delivery status",
+    "حالة التسليم"
+  ],
+  [
+    "Deliverable link (optional)",
+    "رابط التسليم (اختياري)"
+  ],
+  [
+    "Delivery notes",
+    "ملاحظات التسليم"
+  ],
+  [
+    "Student / course enrolment",
+    "الطالب / تسجيل الكورس"
+  ],
+  [
+    "Material / lecture",
+    "المادة / المحاضرة"
+  ],
+  [
+    "Material link (optional)",
+    "رابط المادة (اختياري)"
+  ],
+  [
+    "Planned delivery date",
+    "تاريخ التسليم المخطط"
+  ],
+  [
+    "Actual delivery date (blank until sent)",
+    "تاريخ التسليم الفعلي (فارغ حتى الإرسال)"
+  ],
+  [
+    "Username (letters / numbers / dots)",
+    "اسم المستخدم (حروف / أرقام / نقاط)"
+  ],
+  [
+    "Linked teacher (required for Teacher)",
+    "المدرس المرتبط (مطلوب لحساب المدرس)"
+  ],
+  [
+    "Password (12+ characters)",
+    "كلمة المرور (١٢ حرفًا أو أكثر)"
+  ],
+  [
+    "New password (blank keeps existing; 12+ characters)",
+    "كلمة مرور جديدة (اتركها فارغة للإبقاء على الحالية؛ ١٢ حرفًا أو أكثر)"
+  ]
+]

@@ -1,0 +1,42 @@
+'use strict';
+const {tx}=require('./db'),{assemble}=require('./state'),F=require('./finance'),rules=require('./rules'),audit=require('./audit'),store=require('./store'),cairo=require('./cairo'),TR=require('./treasury');
+class BatchError extends Error{constructor(message,code=422){super(message);this.code=code;}}
+const fail=(m,c)=>{throw new BatchError(m,c)},allowed=u=>{if(!u||!['Admin','Accountant'].includes(u.role))fail('Financial permission required.',403)},units=h=>Math.round(h*1e6);
+function ledger(db,tid){
+ const st=assemble(db),lessons=st.l.filter(l=>l.t===tid&&l.st==='Completed'&&l.tc==='EGP'&&F.O(l).cost>0).map(l=>({...l,total:F.O(l).cost,totalHours:units(l.d),paid:0,paidHours:0})),byId=new Map(lessons.map(l=>[l.id,l])),batches=db.prepare('SELECT * FROM teacher_payment_batches WHERE teacher_id=?').all(tid),allocations=db.prepare('SELECT a.*,b.payment_id FROM teacher_hour_allocations a JOIN teacher_payment_batches b ON b.id=a.batch_id WHERE b.teacher_id=?').all(tid);
+ for(const a of allocations){const l=byId.get(a.lesson_id);if(l){l.paid+=a.amount;l.paidHours+=a.hours_micros;}}
+ const pending=[];
+ for(const p of st.tp.filter(p=>p.p===tid&&p.cur==='EGP').sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)){
+  let used=batches.filter(b=>b.payment_id===p.id).reduce((s,b)=>s+b.amount,0);used+=st.ts.filter(t=>t.tp===p.id).reduce((s,t)=>s+t.pamt,0);
+  if(p.src==='Live'&&p.lk){const l=byId.get(p.lk);if(l){const paid=Math.min(Math.max(0,p.amt-used),Math.max(0,l.total-l.paid)),h=paid===l.total-l.paid?l.totalHours-l.paidHours:Math.min(l.totalHours-l.paidHours,Math.round(l.totalHours*paid/l.total));l.paid+=paid;l.paidHours+=h;used+=paid;}}
+  if((p.src==='Live'||!p.src)&&p.amt>used)pending.push({id:p.id,date:p.date,remaining:p.amt-used,source:p.src||'Unassigned'});
+ }
+ for(const t of st.ts.filter(t=>t.ok==='lesson'&&t.scur==='EGP')){const l=byId.get(t.oid);if(l){const v=Math.min(t.samt,Math.max(0,l.total-l.paid));l.paidHours+=v===l.total-l.paid?l.totalHours-l.paidHours:Math.min(l.totalHours-l.paidHours,Math.round(l.totalHours*v/l.total));l.paid+=v;}}
+ return{st,lessons,pending,batches};
+}
+function query(db,r,u,now=new Date()){
+ allowed(u);if(!Number.isSafeInteger(r.teacher_id)||!Number.isSafeInteger(r.student_id)||!rules.isDate(r.starts_on)||!rules.isDate(r.ends_on)||r.starts_on>r.ends_on||r.ends_on>cairo.today(now))fail('Choose a teacher, student and completed period.');
+ const data=ledger(db,r.teacher_id);if(!data.st.t.some(t=>t.id===r.teacher_id)||!data.st.s.some(s=>s.id===r.student_id))fail('Teacher or student not found.');
+ const period=data.lessons.filter(l=>l.s===r.student_id&&l.date>=r.starts_on&&l.date<=r.ends_on);const performedHours=period.reduce((s,l)=>s+l.totalHours,0)/1e6,paidHours=period.reduce((s,l)=>s+Math.min(l.totalHours,l.paidHours),0)/1e6,earnedTotal=period.reduce((s,l)=>s+l.total,0),paidForLessons=period.reduce((s,l)=>s+Math.min(l.total,l.paid),0);
+ const rows=period.filter(l=>l.total>l.paid).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id).map(l=>({id:l.id,date:l.date,subject:data.st.sub.find(s=>s.id===l.sub)?.name||'',hours:(l.totalHours-l.paidHours)/1e6,hoursMicros:l.totalHours-l.paidHours,recordedHourlyRate:l.tr,effectiveHourlyRate:l.total/l.d,amount:l.total-l.paid,totalCost:l.total}));
+ const grouped={};for(const row of rows){const key=String(Math.round(row.effectiveHourlyRate*1e6)/1e6),g=grouped[key]||(grouped[key]={rate:row.effectiveHourlyRate,hoursMicros:0,amount:0});g.hoursMicros+=row.hoursMicros;g.amount+=row.amount;}const excludedForeignLessons=data.st.l.filter(l=>l.t===r.teacher_id&&l.s===r.student_id&&l.st==='Completed'&&l.date>=r.starts_on&&l.date<=r.ends_on&&l.tc!=='EGP').length;
+ return{rev:require('./save').getRev(db),currency:'EGP',rows,performedHours,paidHours,earnedTotal,paidForLessons,rates:Object.values(grouped).map(g=>({...g,hours:g.hoursMicros/1e6})),excludedForeignLessons,totalHours:rows.reduce((s,l)=>s+l.hoursMicros,0)/1e6,total:rows.reduce((s,l)=>s+l.amount,0),unallocatedPreviousPayments:data.pending,history:data.batches.filter(b=>b.student_id===r.student_id)};
+}
+function plan(rows,value,mode){let left=value;const out=[];for(const l of rows){if(left<=0)break;let hours,amount;if(mode==='hours'){hours=Math.min(left,l.hoursMicros);amount=hours===l.hoursMicros?l.amount:Math.round(l.amount*hours/l.hoursMicros);left-=hours;}else{amount=Math.min(left,l.amount);hours=amount===l.amount?l.hoursMicros:Math.min(l.hoursMicros,Math.round(l.hoursMicros*amount/l.amount));left-=amount;}if(hours<=0||amount<=0)fail('The selected portion is below the supported precision.');out.push({lesson_id:l.id,hours_micros:hours,amount});}if(left>0)fail('The selection exceeds the remaining eligible hours or amount.');return out;}
+function write(db,input,u,now=new Date()){
+ allowed(u);if(!input||!Number.isInteger(input.baseRev)||!input.record)fail('Valid record and revision required.',400);
+ return tx(db,()=>{if(input.baseRev!==require('./save').getRev(db))fail('Data changed. Refresh the calculation.',409);const r=input.record,d=query(db,r,u,now),st=assemble(db),stamp=now.toISOString();let paymentId,mode,reason='',alloc;
+ if(input.kind==='pay'){
+  if(d.unallocatedPreviousPayments.length)fail('Allocate the existing unassigned EGP payments first; they may already cover these hours.');if(!Number.isFinite(r.hours)||r.hours<=0||Math.abs(r.hours*1e6-Math.round(r.hours*1e6))>1e-5)fail('Use positive hours with at most six decimal places.');alloc=plan(d.rows,units(r.hours),'hours');mode='New';
+  const amt=alloc.reduce((s,a)=>s+a.amount,0),rx=Number(r.rate),date=r.payment_date;if(!rules.isDate(date)||date>cairo.today(now)||date<r.ends_on)fail('Use an actual payment date on or after the selected period.');if(!Number.isFinite(rx)||rx<=0||rx>1e7||(st.set.base==='EGP'&&rx!==1))fail('Use a valid saved EGP exchange rate.');const bamt=Math.round(amt*rx);if(!rules.isMoney(amt)||!rules.isMoney(bamt)||bamt<=0)fail('The payment amount is outside the supported range.');if(!['Cash','Bank Transfer','KNET','Cheque','Other'].includes(r.method))fail('Choose a payment method.');paymentId=Math.max(st.id,db.prepare('SELECT coalesce(max(id),0)+1 n FROM id_registry').get().n);db.prepare("INSERT INTO id_registry(id,kind) VALUES(?,'teacher_payment')").run(paymentId);store.insertRow(db,'tp',{id:paymentId,p:r.teacher_id,date,cur:'EGP',amt,rx,rt:'Saved',bamt,bc:st.set.base,meth:r.method,notes:'Batch hours payment for student #'+r.student_id+'; '+r.starts_on+' to '+r.ends_on,src:'Live',srcd:'Batch hours',lk:0,fxs:st.set.base==='EGP'?'identity':'stored'},store.nextSeq(db,'tp'));db.prepare("UPDATE schema_meta SET value=? WHERE key='next_id'").run(String(paymentId+1));
+ }else if(input.kind==='allocate-existing'){
+  const old=d.unallocatedPreviousPayments.find(p=>p.id===r.payment_id);reason=typeof r.reason==='string'?r.reason.trim():'';if(!old||!rules.isMoney(r.amount)||r.amount<=0||r.amount>old.remaining||reason.length<3||!rules.plain(reason,300))fail('Choose an available old payment, a valid allocation and a reason.');paymentId=old.id;mode='Existing';alloc=plan(d.rows,r.amount,'amount');
+ }else fail('Unknown batch operation.',400);
+ const a=alloc.reduce((s,x)=>s+x.amount,0),h=alloc.reduce((s,x)=>s+x.hours_micros,0),batchId=Number(db.prepare('INSERT INTO teacher_payment_batches(payment_id,teacher_id,student_id,starts_on,ends_on,amount,hours_micros,mode,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(paymentId,r.teacher_id,r.student_id,r.starts_on,r.ends_on,a,h,mode,reason,stamp).lastInsertRowid);
+ for(const x of alloc)db.prepare('INSERT INTO teacher_hour_allocations(batch_id,lesson_id,hours_micros,amount) VALUES(?,?,?,?)').run(batchId,x.lesson_id,x.hours_micros,x.amount);
+ if(mode==='New'&&r.account_id)TR.attachNative(db,{account_id:r.account_id,native_kind:'tp',native_id:paymentId},u,now);
+ audit.log(db,{actor:u.username,at:stamp,action:'teacher-batch-'+mode.toLowerCase(),entity:'teacher-payment-batch',id:batchId,after:{paymentId,teacher:r.teacher_id,student:r.student_id,amount:a,hours:h/1e6,allocations:alloc},reason:reason||null});const rev=input.baseRev+1;db.prepare("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('rev',?)").run(String(rev));return{rev,record:{id:batchId,paymentId,amount:a,hours:h/1e6,mode}};
+ });
+}
+function details(db,tid){return db.prepare('SELECT b.* FROM teacher_payment_batches b WHERE b.teacher_id=? ORDER BY b.id').all(tid);}
+module.exports={query,write,details,BatchError};

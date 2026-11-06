@@ -1,0 +1,30 @@
+# Local academy data, credentials and exports must never be committed.
+data/
+backups*/
+verification/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+*.db-*
+*.log
+*.zip
+*.bak
+*.pem
+*.key
+node_modules/
+coverage/
+.DS_Store
+Thumbs.db
+
+# Runtime/local evidence. Keep only the static code fixtures required by tests.
+reports/*
+!reports/ui-ux-redesign/
+reports/ui-ux-redesign/*
+!reports/ui-ux-redesign/before-index.html
+!reports/ui-ux-redesign/preservation-baseline.json
+dev/index.html
+.local/

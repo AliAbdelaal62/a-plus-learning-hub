@@ -1,0 +1,12 @@
+'use strict';
+// Pre-flight for start-aplus.cmd / start-synthetic.cmd. Exit codes: 0 = go, 10 = A+ Hub is already running on this port, 11 = port used by another program, 12 = project files missing.
+// It only READS: it never creates, resets or replaces a database.
+const fs = require('fs'), path = require('path'), http = require('http'); const root = path.join(__dirname, '..'); const port = +(process.argv[2] || process.env.APLUS_PORT || 3000);
+const need = ['src/server.js', 'src/db.js', 'src/save.js', 'public/index.html', 'public/vendor/chart.umd.min.js', 'public/vendor/xlsx.full.min.js', 'db/migrations/001_init.sql'];
+const missing = need.filter(f => !fs.existsSync(path.join(root, f))); if (missing.length) { console.error('These project files are missing: ' + missing.join(', ') + '\nRestore them from your copy of the project folder; nothing was changed.'); process.exit(12); }
+const dbf = process.env.APLUS_DB ? path.resolve(process.env.APLUS_DB) : path.join(root, 'data', 'aplus.sqlite');
+{ const g = require('../src/guard'); const bdir = process.env.APLUS_BACKUP_DIR ? path.resolve(process.env.APLUS_BACKUP_DIR) : process.env.APLUS_DB ? path.join(path.dirname(dbf), '..', 'backups') : path.join(root, 'backups'); try { g.inspect(dbf, bdir); } catch (e) { if (e instanceof g.StartupRefused) { console.error('A+ Hub will NOT start (' + e.code + '):\n' + e.message); process.exit(13); } throw e; } } // read-only: a damaged, zero-byte or suspiciously missing database stops the launch
+console.log(fs.existsSync(dbf) ? 'Existing database found: ' + dbf + ' (it will be used as is, never reset).' : 'No database yet: an empty one will be created at ' + dbf + ' on first start. Nothing is imported.');
+const req = http.get({ host: '127.0.0.1', port, path: '/api/health', timeout: 1500 }, res => { let b = ''; res.on('data', d => b += d); res.on('end', () => { try { if (JSON.parse(b).ok) { console.log('A+ Hub is already running on port ' + port + '.'); process.exit(10); } } catch (e) {} console.error('Port ' + port + ' is used by another program. Close it or set APLUS_PORT to another number.'); process.exit(11); }); });
+req.on('timeout', () => { req.destroy(); console.error('Port ' + port + ' is busy but not answering. Close the other program or set APLUS_PORT.'); process.exit(11); });
+req.on('error', e => { if (e.code === 'ECONNREFUSED') process.exit(0); console.error('Port check failed: ' + e.message); process.exit(11); });

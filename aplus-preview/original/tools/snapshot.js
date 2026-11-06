@@ -1,0 +1,22 @@
+// Everything the regression baseline records. Runs INSIDE an app build (eval tail).
+module.exports=`;(()=>{const o={};const A=['t','s','sub','l','sp','tp','tt','pr','pp','rc','re','rm'];
+o.counts=Object.fromEntries(A.map(k=>[k,db[k].length]));
+const ids=A.flatMap(k=>db[k].map(r=>r.id));o.idsUnique=new Set(ids).size==ids.length;o.nextIdAboveMax=db.id>Math.max(...ids);
+const has=(a,i)=>db[a].some(x=>x.id==i),orph=[];
+db.l.forEach(l=>{if(!has('t',l.t))orph.push('l.t '+l.id);if(!has('s',l.s))orph.push('l.s '+l.id);if(!has('sub',l.sub))orph.push('l.sub '+l.id)});
+db.sp.forEach(p=>{if(!has('s',p.p))orph.push('sp '+p.id)});db.tp.forEach(p=>{if(!has('t',p.p))orph.push('tp '+p.id)});
+db.pp.forEach(p=>{if(!has('pr',p.pr))orph.push('pp '+p.id)});db.re.forEach(e=>{if(!has('rc',e.rc)||!has('s',e.s))orph.push('re '+e.id)});
+db.pr.forEach(p=>{if(!has('t',p.t)||!has('s',p.s)||!has('sub',p.subj))orph.push('pr '+p.id)});db.rc.forEach(c=>{if(!has('t',c.inst)||!has('sub',c.subj))orph.push('rc '+c.id)});
+o.orphans=orph;
+o.studentBalances=Object.fromEntries(db.s.map(z=>[z.name,SS(z.id)]));
+o.teacherBalances=Object.fromEntries(db.t.map(z=>[z.name,TS(z.id)]));
+o.teacherByWorkType=Object.fromEntries(db.t.map(z=>[z.name,TSum(z.id)]));
+o.lessonAmounts=db.l.map(l=>[l.id,l.st,C(l)]);
+o.projects=db.pr.map(p=>[p.name,pj(p)]);o.courses=db.rc.map(c=>[c.name,rcc(c)]);
+o.total=TOT(FL({}));
+const D=ds('','',{});o.reportKeys=Object.keys(D);
+o.fin=fin_(db);o.counts2=cnt_(db);
+const bk=mkBackup(db),ck=chkBackup(bk);o.backupRoundTrip=ck.ok===true;
+const pages={};['Dashboard','Timetable','Teachers','Students','Subjects','Lessons','Projects','Recorded Courses','Payments','Reports','Cash Flow','Settings'].forEach(n=>{V.nav=n;V.CF.m='2026-09';pages[n]=VW[n]().length+':'+VW[n]().replace(/\\s+/g,' ').split('').reduce((h,c)=>(h*31+c.charCodeAt(0))>>>0,7)});
+o.pageDigests=pages;
+return JSON.stringify(o)})()`;

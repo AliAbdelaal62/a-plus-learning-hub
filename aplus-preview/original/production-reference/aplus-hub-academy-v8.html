@@ -1,0 +1,639 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>A+ Hub Academy Management System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#faf6ee;--card:#fff;--ink:#12305a;--mut:#5d6f8a;--soft:#dbe9f7;--baby:#eaf3fc;--acc:#3d79bd;--bd:#e6dfd0;--good:#1d7a4d;--bad:#b3352f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1b2d;--card:#172a45;--ink:#e6eefb;--mut:#9fb2cf;--soft:#24406a;--baby:#1d3556;--acc:#7fb2ee;--bd:#2c4468;--good:#5fd49b;--bad:#ff8a84}}
+:root[data-theme=dark]{--bg:#0f1b2d;--card:#172a45;--ink:#e6eefb;--mut:#9fb2cf;--soft:#24406a;--baby:#1d3556;--acc:#7fb2ee;--bd:#2c4468;--good:#5fd49b;--bad:#ff8a84}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,Arial,sans-serif}
+#app{display:flex;min-height:100vh}nav{width:210px;background:var(--soft);padding:18px 12px;flex:none}
+nav h1{font-size:17px;margin:0 6px 2px}nav small{display:block;margin:0 6px 16px;color:var(--mut)}
+nav a{display:block;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600;margin-bottom:3px}nav a.on,nav a:hover{background:var(--card)}
+main{flex:1;padding:22px;min-width:0}h2{margin:0 0 14px;font-size:22px}h3{margin:18px 0 8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.cd{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}.cd span{color:var(--mut);font-size:12px}.cd b{display:block;font-size:18px;margin-top:3px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--card);color:var(--ink);max-width:100%}
+.b,.b2{font:inherit;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer}.b2{background:transparent;color:var(--ink);border-color:var(--bd)}.b.bad{background:var(--bad);border-color:var(--bad)}
+.lk{background:none;border:0;color:var(--acc);cursor:pointer;font:inherit;padding:0 4px;font-weight:600}.lk.bad{color:var(--bad)}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--bd);border-radius:10px;margin-bottom:10px}
+table{border-collapse:collapse;width:100%}th,td{padding:8px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--bd)}th{background:var(--baby);font-size:12px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.ch{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;height:240px}.ch p{margin:0 0 4px;font-weight:600}.ch div{height:195px}
+.mut{color:var(--mut)}.pos{color:var(--good)}.neg{color:var(--bad)}.pill{padding:2px 8px;border-radius:99px;background:var(--baby);font-size:12px}
+.mb{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:9;padding:12px}.md{background:var(--card);border-radius:12px;padding:18px;width:560px;max-width:100%;max-height:92vh;overflow:auto}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fg label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut);font-weight:600}.fg .w{grid-column:1/-1}
+.r{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}.pv{margin-top:12px;background:var(--baby);border-radius:8px;padding:10px}#er{color:var(--bad);margin-top:8px}
+@media(max-width:760px){#app{flex-direction:column}nav{width:100%;display:flex;flex-wrap:wrap;gap:4px;padding:10px}nav h1,nav small{width:100%;margin:0 4px}nav a{margin:0;padding:7px 10px}main{padding:12px}.fg{grid-template-columns:1fr}}
+.te{background:var(--baby);border-radius:8px;padding:7px 9px;margin:0 0 7px;font-size:13px}.tg{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.tg7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.tc{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px;min-height:70px;min-width:0}.tc h4{margin:0 0 6px}.ms{background:var(--baby);border-radius:5px;padding:2px 4px;margin-top:3px;font-size:11px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wg th,.wg td{white-space:normal;vertical-align:top;min-width:105px}.wg td:first-child,.wg th:first-child{min-width:58px;white-space:nowrap}
+.wk{background:var(--baby);border-left:3px solid var(--acc);border-radius:6px;padding:3px 6px;margin-bottom:3px;font-size:12px;cursor:pointer}.wk.c{opacity:.55;border-left-style:dashed}
+#tst{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:var(--ink);color:var(--card);padding:10px 16px;border-radius:10px;z-index:20;max-width:92vw;display:none;font-weight:600}#tst.bad{background:var(--bad);color:#fff}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.g2 h4{margin:8px 0 4px}
+#sbn{display:none;position:sticky;top:0;z-index:30;background:var(--bad);color:#fff;padding:10px 14px;font-weight:600}#sbn .b{margin-left:8px}
+</style></head><body>
+<div id="app"><nav id="nv"></nav><main id="v"></main></div><div id="m"></div>
+<script>
+const $=s=>document.querySelector(s);
+let db=null,LOCK='',RAW=null,LASTGOOD='',SAVEBAD='';
+try{RAW=localStorage.getItem('aplus')}catch(e){LOCK='Browser storage is blocked or unavailable ('+(e&&e.message||e)+').'}
+if(!LOCK&&RAW!==null&&RAW!==''&&RAW!=='null'){try{db=JSON.parse(RAW)}catch(e){db=null;LOCK='The saved data could not be read (it is not valid JSON).'}
+ if(!LOCK){const okA=db&&typeof db=='object'&&!Array.isArray(db)&&['t','s','sub','l','sp','tp','tt','pr','pp','rc','re','rm'].every(k=>db[k]===undefined||Array.isArray(db[k]));if(!okA){db=null;LOCK='The saved data is not in the expected format.'}}}
+const CUR0=[['EGP','Egyptian Pound'],['KWD','Kuwaiti Dinar'],['SAR','Saudi Riyal'],['QAR','Qatari Riyal'],['AED','UAE Dirham'],['BHD','Bahraini Dinar'],['OMR','Omani Rial'],['USD','US Dollar']].map(a=>({c:a[0],n:a[1]}));
+db=db||{t:[],s:[],sub:[],l:[],sp:[],tp:[],set:{name:'A+ Hub Academy',tr:'10',sr:'15'},id:1};
+/* ---- non-destructive migration: only ADDS fields; legacy records were entered in KWD ---- */
+(function(){['t','s','sub','l','sp','tp','tt','pr','pp','rc','re','rm'].forEach(k=>db[k]=db[k]||[]);db.rd=db.rd||{};db.rates=db.rates||{};db.cur=db.cur||CUR0;
+if(!db.v){const had=db.l.length||db.sp.length||db.tp.length||db.t.length||db.s.length;db.set.base=had?'KWD':'EGP';
+db.t.forEach(t=>t.cur=t.cur||'KWD');db.s.forEach(s=>s.cur=s.cur||'KWD');
+db.l.forEach(l=>{if(l.bcost!=null)return;l.tc=l.sc=l.bc='KWD';l.trx=l.srx=1;l.rt='Legacy';l.lv=l.lv||'';l.bcost=Math.round(l.d*l.tr);l.bchg=Math.round(l.d*l.sr)});
+[...db.sp,...db.tp].forEach(p=>{if(p.bamt!=null)return;p.cur='KWD';p.rx=1;p.bamt=p.amt;p.bc='KWD';p.rt='Legacy'});db.v=2}
+if(db.v<3){db.sub.forEach(z=>{z.type=z.type||'Live'});
+const mk=(r,t,n)=>{if(r.subj&&db.sub.some(z=>z.id==r.subj))return;const z={id:db.id++,name:n,type:t};db.sub.push(z);r.subj=z.id};
+db.rc.forEach(c=>mk(c,'Recorded',c.name));db.pr.forEach(p=>mk(p,'Project',p.name));db.v=3}
+if(db.v<5){db.sub.forEach(z=>{z.uni=z.uni||'';if((z.type||'Live')!='Live')return;const ls=db.l.filter(l=>l.sub==z.id);
+ if(!Array.isArray(z.studs))z.studs=[...new Set(ls.map(l=>l.s))];
+ if(!z.inst){const ts=[...new Set(ls.map(l=>l.t))];if(ts.length==1)z.inst=ts[0]}});db.v=5}
+db.set.base=db.set.base||'EGP'})();
+if(!LOCK)LASTGOOD=JSON.stringify(db);
+const save=()=>{if(LOCK)return false;
+ try{const s=JSON.stringify(db);localStorage.setItem('aplus',s);if(localStorage.getItem('aplus')!==s)throw new Error('the browser did not keep the data');LASTGOOD=s;if(SAVEBAD){SAVEBAD='';sbn()}return true}
+ catch(e){SAVEBAD='The browser refused the save ('+(e&&e.message||e)+').';try{db=JSON.parse(LASTGOOD)}catch(x){}sbn();toast('NOT SAVED — the change was undone. See the red message at the top.',1);return false}};
+const today=()=>new Date().toISOString().slice(0,10);
+const V={nav:'Dashboard',tid:null,sid:null,prid:null,rcid:null,F:{},LF:{},tq:'',sq:'',TT:{m:'weekly',d:today()},RP:{p:'monthly',d:today(),a:'',b:'',f:{}},CF:{m:today().slice(0,7),cur:'',wt:'',s:'',t:'',meth:''}};
+const E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const g=(a,id)=>a.find(x=>x.id==id),tn=id=>g(db.t,id)?.name||'—',sn=id=>g(db.s,id)?.name||'—',bn=id=>g(db.sub,id)?.name||'—';
+const m=x=>Math.round((parseFloat(x)||0)*1000),n3=n=>(n/1000).toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});
+const B=()=>db.set.base,f=n=>n3(n)+' '+B(),fm=(n,c)=>n3(n)+' '+c;
+const cl=n=>n<0?'neg':'pos',pc=(p,r)=>r?(p/r*100).toFixed(1)+'%':'0.0%',h2=h=>(+h).toFixed(2);
+const addD=(d,n)=>new Date(+new Date(d+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],dow=d=>DAYS[new Date(d+'T00:00:00Z').getUTCDay()];
+const LV=[['','—'],['High School','High School'],['Undergraduate','Undergraduate'],['Postgraduate','Postgraduate']],WT=['Live','Project','Recorded'],ST=['Completed','Cancelled','Rescheduled','No Show'];
+const WTO=[['Live','Live'],['Project','Project'],['Recorded','Recorded Course']],wl=x=>x=='Recorded'?'Recorded Course':x;
+/* ---- currency ---- */
+const rate=c=>c==B()?{r:1,type:'Same'}:(db.rates[c]&&db.rates[c].r>0?db.rates[c]:null);
+const rfor=c=>{const r=rate(c);return r?r.r:''};
+const rty=(c,r,keep)=>c==B()?'Same':keep||(rate(c)&&rate(c).r==r?rate(c).type:'Manual');
+const ty=(a,b)=>a=='Manual'||b=='Manual'?'Manual':a=='Live'||b=='Live'?'Live':a=='Legacy'||b=='Legacy'?'Legacy':'Same';
+const curO=()=>db.cur.map(c=>[c.c,c.c+' — '+c.n]);
+const mixed=()=>[...db.l,...db.pr,...db.rc].some(x=>x.bc&&x.bc!=B());
+/* display conversion of a base-currency amount into another currency (current rate; never invented) */
+const conv=(n,c)=>{if(c==B())return n;const r=rate(c);return r?Math.round(n/r.r):null};
+const fx=(n,c)=>{const v=conv(n,c);return v==null?`<span class=neg>${c} rate unavailable</span>`:fm(v,c)};
+const dp=(t,n)=>`<div class=cd style="grid-column:span 2"><span>${t}</span><b>${fx(n,'EGP')}</b><div class=mut style="font-weight:600;margin-top:2px">≈ ${fx(n,'KWD')}</div></div>`;
+const VC=()=>[...new Set([B(),'EGP','KWD'])];
+/* ---- core calculations ---- */
+const O=l=>({cost:l.oc!=null?l.oc:Math.round(l.d*l.tr),chg:l.og!=null?l.og:Math.round(l.d*l.sr)}); /* original-currency amounts */
+const C=l=>{const ok=l.st==='Completed',cost=ok?l.bcost:0,chg=ok?l.bchg:0;return{cost,chg,p:chg-cost}}; /* base-currency amounts */
+const S=ls=>{const r={n:0,h:0,rev:0,cost:0};ls.forEach(l=>{if(l.st!=='Completed')return;const c=C(l);r.n++;r.h+=l.d;r.rev+=c.chg;r.cost+=c.cost});r.p=r.rev-r.cost;return r};
+const sum=a=>a.reduce((x,p)=>x+p.bamt,0),sumO=a=>a.reduce((x,p)=>x+p.amt,0);
+const TS=id=>{const s=S(db.l.filter(l=>l.t==id)),paid=sum(db.tp.filter(p=>p.p==id));return{...s,paid,rem:s.cost-paid}};
+const SS=id=>{const s=S(db.l.filter(l=>l.s==id)),paidL=sum(db.sp.filter(p=>p.p==id));
+let rcC=0,rcP=0;db.re.filter(e=>e.s==id).forEach(e=>{const c=g(db.rc,e.rc);if(!c)return;rcC+=k_(e.price,c.rx);rcP+=k_(e.paid,c.rx)});
+let prC=0,prP=0;db.pr.filter(p=>p.s==id&&p.status!='Cancelled').forEach(p=>{const j=pj(p);prC+=j.brev;prP+=k_(j.paid,p.rx)});
+const tot=s.rev+rcC+prC,paid=paidL+rcP+prP;return{...s,tot,paid,rem:tot-paid,paidL,rcC,rcP,prC,prP}};
+const k_=(a,r)=>Math.round(a*r);
+function pj(p){const share=Math.round(p.rev*p.share/100),paid=(p.paid0||0)+sumO(db.pp.filter(x=>x.pr==p.id));return{share,prof:p.rev-share,paid,out:p.rev-paid,brev:k_(p.rev,p.rx),bshare:k_(share,p.rx),bprof:k_(p.rev,p.rx)-k_(share,p.rx)}}
+function rcc(c){const rev=Math.round(c.price*c.n),share=Math.round(rev*c.share/100),prof=rev-share-c.cost;return{rev,share,prof,brev:k_(rev,c.rx),bshare:k_(share,c.rx),bcost:k_(c.cost,c.rx),bprof:k_(rev,c.rx)-k_(share,c.rx)-k_(c.cost,c.rx)}}
+const inD=(F,d)=>(!F.a||(d||'')>=F.a)&&(!F.b||(d||'')<=F.b);
+function FL(F){const w=F.wt;
+const ls=(w&&w!='Live')?[]:db.l.filter(l=>inD(F,l.date)&&(!F.t||l.t==F.t)&&(!F.s||l.s==F.s)&&(!F.lv||l.lv==F.lv)&&(!F.cur||l.tc==F.cur||l.sc==F.cur)&&(!F.sub||l.sub==F.sub)&&(!F.st||l.st==F.st)&&(!F.q||(tn(l.t)+sn(l.s)+bn(l.sub)).toLowerCase().includes(F.q.toLowerCase())));
+const pr=(w&&w!='Project')||F.st?[]:db.pr.filter(p=>p.status!='Cancelled'&&(!F.sub||p.subj==F.sub)&&inD(F,p.start)&&(!F.t||p.t==F.t)&&(!F.s||p.s==F.s)&&(!F.lv||p.lv==F.lv)&&(!F.cur||p.cur==F.cur));
+const rc=(w&&w!='Recorded')||F.st?[]:db.rc.filter(c=>(!F.sub||c.subj==F.sub)&&inD(F,c.date)&&(!F.t||c.inst==F.t)&&(!F.lv||c.lv==F.lv)&&(!F.cur||c.cur==F.cur)&&(!F.s||db.re.some(e=>e.rc==c.id&&e.s==F.s)));
+return{ls,pr,rc}}
+function TOT(x){const s=S(x.ls),L={rev:s.rev,cost:s.cost,p:s.p},P={rev:0,cost:0,p:0},R={rev:0,cost:0,p:0};
+x.pr.forEach(p=>{const j=pj(p);P.rev+=j.brev;P.cost+=j.bshare;P.p+=j.bprof});x.rc.forEach(c=>{const j=rcc(c);R.rev+=j.brev;R.cost+=j.bshare+j.bcost;R.p+=j.bprof});
+return{s,L,P,R,rev:L.rev+P.rev+R.rev,cost:L.cost+P.cost+R.cost,p:L.p+P.p+R.p}}
+function EV(x){const e=[];x.ls.forEach(l=>{if(l.st!='Completed')return;const c=C(l);e.push({d:l.date,t:l.t,s:l.s,lv:l.lv,wt:'Live',rev:c.chg,cost:c.cost,p:c.p})});
+x.pr.forEach(p=>{const j=pj(p);e.push({d:p.start||'',t:p.t,s:p.s,lv:p.lv,wt:'Project',rev:j.brev,cost:j.bshare,p:j.bprof})});
+x.rc.forEach(c=>{const j=rcc(c);e.push({d:c.date||'',t:c.inst,s:0,lv:c.lv,wt:'Recorded',rev:j.brev,cost:j.bshare+j.bcost,p:j.bprof})});return e}
+const gE=(e,kf,vf)=>{const o={};e.forEach(v=>{const k=kf(v)||'—';o[k]=(o[k]||0)+vf(v)});const k=Object.keys(o).sort();return[k,k.map(x=>o[x]/1000)]};
+/* ---- ui helpers ---- */
+const T=(h,rows,e)=>rows.length?`<div class=tw><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:`<p class=mut>${e||'Nothing here yet — use the Add button.'}</p>`;
+const card=(l,v,c)=>`<div class=cd><span>${l}</span><b class="${c||''}">${v}</b></div>`;
+const fi=(o,k,t,ph)=>`<input id=${o}_${k} type=${t} placeholder="${ph||''}" title="${ph||''}" value="${E(V[o][k]||'')}" oninput="V.${o}.${k}=this.value;render()">`;
+const fs=(o,k,opts,all)=>`<select id=${o}_${k} onchange="V.${o}.${k}=this.value;render()"><option value="">${all}</option>${opts.map(x=>`<option value="${E(x[0])}" ${x[0]==V[o][k]?'selected':''}>${E(x[1])}</option>`).join('')}</select>`;
+const fr=(k,t,ph)=>`<input id=RPf_${k} type=${t} placeholder="${ph}" value="${E(V.RP.f[k]||'')}" oninput="V.RP.f.${k}=this.value;render()">`;
+const fsr=(k,opts,all)=>`<select id=RPf_${k} onchange="V.RP.f.${k}=this.value;render()"><option value="">${all}</option>${opts.map(x=>`<option value="${E(x[0])}" ${x[0]==V.RP.f[k]?'selected':''}>${E(x[1])}</option>`).join('')}</select>`;
+const tO=()=>db.t.map(x=>[x.id,x.name]),sO=()=>db.s.map(x=>[x.id,x.name]),bO=()=>db.sub.map(x=>[x.id,x.name+(x.type&&x.type!='Live'?' ('+wl(x.type)+')':'')]),lvF=LV.slice(1),cF=()=>db.cur.map(c=>[c.c,c.c]);
+const close=()=>$('#m').innerHTML='';
+const modal=h=>$('#m').innerHTML=`<div class=mb><div class=md id=md>${h}</div></div>`;
+function ask(msg,cb,lbl){if(SAVEBAD&&!storageOK())return note('Saving is failing right now, so this change would be lost. Download a backup and free up browser storage first.');modal(`<p>${msg}</p><div class=r><button class=b2 onclick=close()>Cancel</button><button class="b bad" id=yes>${lbl||'Delete'}</button></div>`);$('#yes').onclick=()=>{close();cb()}}
+const note=h=>modal(`<p>${h}</p><div class=r><button class=b onclick=close()>OK</button></div>`);
+function form(title,fl,v,sv,pv){v=v||{};if(SAVEBAD&&!storageOK())return note('Saving is failing right now, so this change would be lost. Download a backup and free up browser storage first.');
+modal(`<h3 style="margin-top:0">${title}</h3><div class=fg>${fl.map(x=>`<label class="${x.w?'w':''}" ${x.v?`data-v="${x.v}"`:''}>${x.l}${x.t=='area'?`<textarea id=f_${x.k}>${E(v[x.k])}</textarea>`:(x.t=='sel'||x.t=='multi')?`${x.q?'<input class=qs placeholder="Type to search…" oninput="qf(this)">':''}<select id=f_${x.k} ${x.t=='multi'?'multiple size=5':''}>${x.o.map(o=>`<option value="${E(o[0])}" ${(x.t=='multi'?String(v[x.k]??'').split(',').includes(String(o[0])):o[0]==v[x.k])?'selected':''}>${E(o[1])}</option>`).join('')}</select>`:`<input id=f_${x.k} type=${x.t||'text'} ${x.t=='number'?'step=any min=0':''} ${x.d?'list='+x.d:''} value="${E(v[x.k])}">`}</label>`).join('')}</div>${pv?'<div id=pv class=pv></div>':''}<div id=er></div><div class=r><button class=b2 onclick=close()>Cancel</button><button class=b id=sv>Save</button></div>`);
+const get=()=>Object.fromEntries(fl.map(x=>[x.k,x.t=='multi'?[...$('#f_'+x.k).selectedOptions].map(o=>o.value).join(','):$('#f_'+x.k).value.trim()]));
+if(pv){const u=()=>$('#pv').innerHTML=pv(get());$('#md').addEventListener('input',u);u()}
+let busy=0;$('#sv').onclick=()=>{if(busy)return;busy=1;try{const o=get(),r=fl.find(x=>x.r&&!o[x.k]);if(r){busy=0;return $('#er').textContent=r.l+' is required'}const e=sv(o);if(e){busy=0;return $('#er').textContent=e}save();close();render()}catch(err){busy=0;throw err}}}
+const qf=i=>{const s=i.nextElementSibling,t=i.value.trim().toLowerCase();[...s.options].forEach(o=>{o.hidden=!!t&&!o.selected&&o.value!==''&&!o.text.toLowerCase().includes(t)})};
+const sync=(c,r)=>$('#f_'+c).addEventListener('change',()=>{$('#f_'+r).value=rfor($('#f_'+c).value);$('#md').dispatchEvent(new Event('input'))});
+const fire=()=>$('#md').dispatchEvent(new Event('input'));
+const tog=id=>{const sel=$('#f_'+id),u=()=>document.querySelectorAll('#md label[data-v]').forEach(l=>{l.style.display=l.dataset.v.split(',').includes(sel.value)?'':'none'});sel.addEventListener('change',()=>{u();fire()});u()};
+const lnk=(r,t,n)=>{let z=g(db.sub,r.subj);if(z){z.name=n;z.uni=r.uni||''}else{z={id:db.id++,name:n,type:t,uni:r.uni||''};db.sub.push(z);r.subj=z.id}};
+const uni=id=>(g(db.sub,id)||{}).uni||'';
+const subOK=(z,t,s)=>z.type=='Live'&&!!z.inst&&z.inst==t&&(z.studs||[]).map(Number).includes(+s);
+const subsFor=(t,s)=>db.sub.filter(z=>subOK(z,+t,+s));
+const subLbl=z=>z.name+(z.uni?' — '+z.uni:'');
+const needsRev=z=>{const tp=z.type||'Live';if(tp=='Live')return !g(db.t,z.inst)||!(z.studs||[]).some(i=>g(db.s,i));if(tp=='Recorded'){const c=db.rc.find(c=>c.subj==z.id);return !c||!g(db.t,c.inst)}const p=db.pr.find(p=>p.subj==z.id);return !p||!g(db.t,p.t)};
+const subStuds=z=>{const tp=z.type||'Live';if(tp=='Live')return (z.studs||[]).filter(i=>g(db.s,i)).map(sn);if(tp=='Recorded'){const c=db.rc.find(c=>c.subj==z.id);return c?db.re.filter(e=>e.rc==c.id).map(e=>sn(e.s)):[]}const p=db.pr.find(p=>p.subj==z.id);return p&&p.s?[sn(p.s)]:[]};
+const liveChk=(o,id)=>{const inst=+o.inst||0,ss=(o.studs||'').split(',').filter(a=>a!=='').map(Number);
+ if(!g(db.t,inst))return 'Choose the instructor from the teachers list';
+ if(!ss.length)return 'Choose at least one student';
+ if(ss.some(i=>!g(db.s,i)))return 'A selected student no longer exists';
+ if(db.sub.some(z=>z.id!=id&&z.type=='Live'&&z.name.toLowerCase()==o.name.toLowerCase()&&(z.uni||'').toLowerCase()==(o.uni||'').toLowerCase()&&z.inst==inst))return 'This instructor already has a Live subject with this name and university — edit that one instead';
+ return ''};
+const toast=(msg,bad)=>{let t=document.querySelector('#tst');if(!t){t=document.createElement('div');t.id='tst';document.body.appendChild(t)}t.className=bad?'bad':'';t.textContent=msg;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},8000)};
+/* all-or-nothing save: any failure restores the database exactly as it was */
+const atomic=fn=>{const snap=JSON.stringify(db);try{fn()}catch(e){db=JSON.parse(snap);return 'Could not save ('+(e&&e.message||e)+'). Nothing was changed — please retry.'}};
+const stSel=[['Active','Active'],['Inactive','Inactive']];
+const RX='Exchange rate unavailable for this currency — enter a manual rate (rates are never invented).';
+const rateF=(l,k)=>({k,l,t:'number'});
+const tmin=s=>{const a=String(s||'').split(':').map(Number);return isNaN(a[0])?null:a[0]*60+(a[1]||0)};
+const SRC=[['Live','Live Sessions'],['Recorded','Recorded Courses'],['Project','Projects'],['Other','Other']];
+const SRCF=[{k:'src',l:'Payment Source',t:'sel',o:[['','— Select source —'],...SRC],r:1},{k:'srcd',l:'Other Payment Source Description',w:1,v:'Other'},{k:'lk',l:'Link to a specific lesson / course / project (optional)',t:'sel',o:[['','— None (whole category) —']],w:1,v:'Live,Recorded,Project'}];
+const lkOpts=(tid,src)=>src=='Live'?db.l.filter(l=>l.t==tid&&l.st=='Completed').sort((a,b)=>b.date.localeCompare(a.date)).map(l=>[l.id,`${l.date} · ${sn(l.s)} · ${bn(l.sub)} (${h2(l.d)} h)`]):src=='Recorded'?db.rc.filter(c=>c.inst==tid).map(c=>[c.id,c.name]):src=='Project'?db.pr.filter(p=>p.t==tid).map(p=>[p.id,p.name]):[];
+const refreshLk=keep=>{const sel=$('#f_lk'),cur=keep!=null?String(keep||''):sel.value,o=lkOpts(+$('#f_p').value,$('#f_src').value);sel.innerHTML='<option value="">— None (whole category) —</option>'+o.map(a=>`<option value="${a[0]}">${E(a[1])}</option>`).join('');sel.value=o.some(a=>String(a[0])==cur)?cur:''};
+const lkName=p=>{if(!p.lk)return '';if(p.src=='Live'){const l=g(db.l,p.lk);return l?`lesson ${l.date} ${sn(l.s)}`:'lesson (deleted)'}if(p.src=='Recorded')return (g(db.rc,p.lk)||{name:'course (deleted)'}).name;if(p.src=='Project')return (g(db.pr,p.lk)||{name:'project (deleted)'}).name;return ''};
+const srcName=p=>p.src?(SRC.find(a=>a[0]==p.src)||[0,p.src])[1]:'Unassigned';
+const srcL=p=>p.src?E(srcName(p)+(p.src=='Other'&&p.srcd?': '+p.srcd:'')+(p.lk?' · '+lkName(p):'')):'<span class=pill title="Recorded before Payment Source existed — edit the payment to assign a source">Unassigned</span>';
+const srcChk=o=>{if(!o.src)return 'Payment Source is required';if(o.src=='Other'&&!o.srcd)return 'Other Payment Source Description is required';const tid=+o.p;let lk=0;
+ if(o.src!='Other'&&o.lk){lk=+o.lk;const ok=o.src=='Live'?(g(db.l,lk)||{}).t==tid:o.src=='Recorded'?(g(db.rc,lk)||{}).inst==tid:(g(db.pr,lk)||{}).t==tid;if(!ok)return 'The selected link does not belong to this teacher and source'}
+ return{src:o.src,srcd:o.src=='Other'?o.srcd:'',lk}};
+/* teacher earnings by work type, read from the same records the rest of the app uses (nothing is stored twice) */
+function TSum(id){const live=TS(id),rcE=db.rc.filter(c=>c.inst==id).reduce((a,c)=>a+rcc(c).bshare,0),prE=db.pr.filter(p=>p.t==id&&p.status!='Cancelled').reduce((a,p)=>a+pj(p).bshare,0),ps=db.tp.filter(p=>p.p==id),pd=k=>sum(ps.filter(p=>p.src==k));
+ const cats=[['Live','Live Sessions',live.cost],['Recorded','Recorded Courses',rcE],['Project','Projects',prE],['Other','Other',0]].map(([k,label,earn])=>{const paid=pd(k);return{k,label,earn,paid,rem:earn-paid}});
+ const earn=cats.reduce((a,c)=>a+c.earn,0),paid=sum(ps);return{cats,un:sum(ps.filter(p=>!p.src)),nUn:ps.filter(p=>!p.src).length,earn,paid,rem:earn-paid}}
+const ovWarn=(o,x)=>{if(!o.src)return '';const rx=o.cur==B()?1:parseFloat(o.rx);if(!(rx>0))return '';const add=k_(m(o.amt),rx),c=TSum(+o.p).cats.find(c=>c.k==o.src);if(!c)return '';const prior=x&&x.src==o.src&&x.p==+o.p?x.bamt:0,rem=Math.max(c.earn-(c.paid-prior),0);
+ return add>rem?`<br><span class=neg>This is ${f(add-rem)} more than the outstanding ${c.label} balance (${f(rem)}). It will be saved and flagged as an excess for ${c.label} only — no other category is changed.</span>`:''};
+/* ---- teachers / students ---- */
+function edT(id){const x=id?g(db.t,id):null;form(x?'Edit Teacher':'Add Teacher',[{k:'name',l:'Teacher Name',r:1},{k:'phone',l:'Phone Number'},{k:'email',l:'Email'},{k:'spec',l:'Specialization'},{k:'cur',l:'Payment Currency',t:'sel',o:curO()},{k:'rate',l:'Default Hourly Cost',t:'number'},{k:'status',l:'Status',t:'sel',o:stSel},{k:'notes',l:'Notes',t:'area',w:1}],x?{...x,rate:x.rate/1000}:{rate:db.set.tr,status:'Active',cur:B()},o=>{const d={...o,rate:m(o.rate)};x?Object.assign(x,d):db.t.push({id:db.id++,...d})})}
+function edS(id){const x=id?g(db.s,id):null;form(x?'Edit Student':'Add Student',[{k:'name',l:'Student Name',r:1},{k:'uni',l:'University'},{k:'country',l:'Country'},{k:'major',l:'Major / Specialization'},{k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'cur',l:'Billing Currency',t:'sel',o:curO()},{k:'phone',l:'Phone / WhatsApp'},{k:'email',l:'Email'},{k:'status',l:'Status',t:'sel',o:stSel},{k:'notes',l:'Notes',t:'area',w:1}],x||{status:'Active',cur:B()},o=>{x?Object.assign(x,o):db.s.push({id:db.id++,...o})})}
+const dlT=id=>ask('Delete this teacher and all their lessons and payments?',()=>{db.t=db.t.filter(x=>x.id!=id);db.l=db.l.filter(l=>l.t!=id);db.tp=db.tp.filter(p=>p.p!=id);V.tid=null;save();render()});
+const dlS=id=>ask('Delete this student and all their lessons and payments?',()=>{db.s=db.s.filter(x=>x.id!=id);db.l=db.l.filter(l=>l.s!=id);db.sp=db.sp.filter(p=>p.p!=id);V.sid=null;save();render()});
+/* ---- lessons (Live) ---- */
+function edL(id,pre){const x=id?g(db.l,id):null;pre=pre||{};const dn=!!pre.tt;
+if(!db.t.length||!db.s.length)return note('Please add at least one teacher and one student first.');
+const t0=g(db.t,pre.t||db.t[0].id),s0=g(db.s,pre.s||db.s[0].id),showT=dn||!!(x&&(x.ts||x.te)),showO=dn||!!(x&&(x.oc!=null||x.og!=null));
+const optsFor=(t,s,cur)=>{const a=subsFor(+t,+s),c=cur?g(db.sub,cur):null;if(c&&!a.some(z=>z.id==c.id))a.push(c);return a};
+const so=(t,s,cur)=>{const a=optsFor(t,s,cur);return[['',a.length?'— Select subject —':'No subject is linked to this student and instructor'],...a.map(z=>[z.id,subLbl(z)+(subOK(z,+t,+s)?'':' (current — not linked to this pair)')])]};
+const z0=pre.sub?g(db.sub,pre.sub):null,zr=z0&&z0.tr!=null;
+const v=x?{date:x.date,t:x.t,s:x.s,sub:x.sub,lv:x.lv||'',d:x.d,st:x.st,tc:x.tc,tr:x.tr/1000,sc:x.sc,sr:x.sr/1000,trx:x.trx,srx:x.srx,notes:x.notes,ts:x.ts||'',te:x.te||'',og:x.og!=null?x.og/1000:'',oc:x.oc!=null?x.oc/1000:''}
+ :{date:pre.date||today(),t:t0.id,s:s0.id,sub:z0?z0.id:'',lv:pre.lv!=null?pre.lv:(s0.lv||''),d:pre.d!=null?pre.d:1,st:'Completed',tc:zr?z0.tc:t0.cur,tr:zr?z0.tr/1000:t0.rate/1000,sc:zr?z0.sc:s0.cur,sr:zr?z0.sr/1000:db.set.sr,trx:'',srx:'',notes:pre.notes||'',ts:pre.ts||'',te:pre.te||'',og:'',oc:''};
+if(!x){v.trx=rfor(v.tc);v.srx=rfor(v.sc)}
+const sOpts=pre.sList?sO().filter(a=>pre.sList.includes(+a[0])):sO();
+const fl=[{k:'date',l:dn?'Actual session date':'Date',t:'date',r:1},{k:'s',l:'Student',t:'sel',o:sOpts,q:1},{k:'t',l:dn?'Instructor':'Teacher',t:'sel',o:tO(),q:1},{k:'sub',l:'Subject (only subjects linked to this student and instructor)',t:'sel',o:so(v.t,v.s,x&&x.sub),r:1,w:1,q:1},
+ ...(showT?[{k:'ts',l:'Actual start time',t:'time'},{k:'te',l:'Actual end time',t:'time'}]:[]),
+ {k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'d',l:dn?'Actual duration (hours)':'Duration (hours)',t:'number',r:1},...(dn?[]:[{k:'st',l:'Status',t:'sel',o:ST.map(a=>[a,a])}]),
+ {k:'tc',l:'Teacher Currency',t:'sel',o:curO()},{k:'tr',l:'Teacher Hourly Cost',t:'number',r:1},{k:'sc',l:'Student Currency',t:'sel',o:curO()},{k:'sr',l:'Student Hourly Price',t:'number',r:1},{k:'trx',l:'Teacher currency → '+B()+' rate',t:'number'},{k:'srx',l:'Student currency → '+B()+' rate',t:'number'},
+ ...(showO?[{k:'og',l:'Student session charge — optional total (blank = duration × hourly price)',t:'number',w:1},{k:'oc',l:'Teacher session earning — optional total (blank = duration × hourly cost)',t:'number',w:1}]:[]),
+ {k:'notes',l:'Notes',w:1}];
+const ov=a=>a!==undefined&&a!==''?m(a):null;
+form(dn?'Complete Session (DONE) — record the actual lesson':(x?'Edit Lesson':'Add Lesson'),fl,v,o=>{
+ const tx=o.tc==B()?1:parseFloat(o.trx),sx=o.sc==B()?1:parseFloat(o.srx);if(!(tx>0&&sx>0))return RX;
+ const sid=+o.sub,z=g(db.sub,sid);if(!z||z.type!='Live')return 'Select a subject from the list';
+ if(!(x&&x.sub==sid)&&!subOK(z,+o.t,+o.s))return 'This subject is not linked to the selected student and instructor. Choose another subject, or update it in Subjects.';
+ const dur=parseFloat(o.d)||0;
+ if(dn){if(!(dur>0))return 'Actual duration must be greater than zero';if(o.ts&&o.te&&o.te<=o.ts)return 'End time must be after the start time';
+  if(db.l.some(q=>q.tt==pre.tt&&q.od==pre.od&&q.s==+o.s))return 'This session is already recorded for this student — see Lessons.'}
+ const tr=m(o.tr),sr=m(o.sr),oc=ov(o.oc),og=ov(o.og),cost=oc!=null?oc:Math.round(dur*tr),chg=og!=null?og:Math.round(dur*sr),kt=x&&x.tc==o.tc&&x.trx==tx?x.rt:0,ks=x&&x.sc==o.sc&&x.srx==sx?x.rt:0;
+ const d={date:o.date,t:+o.t,s:+o.s,sub:sid,lv:o.lv,d:dur,tr,sr,st:dn?'Completed':o.st,tc:o.tc,sc:o.sc,trx:tx,srx:sx,bc:x?x.bc:B(),bcost:k_(cost,tx),bchg:k_(chg,sx),rt:ty(rty(o.tc,tx,kt),rty(o.sc,sx,ks)),notes:o.notes};
+ if(showT){d.ts=o.ts||'';d.te=o.te||''}if(og!=null)d.og=og;if(oc!=null)d.oc=oc;
+ if(x){if(og==null)delete x.og;if(oc==null)delete x.oc;Object.assign(x,d);return}
+ if(dn){const e=g(db.tt,pre.tt);if(!e)return 'The timetable entry no longer exists';
+  const r=atomic(()=>{db.l.push({id:db.id++,...d,tt:pre.tt,od:pre.od});if(coverage(e,pre.od).all)markDone(e,pre.od)});if(r)return r;
+  const left=coverage(e,pre.od).miss.length;toast(`Session saved to Lessons — student charge ${fm(chg,o.sc)}, teacher earning ${fm(cost,o.tc)}. No payment was recorded.`+(left?` ${left} student(s) of this session still need their lesson recorded.`:''));return}
+ db.l.push({id:db.id++,...d})},
+o=>{const l={d:parseFloat(o.d)||0,tr:m(o.tr),sr:m(o.sr)},c0=O(l),ocv=ov(o.oc),ogv=ov(o.og),cost0=ocv!=null?ocv:c0.cost,chg0=ogv!=null?ogv:c0.chg,tx=o.tc==B()?1:parseFloat(o.trx),sx=o.sc==B()?1:parseFloat(o.srx);
+ let w='';if(!subsFor(+o.t,+o.s).length&&!(x&&x.sub==+o.sub))w=`<span class=neg>No subject is linked to this student and instructor. Add one (or link them) in Subjects first.</span><br>`;
+ const h=w+`<b>Teacher ${dn?'Earning':'Cost'}:</b> ${fm(cost0,o.tc)} &nbsp; <b>Student Charge:</b> ${fm(chg0,o.sc)}`;
+ if(!(tx>0&&sx>0))return h+`<br><span class=neg>${RX}</span>`;const bc=k_(cost0,tx),bg=k_(chg0,sx),p=bg-bc;return h+`<br><b>In ${B()}:</b> cost ${n3(bc)} · charge ${n3(bg)} · <b>Profit:</b> <span class=${cl(p)}>${f(p)}</span> · <b>Margin:</b> ${pc(p,bg)}${(o.st||'Completed')!='Completed'?'<br><span class=mut>Not counted in totals (status is '+o.st+')</span>':''}`});
+const sS=$('#f_s'),tS=$('#f_t'),bS=$('#f_sub');
+const refresh=()=>{const o2=so(tS.value,sS.value,x&&x.sub),cur=bS.value;bS.innerHTML=o2.map(a=>`<option value="${E(a[0])}">${E(a[1])}</option>`).join('');bS.value=o2.some(a=>a[0]!==''&&String(a[0])==cur)?cur:'';fire()};
+sync('tc','trx');sync('sc','srx');
+bS.addEventListener('change',()=>{const z=g(db.sub,bS.value);if(z&&!x&&z.tr!=null){$('#f_tc').value=z.tc;$('#f_tr').value=z.tr/1000;$('#f_sc').value=z.sc;$('#f_sr').value=z.sr/1000;$('#f_trx').value=rfor(z.tc);$('#f_srx').value=rfor(z.sc);fire()}});
+tS.addEventListener('change',e=>{const t=g(db.t,e.target.value);if(t&&!x){$('#f_tc').value=t.cur;$('#f_tr').value=t.rate/1000;$('#f_trx').value=rfor(t.cur)}refresh()});
+sS.addEventListener('change',e=>{const s=g(db.s,e.target.value);if(s&&!x){$('#f_sc').value=s.cur;$('#f_lv').value=s.lv||'';$('#f_srx').value=rfor(s.cur)}refresh()});
+if(showT){const calc=()=>{const a=tmin($('#f_ts').value),b=tmin($('#f_te').value);if(a!=null&&b!=null&&b>a){$('#f_d').value=Math.round((b-a)/60*100)/100;fire()}};$('#f_ts').addEventListener('input',calc);$('#f_te').addEventListener('input',calc)}
+if(dn&&pre.info)$('#md .fg').insertAdjacentHTML('beforebegin',`<div class=pv style="margin-bottom:10px">${pre.info}</div>`)}
+const dlL=id=>{const l0=g(db.l,id);ask(l0&&l0.tt?'Delete this lesson? It was created from a completed timetable session, which will be reopened.':'Delete this lesson?',()=>{db.l=db.l.filter(l=>l.id!=id);
+ if(l0&&l0.tt){const e=g(db.tt,l0.tt);if(e&&!coverage(e,l0.od).all){if(e.sched=='rec'){const z=(e.ex||{})[l0.od];if(z)delete z.done}else delete e.done}}save();render()})};
+const lrow=(l,who)=>{const c=C(l),o=O(l),ok=l.st=='Completed';return [l.date,E(who=='t'?sn(l.s):tn(l.t)),E(bn(l.sub))+(uni(l.sub)?' <span class=mut>· '+E(uni(l.sub))+'</span>':'')+(l.rt=='Manual'?' <span class=pill>Manual Exchange Rate</span>':''),ok?h2(l.d):`<span class=pill>${l.st}</span>`,fm(l.tr,l.tc),fm(l.sr,l.sc),ok?fm(o.cost,l.tc):'—',ok?fm(o.chg,l.sc):'—',`<span class=${cl(c.p)}>${n3(c.p)}</span>`,`<button class=lk onclick=edL(${l.id})>Edit</button><button class="lk bad" onclick=dlL(${l.id})>Delete</button>`]};
+const LH=who=>['Date',who=='t'?'Student':'Teacher','Subject','Hours','Teacher Rate','Student Rate','Teacher Cost','Charge','Profit ('+B()+')',''];
+/* ---- payments (students / teachers) ---- */
+function edP(k,id,pre){const x=id?g(db[k],id):null,tc=k=='tp',ar=db[tc?'t':'s'];if(!ar.length)return note('Add a '+(tc?'teacher':'student')+' first.');const e0=g(ar,x?.p||pre||ar[0].id);
+form((x?'Edit ':'Add ')+(tc?'Teacher':'Student')+' Payment',[{k:'p',l:tc?'Teacher':'Student',t:'sel',o:tc?tO():sO()},...(tc?SRCF:[]),{k:'date',l:'Payment Date',t:'date',r:1},{k:'cur',l:'Currency',t:'sel',o:curO()},{k:'amt',l:'Amount',t:'number',r:1},{k:'rx',l:'Currency → '+B()+' rate',t:'number'},{k:'meth',l:'Method',t:'sel',o:['Cash','Bank Transfer','KNET','Cheque','Other'].map(a=>[a,a])},{k:'notes',l:'Notes',w:1}],x?{...x,amt:x.amt/1000}:{date:today(),meth:'Cash',p:e0.id,cur:e0.cur,rx:rfor(e0.cur)},o=>{
+const rx=o.cur==B()?1:parseFloat(o.rx);if(!(rx>0))return RX;const amt=m(o.amt),kp=x&&x.cur==o.cur&&x.rx==rx?x.rt:0;const sv_=tc?srcChk(o):null;if(typeof sv_=='string')return sv_;
+const d={p:+o.p,date:o.date,cur:o.cur,amt,rx,rt:rty(o.cur,rx,kp),bamt:k_(amt,rx),bc:x?x.bc:B(),meth:o.meth,notes:o.notes,...(tc?sv_:{})};x?Object.assign(x,d):db[k].push({id:db.id++,...d})},
+o=>{const rx=o.cur==B()?1:parseFloat(o.rx);return (rx>0?`${fm(m(o.amt),o.cur)} = <b>${f(k_(m(o.amt),rx))}</b>`:`<span class=neg>${RX}</span>`)+(tc?ovWarn(o,x):'')});
+sync('cur','rx');$('#f_p').addEventListener('change',e=>{const z=g(ar,e.target.value);if(z){$('#f_cur').value=z.cur;$('#f_rx').value=rfor(z.cur)}if(tc)refreshLk();fire()});if(tc){tog('src');refreshLk(x&&x.lk);$('#f_src').addEventListener('change',()=>refreshLk())}}
+const dlP=(k,id)=>ask('Delete this payment?',()=>{db[k]=db[k].filter(p=>p.id!=id);save();render()});
+const prow=(k,p)=>[p.date,fm(p.amt,p.cur)+(p.rt=='Manual'?' <span class=pill>Manual Exchange Rate</span>':''),p.cur==B()?'—':(+p.rx).toFixed(6),f(p.bamt),...(k=='tp'?[srcL(p)]:[]),p.meth,E(p.notes),`<button class=lk onclick="edP('${k}',${p.id})">Edit</button><button class="lk bad" onclick="dlP('${k}',${p.id})">Delete</button>`];
+const PH=['Date','Amount','Rate','In '+'base','Method','Notes',''],PHT=['Date','Amount','Rate','In base','Source','Method','Notes',''];
+const stT=id=>{const re=db.re.filter(e=>e.s==id),pr=db.pr.filter(p=>p.s==id);
+return `<h3>Recorded course enrollments</h3>`+T(['Course','Date','Price','Paid','Remaining','Status'],re.map(e=>{const c=g(db.rc,e.rc)||{cur:B(),name:'—'};return[E(c.name),e.date||'',fm(e.price,c.cur),fm(e.paid,c.cur),fm(e.price-e.paid,c.cur),`<span class=pill>${pst(e)}</span>`]}),'No recorded-course enrollments.')+`<h3>Projects</h3>`+T(['Project','Status','Price','Paid','Outstanding'],pr.map(p=>{const j=pj(p);return[E(p.name),p.status,fm(p.rev,p.cur),fm(j.paid,p.cur),fm(j.out,p.cur)]}),'No projects for this student.')};
+/* ---- timetable (one-time + recurring weekly) ---- */
+const tm=e=>`${e.st||''}–${e.en||''}`,studs=e=>(e.s||[]).map(sn).join(', ');
+const dowN=d=>new Date(d+'T00:00:00Z').getUTCDay();
+/* every occurrence between a and b (inclusive); recurring entries expand to one occurrence per matching day */
+function occ(a,b){const out=[];db.tt.forEach(e=>{
+ if(e.sched!='rec'){if(e.date>=a&&e.date<=b)out.push({e,od:e.date,date:e.date,st:e.st,en:e.en,done:!!e.done,mv:!!e.rs,h:e.hist||''});return}
+ const ex=e.ex||{},lo=a>e.a?a:e.a,hi=e.b&&e.b<b?e.b:b;
+ for(let d=lo;d<=hi;d=addD(d,1)){if(dowN(d)!=e.dw)continue;const x=ex[d]||{};if(x.deleted||x.moved)continue;out.push({e,od:d,date:d,st:e.st,en:e.en,done:!!x.done,mv:false,h:''})}
+ Object.keys(ex).forEach(od=>{const x=ex[od];if(x.moved&&!x.deleted&&x.moved.date>=a&&x.moved.date<=b)out.push({e,od,date:x.moved.date,st:x.moved.st,en:x.moved.en,done:!!x.done,mv:true,h:x.hist||''})})});
+ return out.sort((p,q)=>(p.date+(p.st||'')).localeCompare(q.date+(q.st||'')))}
+const oa=o=>`${o.e.id},'${o.od}'`;
+const te=(o,act)=>{const e=o.e;return `<div class=te style="${o.done?'opacity:.6':''}"><b>${tm(o)}</b> <span class=pill>${wl(e.wt)}</span>${e.sched=='rec'?' <span class=pill>Weekly</span>':''}${o.mv?' <span class=pill>Rescheduled</span>':''}${o.done?' <span class=pill>Done</span>':''}<br>${E(e.sub)}${e.lv?' · '+e.lv:''}<br><span class=mut>${e.t?E(tn(e.t)):''}${studs(e)?' · '+E(studs(e)):''}</span>${e.notes?'<br>'+E(e.notes):''}${o.h?'<br><span class=mut>'+E(o.h)+'</span>':''}${act?`<br>${o.done?`<button class=lk onclick="undoOc(${oa(o)})">Undo</button>`:`<button class=lk onclick="doneOc(${oa(o)})">Done</button><button class=lk onclick="rsOc(${oa(o)})">Reschedule</button>`}<button class=lk onclick="edTT(${e.id})">Edit</button><button class="lk bad" onclick="dlOc(${oa(o)})">Delete</button>`:''}</div>`};
+function exo(id,od){const e=g(db.tt,id);e.ex=e.ex||{};e.ex[od]=e.ex[od]||{};return e.ex[od]}
+const doneOc=(id,od)=>{const e=g(db.tt,id);if(e.sched=='rec')exo(id,od).done=1;else e.done=1;save();render()};
+const undoOc=(id,od)=>{const e=g(db.tt,id);if(e.sched=='rec')delete exo(id,od).done;else delete e.done;save();render()};
+function rsOc(id,od){const e=g(db.tt,id),rec=e.sched=='rec',x=rec?((e.ex||{})[od]||{}):{},cur=rec?(x.moved||{date:od,st:e.st,en:e.en}):{date:e.date,st:e.st,en:e.en};
+form('Reschedule this session (nothing is deleted)',[{k:'date',l:'New Date',t:'date',r:1},{k:'st',l:'New Start Time',t:'time',r:1},{k:'en',l:'New End Time',t:'time'}],cur,o=>{const h=`Rescheduled from ${cur.date} ${cur.st||''}–${cur.en||''}`;
+ if(rec){const z=exo(id,od);z.moved={date:o.date,st:o.st,en:o.en};z.hist=(z.hist?z.hist+' | ':'')+h}else{e.hist=(e.hist?e.hist+' | ':'')+h;Object.assign(e,{date:o.date,day:dow(o.date),st:o.st,en:o.en,rs:1})}})}
+function dlOc(id,od){const e=g(db.tt,id);if(e.sched!='rec')return ask('Delete this timetable entry?',()=>{db.tt=db.tt.filter(z=>z.id!=id);save();render()});
+modal(`<p>This is a recurring weekly schedule. What do you want to delete?</p><p class=mut>"Whole series" also removes the done history of this schedule.</p><div class=r style="flex-wrap:wrap"><button class=b2 onclick=close()>Cancel</button><button class=b2 id=d1>Only ${od}</button><button class="b bad" id=d2>Whole series</button></div>`);
+$('#d1').onclick=()=>{exo(id,od).deleted=1;save();close();render()};$('#d2').onclick=()=>{db.tt=db.tt.filter(z=>z.id!=id);save();close();render()}}
+function edTT(id,pre){const x=id?g(db.tt,id):null;pre=pre||{};const d0=(pre.t||pre.s)?today():V.TT.d;
+form(x?'Edit Timetable Entry':'Add Timetable Entry',[{k:'sched',l:'Schedule Type',t:'sel',o:[['one','One-time'],['rec','Recurring weekly']]},{k:'wt',l:'Work Type',t:'sel',o:WTO},{k:'date',l:'Date (day is set automatically)',t:'date',v:'one'},{k:'dw',l:'Day of the week',t:'sel',o:DAYS.map((a,i)=>[i,a]),v:'rec'},{k:'a',l:'Start Date',t:'date',v:'rec'},{k:'b',l:'End Date',t:'date',v:'rec'},{k:'st',l:'Start Time',t:'time',r:1},{k:'en',l:'End Time',t:'time'},{k:'t',l:'Teacher',t:'sel',o:[['','—'],...tO()]},{k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'s',l:'Student(s) — Ctrl/Cmd-click for several',t:'multi',o:sO(),w:1},{k:'sub',l:'Subject',r:1,w:1,d:'ttsub'},{k:'notes',l:'Notes',t:'area',w:1}],x?{...x,sched:x.sched||'one',dw:x.dw??'',s:(x.s||[]).join(',')}:{sched:pre.rec?'rec':'one',date:d0,wt:'Live',dw:pre.rec?6:dowN(d0),a:d0,t:pre.t||'',s:pre.s?String(pre.s):''},o=>{
+ const d={sched:o.sched,wt:o.wt,st:o.st,en:o.en,t:+o.t||0,lv:o.lv,s:o.s?o.s.split(',').map(Number):[],sub:o.sub,notes:o.notes};
+ if(o.sched=='rec'){if(o.dw==='')return 'Choose the day of the week';if(!o.a)return 'Start Date is required';if(o.b&&o.b<o.a)return 'End Date must be on or after the Start Date';if(db.tt.some(q=>q!==x&&q.sched=='rec'&&q.t==d.t&&q.dw==+o.dw&&q.st==o.st&&(q.en||'')==(o.en||'')&&String(q.sub||'').trim().toLowerCase()==o.sub.trim().toLowerCase()&&(!q.b||q.b>=o.a)&&(!o.b||q.a<=o.b)))return 'This weekly entry already exists for this teacher';Object.assign(d,{dw:+o.dw,a:o.a,b:o.b,date:o.a,day:DAYS[+o.dw]})}
+ else{if(!o.date)return 'Date is required';Object.assign(d,{date:o.date,day:dow(o.date)})}
+ x?Object.assign(x,d):db.tt.push({id:db.id++,...d,ex:{}})});
+$('#md').insertAdjacentHTML('beforeend',`<datalist id=ttsub>${[...new Set(db.sub.map(z=>z.name))].map(n=>`<option value="${E(n)}">`).join('')}</datalist>`);tog('sched')}
+const wkS=d=>addD(d,-((new Date(d+'T00:00:00Z').getUTCDay()+6)%7));
+function shTT(dir){const Q=V.TT;if(Q.m=='daily')Q.d=addD(Q.d,dir);else if(Q.m=='weekly')Q.d=addD(Q.d,7*dir);else{const t=new Date(Q.d.slice(0,7)+'-01T00:00:00Z');t.setUTCMonth(t.getUTCMonth()+dir);Q.d=t.toISOString().slice(0,10)}render()}
+function vTT(){const Q=V.TT,d=Q.d;let body='';
+if(Q.m=='daily')body=`<h3>${dow(d)} ${d}</h3>`+(occ(d,d).map(o=>te(o,1)).join('')||'<p class=mut>No entries.</p>');
+else if(Q.m=='weekly'){const s=wkS(d),os=occ(s,addD(s,6));body=`<p class=mut>Week of ${s} → ${addD(s,6)}</p><div class=tg>${[0,1,2,3,4,5,6].map(i=>{const x=addD(s,i);return `<div class=tc><h4>${dow(x).slice(0,3)} ${x.slice(5)}</h4>${os.filter(o=>o.date==x).map(o=>te(o,1)).join('')}</div>`}).join('')}</div>`}
+else{const y=+d.slice(0,4),mo=+d.slice(5,7),pad=new Date(Date.UTC(y,mo-1,1)).getUTCDay(),nd=new Date(Date.UTC(y,mo,0)).getUTCDate(),os=occ(d.slice(0,7)+'-01',d.slice(0,7)+'-31');let c='';for(let i=0;i<pad;i++)c+='<div></div>';
+for(let i=1;i<=nd;i++){const x=d.slice(0,8)+String(i).padStart(2,'0');c+=`<div class=tc><b>${i}</b>${os.filter(o=>o.date==x).map(o=>`<div class=ms style="${o.done?'text-decoration:line-through':''}" onclick="edTT(${o.e.id})" title="${E(o.e.sub)}">${o.st||''} ${E(o.e.sub)}</div>`).join('')}</div>`}
+body=`<h3>${d.slice(0,7)}</h3><div class=tg7>${DAYS.map(x=>`<b class=mut>${x.slice(0,3)}</b>`).join('')}${c}</div>`}
+const hist=occ(addD(today(),-365),addD(today(),60)).filter(o=>o.done).sort((p,q)=>(q.date+(q.st||'')).localeCompare(p.date+(p.st||''))).slice(0,50);
+return `<h2>Timetable</h2><div class=bar><select onchange="V.TT.m=this.value;render()">${['daily','weekly','monthly'].map(x=>`<option ${Q.m==x?'selected':''}>${x}</option>`).join('')}</select><button class=b2 onclick="shTT(-1)">◀</button>${fi('TT','d','date','Date')}<button class=b2 onclick="shTT(1)">▶</button><button class=b2 onclick="V.TT.d=today();render()">Today</button><button class=b onclick=edTT()>+ Add Entry</button></div>`+body+`<h3>Completed sessions (history)</h3>`+T(['Date','Time','Subject','Teacher','Students','Type',''],hist.map(o=>[o.date,tm(o),E(o.e.sub),E(o.e.t?tn(o.e.t):'—'),E(studs(o.e)||'—'),wl(o.e.wt),`<button class=lk onclick="undoOc(${oa(o)})">Undo</button>`]),'No completed sessions yet.')}
+/* ---- profile timetables (teacher / student): views of the central timetable, no separate records ---- */
+const ptt=(k,id)=>{const isT=k=='t',td=today(),mine=o=>isT?o.e.t==id:(o.e.s||[]).map(Number).includes(+id),
+ all=occ(addD(td,-30),addD(td,180)).filter(mine),up=all.filter(o=>o.date>=td&&!o.done),past=all.filter(o=>o.date<td||o.done).reverse(),
+ row=o=>[o.date,dow(o.date),o.st||'—',o.en||'—',E(isT?(studs(o.e)||'—'):(o.e.t?tn(o.e.t):'—')),E(o.e.sub),wl(o.e.wt)+(o.e.sched=='rec'?' · weekly':''),o.done?'<span class=pill>Done</span>':o.mv?'<span class=pill>Rescheduled</span>':'<span class=pill>Scheduled</span>',`<button class=lk onclick="edTT(${o.e.id})">Edit</button><button class="lk bad" onclick="dlOc(${oa(o)})">Delete</button>`],
+ H=['Date','Day','Start Time','End Time',isT?'Student(s)':'Teacher','Subject','Work Type','Status',''];
+return `<h3>Timetable</h3><div class=bar><button class=b onclick="edTT(0,{${k}:${id}})">+ Add Session</button><span class=mut>Same sessions as the main Timetable. Editing a weekly entry changes the whole series; Delete asks whether to remove one date or the whole series.</span></div>`+T(H,up.map(row),'No upcoming sessions.')+`<h3>Recent &amp; completed (last 30 days)</h3>`+T(H,past.map(row),'Nothing in the last 30 days.')};
+/* ---- teacher profile: financial summary (all work types) and fixed weekly timetable ---- */
+function tFin(id){const S=TSum(id),two=n=>[fx(n,'EGP'),fx(n,'KWD')],neg=(n,a)=>n<0?a.map(h=>`<span class=neg>${h}</span>`):a,
+ row=(l,e,p,r,nt)=>[l,...two(e),...two(p),...neg(r,two(r)),nt||''];
+const rows=S.cats.map(c=>row(c.label,c.earn,c.paid,c.rem,c.rem<0?`<span class=neg>Excess paid</span>`:''));
+if(S.nUn)rows.push(row('Unassigned (older payments)',0,S.un,-S.un,`<span class=pill>${S.nUn} payment(s) — edit them to choose a Payment Source</span>`));
+rows.push(row('<b>TOTAL</b>',S.earn,S.paid,S.rem,S.rem<0?'<span class=neg>Overpaid overall</span>':''));
+return `<h3>Financial summary (all work types)</h3><p class=mut>Accrued = what the teacher has earned: Live Sessions = teacher cost of completed lessons; Recorded Courses = instructor share; Projects = engineer share (cancelled projects excluded). Paid = recorded teacher payments only, by the Payment Source chosen. Amounts are stored in ${B()}; EGP and KWD are conversions of the same amounts at the current exchange rate (never invented). The cards above still show Live Sessions only, as before.</p>`+T(['Source','Accrued (EGP)','Accrued (KWD)','Paid (EGP)','Paid (KWD)','Remaining (EGP)','Remaining (KWD)','Note'],rows)}
+const dlWk=id=>ask('Delete this weekly entry? This removes the whole recurring schedule — it also disappears from the main Timetable and the Dashboard. Sessions already completed and lessons are not affected.',()=>{db.tt=db.tt.filter(e=>e.id!=id);save();render()});
+function twk(id){const ORD=[6,0,1,2,3,4,5],td=today(),all=db.tt.filter(e=>e.t==id&&e.sched=='rec'),es=all.filter(e=>!e.b||e.b>=td),old=all.length-es.length,
+ sp=es.map(e=>{const a=tmin(e.st),b=tmin(e.en);return{e,a,b:b!=null&&b>a?b:a+60}}).filter(z=>z.a!=null),
+ h0=Math.min(8,...sp.map(z=>Math.floor(z.a/60))),h1=Math.max(21,...sp.map(z=>Math.ceil(z.b/60))),pad=n=>String(n).padStart(2,'0'),hs=[];for(let h=h0;h<h1;h++)hs.push(h);
+const cell=(h,d)=>sp.filter(z=>z.e.dw==d&&z.a<(h+1)*60&&z.b>h*60).map(z=>Math.floor(z.a/60)==h?`<div class=wk onclick="edTT(${z.e.id})" title="Click to edit"><b>${E(z.e.st)}–${E(z.e.en||'')}</b><br>${E(z.e.sub)}<br><span class=mut>${E(studs(z.e)||'')} · ${wl(z.e.wt)}</span></div>`:`<div class="wk c">↳ ${E(z.e.sub)}</div>`).join('');
+const grid=`<div class=tw><table class=wg><thead><tr><th>Time</th>${ORD.map(d=>`<th>${DAYS[d]}</th>`).join('')}</tr></thead><tbody>${hs.map(h=>`<tr><td>${pad(h)}:00</td>${ORD.map(d=>`<td>${cell(h,d)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+return `<h3>Weekly timetable (fixed, no dates)</h3><div class=bar><button class=b onclick="edTT(0,{t:${id},rec:1})">+ Add Weekly Slot</button><span class=mut>Shows this teacher's recurring weekly entries (the same records as the main Timetable). One-time dated sessions are not shown here — they stay in the dated Timetable below.${old?' '+old+' ended weekly schedule(s) hidden.':''}</span></div>`+(es.length?grid:'<p class=mut>No weekly entries yet. Use "+ Add Weekly Slot".</p>')+
+ (es.length?T(['Day','Start','End','Student(s)','Subject','Work Type',''],es.slice().sort((a,b)=>ORD.indexOf(a.dw)-ORD.indexOf(b.dw)||(a.st||'').localeCompare(b.st||'')).map(e=>[DAYS[e.dw],e.st||'—',e.en||'—',E(studs(e)||'—'),E(e.sub),wl(e.wt),`<button class=lk onclick="edTT(${e.id})">Edit</button><button class="lk bad" onclick="dlWk(${e.id})">Delete</button>`])):'')}
+/* ---- Dashboard DONE: complete a scheduled Live session into the existing Lessons module ---- */
+function occInfo(e,od){if(e.sched!='rec')return{date:e.date,st:e.st,en:e.en};const x=(e.ex||{})[od]||{};return x.moved?{date:x.moved.date,st:x.moved.st,en:x.moved.en}:{date:od,st:e.st,en:e.en}}
+function coverage(e,od){const ln=db.l.filter(l=>l.tt==e.id&&l.od==od),need=(e.s||[]).length?e.s:[0],miss=need.filter(s=>s?!ln.some(l=>l.s==s):!ln.length);return{ln,miss,all:!miss.length}}
+const markDone=(e,od)=>{if(e.sched=='rec')exo(e.id,od).done=1;else e.done=1};
+function doneFlow(id,od){const e=g(db.tt,id);if(!e)return;if(e.wt!='Live')return doneOc(id,od);
+ const cv=coverage(e,od);
+ if(cv.all){markDone(e,od);save();render();return modal(`<h3 style="margin-top:0">Session already recorded</h3><p class=mut>This session was already completed and saved in Lessons. No new lesson, charge or earning was created.</p>${cv.ln.map(l=>`<p>${l.date} · ${E(sn(l.s))} · ${E(tn(l.t))} · ${E(bn(l.sub))} · ${h2(l.d)} h<br>Charge ${fm(O(l).chg,l.sc)} · Teacher earning ${fm(O(l).cost,l.tc)} <button class=lk onclick="close();edL(${l.id})">Open lesson</button></p>`).join('')}<div class=r><button class=b onclick=close()>Close</button></div>`)}
+ if(!db.s.length||!db.t.length)return note('Add at least one student and one teacher first.');
+ const info=occInfo(e,od),sList=(e.s||[]).length?cv.miss.filter(Boolean):db.s.map(z=>z.id),sid=sList[0],tid=e.t||0;
+ const mt=subsFor(tid,sid).filter(z=>z.name.toLowerCase()==String(e.sub||'').trim().toLowerCase()),z=mt.length==1?mt[0]:null;
+ let dur=1;const a=tmin(info.st),b=tmin(info.en);if(a!=null&&b!=null&&b>a)dur=Math.round((b-a)/60*100)/100;
+ edL(0,{tt:e.id,od,date:info.date,ts:info.st||'',te:info.en||'',d:dur,s:sid,t:tid,sub:z?z.id:'',lv:e.lv||'',notes:e.notes||'',sList,
+  info:`<b>Scheduled:</b> ${info.date} ${tm(info)} · ${E(e.sub)} · student(s): ${E(studs(e)||'—')} · instructor: ${E(e.t?tn(e.t):'—')}<br><span class=mut>${z&&z.tr!=null?`Subject rates: teacher ${fm(z.tr,z.tc)}/h · student ${fm(z.sr,z.sc)}/h.`:'Rates default from the teacher, student and Settings.'} Confirm or change the actual details. Saving records the lesson only — student and teacher payments are recorded separately in Payments.</span>`})}
+/* reminders */
+const FQ={'Weekly':1,'Every 2 weeks':2,'Every 4 weeks':4,'Once (first week only)':0};
+function remDue(a,b){const out=[];db.rm.forEach(r=>{for(let d=a;d<=b;d=addD(d,1)){if(!r.a||d<r.a||(r.b&&d>r.b))continue;if(!(r.days||[]).includes(new Date(d+'T00:00:00Z').getUTCDay()))continue;const wk=Math.floor((new Date(d)-new Date(r.a))/864e5/7),k=FQ[r.f]??1;if(k?wk%k:wk)continue;out.push({r,d})}});return out.sort((x,y)=>(x.d+x.r.time).localeCompare(y.d+y.r.time))}
+const rmRow=o=>[o.d,dow(o.d).slice(0,3),o.r.time||'',E(o.r.name),E(g(db.rc,o.r.rc)?.name||'—'),db.rd[o.r.id+'|'+o.d]?'<span class=pill>Done</span>':`<button class=lk onclick="db.rd['${o.r.id}|${o.d}']=1;save();render()">Mark done</button>`];
+function edRM(id){const x=id?g(db.rm,id):null;if(!db.rc.length)return note('Add a recorded course first.');form(x?'Edit Reminder':'Add Reminder',[{k:'name',l:'Reminder Name (e.g. Send Recorded Lectures)',r:1,w:1},{k:'rc',l:'Related Recorded Course',t:'sel',o:db.rc.map(c=>[c.id,c.name]),w:1},{k:'days',l:'Day(s) — Ctrl/Cmd-click for several',t:'multi',o:DAYS.map((a,i)=>[i,a]),r:1},{k:'time',l:'Time',t:'time',r:1},{k:'a',l:'Start Date',t:'date',r:1},{k:'b',l:'End Date',t:'date'},{k:'f',l:'Repeat Frequency',t:'sel',o:Object.keys(FQ).map(a=>[a,a])}],x?{...x,days:(x.days||[]).join(',')}:{f:'Weekly',a:today()},o=>{const d={name:o.name,rc:+o.rc,days:o.days.split(',').filter(a=>a!=='').map(Number),time:o.time,a:o.a,b:o.b,f:o.f};x?Object.assign(x,d):db.rm.push({id:db.id++,...d})})}
+const dlRM=id=>ask('Delete this reminder?',()=>{db.rm=db.rm.filter(r=>r.id!=id);save();render()});
+/* ---- projects ---- */
+function edPR(id){const x=id?g(db.pr,id):null,c0=B();form(x?'Edit Project':'Add Project',[{k:'name',l:'Project Name',r:1},{k:'sub',l:'Subject'},{k:'uni',l:'University'},{k:'t',l:'Teacher / Engineer',t:'sel',o:[['','—'],...tO()]},{k:'s',l:'Student',t:'sel',o:[['','—'],...sO()]},{k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'status',l:'Project Status',t:'sel',o:['Not Started','In Progress','Completed','Cancelled'].map(a=>[a,a])},{k:'cur',l:'Currency',t:'sel',o:curO()},{k:'rev',l:'Project Revenue',t:'number',r:1},{k:'share',l:'Engineer Profit Share %',t:'number',r:1},{k:'rx',l:'Currency → '+B()+' rate',t:'number'},{k:'start',l:'Start Date',t:'date'},{k:'due',l:'Due Date',t:'date'},{k:'paid0',l:'Amount Paid (so far)',t:'number'},{k:'notes',l:'Notes',t:'area',w:1}],x?{...x,rev:x.rev/1000,paid0:(x.paid0||0)/1000}:{status:'In Progress',cur:c0,rx:rfor(c0),start:today(),share:'',paid0:0},o=>{
+const rx=o.cur==B()?1:parseFloat(o.rx);if(!(rx>0))return RX;const kp=x&&x.cur==o.cur&&x.rx==rx?x.rt:0;
+const d={name:o.name,sub:o.sub,uni:o.uni,t:+o.t||0,s:+o.s||0,lv:o.lv,status:o.status,cur:o.cur,rev:m(o.rev),share:parseFloat(o.share)||0,rx,rt:rty(o.cur,rx,kp),bc:x?x.bc:B(),start:o.start,due:o.due,paid0:m(o.paid0),notes:o.notes};const r=x?Object.assign(x,d):(db.pr.push({id:db.id++,...d}),db.pr[db.pr.length-1]);lnk(r,'Project',d.name)},
+o=>{const rev=m(o.rev),sh=Math.round(rev*(parseFloat(o.share)||0)/100),rx=o.cur==B()?1:parseFloat(o.rx);return `<b>Engineer Share:</b> ${fm(sh,o.cur)} · <b>A+ Profit:</b> ${fm(rev-sh,o.cur)}`+(rx>0?` (= ${f(k_(rev-sh,rx))})`:`<br><span class=neg>${RX}</span>`)});sync('cur','rx')}
+const dlPR=id=>ask('Delete this project and its payments?',()=>{{const p0=g(db.pr,id);if(p0)db.sub=db.sub.filter(z=>z.id!=p0.subj)}db.pr=db.pr.filter(p=>p.id!=id);db.pp=db.pp.filter(p=>p.pr!=id);V.prid=null;save();render()});
+function edPP(id){const x=id?g(db.pp,id):null,p=g(db.pr,V.prid);form('Project Payment ('+p.cur+')',[{k:'date',l:'Payment Date',t:'date',r:1},{k:'amt',l:'Amount ('+p.cur+')',t:'number',r:1},{k:'meth',l:'Method',t:'sel',o:['Cash','Bank Transfer','KNET','Cheque','Other'].map(a=>[a,a])},{k:'notes',l:'Notes',w:1}],x?{...x,amt:x.amt/1000}:{date:today(),meth:'Cash'},o=>{const d={pr:p.id,date:o.date,amt:m(o.amt),meth:o.meth,notes:o.notes};x?Object.assign(x,d):db.pp.push({id:db.id++,...d})})}
+function vPR(){if(V.prid)return vPRD();return `<h2>Projects</h2><div class=bar><button class=b onclick=edPR()>+ Add Project</button></div>`+T(['Project','Engineer','Student','Level','Status','Revenue','Engineer Share','A+ Profit','Paid','Outstanding','Profit ('+B()+')',''],db.pr.map(p=>{const j=pj(p);return[`<a class=lk onclick="V.prid=${p.id};render()">${E(p.name)}</a>`,E(p.t?tn(p.t):'—'),E(p.s?sn(p.s):'—'),p.lv||'—',`<span class=pill>${p.status}</span>`,fm(p.rev,p.cur),fm(j.share,p.cur)+` (${p.share}%)`,fm(j.prof,p.cur),fm(j.paid,p.cur),`<b class=${j.out>0?'neg':'pos'}>${fm(j.out,p.cur)}</b>`,n3(j.bprof),`<button class=lk onclick=edPR(${p.id})>Edit</button><button class="lk bad" onclick=dlPR(${p.id})>Delete</button>`]}),'No projects yet.')}
+function vPRD(){const p=g(db.pr,V.prid),j=pj(p);return `<p><a class=lk onclick="V.prid=null;render()">← All projects</a></p><h2>${E(p.name)}</h2><p class=mut>${E(p.sub)} · ${p.t?E(tn(p.t)):''} · ${p.s?E(sn(p.s)):''} · ${p.lv||''} · ${p.status} · ${p.start||''} → ${p.due||''}${p.notes?' · '+E(p.notes):''}</p><div class=cards>${card('Project Revenue',fm(p.rev,p.cur))}${card('Engineer Share ('+p.share+'%)',fm(j.share,p.cur))}${card('A+ Project Profit',fm(j.prof,p.cur),cl(j.prof))}${card('Paid',fm(j.paid,p.cur))}${card('Outstanding',fm(j.out,p.cur),j.out>0?'neg':'pos')}${card('Profit in '+B(),f(j.bprof),cl(j.bprof))}${card('Exchange rate',p.cur==B()?'1 (base)':(+p.rx).toFixed(6)+' · '+p.rt)}</div><div class=bar><button class=b onclick=edPP()>+ Record Payment</button></div>`+T(['Date','Amount','Method','Notes',''],db.pp.filter(x=>x.pr==p.id).map(x=>[x.date,fm(x.amt,p.cur),x.meth,E(x.notes),`<button class=lk onclick=edPP(${x.id})>Edit</button><button class="lk bad" onclick="db.pp=db.pp.filter(z=>z.id!=${x.id});save();render()">Delete</button>`]),'No payments recorded.')}
+/* ---- recorded courses ---- */
+function edRC(id){const x=id?g(db.rc,id):null;form(x?'Edit Recorded Course':'Add Recorded Course',[{k:'name',l:'Course Name',r:1},{k:'sub',l:'Subject'},{k:'uni',l:'University'},{k:'inst',l:'Instructor / Engineer',t:'sel',o:[['','—'],...tO()]},{k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'cur',l:'Currency',t:'sel',o:curO()},{k:'rx',l:'Currency → '+B()+' rate',t:'number'},{k:'cost',l:'Course Cost',t:'number'},{k:'price',l:'Course Selling Price',t:'number',r:1},{k:'n',l:'Number of Students',t:'number',r:1},{k:'share',l:'Instructor Share %',t:'number',r:1},{k:'date',l:'Date',t:'date'},{k:'notes',l:'Notes',t:'area',w:1}],x?{...x,cost:x.cost/1000,price:x.price/1000}:{cur:B(),rx:rfor(B()),date:today(),cost:0},o=>{
+const rx=o.cur==B()?1:parseFloat(o.rx);if(!(rx>0))return RX;const kp=x&&x.cur==o.cur&&x.rx==rx?x.rt:0;
+const d={name:o.name,sub:o.sub,uni:o.uni,inst:+o.inst||0,lv:o.lv,cur:o.cur,rx,rt:rty(o.cur,rx,kp),bc:x?x.bc:B(),cost:m(o.cost),price:m(o.price),n:parseFloat(o.n)||0,share:parseFloat(o.share)||0,date:o.date,notes:o.notes};const r=x?Object.assign(x,d):(db.rc.push({id:db.id++,...d}),db.rc[db.rc.length-1]);lnk(r,'Recorded',d.name)},
+o=>{const c={price:m(o.price),n:parseFloat(o.n)||0,share:parseFloat(o.share)||0,cost:m(o.cost)},r=rcc({...c,rx:1});return `<b>Total Revenue:</b> ${fm(r.rev,o.cur)} · <b>Instructor Share:</b> ${fm(r.share,o.cur)} · <b>A+ Recorded Profit:</b> <span class=${cl(r.prof)}>${fm(r.prof,o.cur)}</span>`});sync('cur','rx')}
+const dlRC=id=>ask('Delete this course, its enrolled students and reminders?',()=>{{const c0=g(db.rc,id);if(c0)db.sub=db.sub.filter(z=>z.id!=c0.subj)}db.rc=db.rc.filter(c=>c.id!=id);db.re=db.re.filter(e=>e.rc!=id);db.rm=db.rm.filter(r=>r.rc!=id);V.rcid=null;save();render()});
+function edRE(id){const x=id?g(db.re,id):null,c=g(db.rc,V.rcid);if(!db.s.length)return note('Add a student first.');form('Enrol Student ('+c.cur+')',[{k:'s',l:'Student',t:'sel',o:sO()},{k:'date',l:'Enrollment Date',t:'date'},{k:'price',l:'Course Price',t:'number',r:1},{k:'paid',l:'Amount Paid',t:'number'}],x?{...x,price:x.price/1000,paid:x.paid/1000}:{date:today(),price:c.price/1000,paid:0},o=>{const d={rc:c.id,s:+o.s,date:o.date,price:m(o.price),paid:m(o.paid)};x?Object.assign(x,d):db.re.push({id:db.id++,...d})})}
+const pst=e=>e.paid>=e.price&&e.price>0?'Paid':e.paid>0?'Partial':'Unpaid';
+function vRC(){if(V.rcid)return vRCD();const rd=remDue(today(),addD(today(),30));
+return `<h2>Recorded Courses</h2><div class=bar><button class=b onclick=edRC()>+ Add Recorded Course</button></div>`+T(['Course','Instructor','Level','Date','Price','Students','Revenue','Instructor Share','Course Cost','A+ Profit','Profit ('+B()+')',''],db.rc.map(c=>{const j=rcc(c);return[`<a class=lk onclick="V.rcid=${c.id};render()">${E(c.name)}</a>`,E(c.inst?tn(c.inst):'—'),c.lv||'—',c.date||'',fm(c.price,c.cur),c.n,fm(j.rev,c.cur),fm(j.share,c.cur)+` (${c.share}%)`,fm(c.cost,c.cur),fm(j.prof,c.cur),n3(j.bprof),`<button class=lk onclick=edRC(${c.id})>Edit</button><button class="lk bad" onclick=dlRC(${c.id})>Delete</button>`]}),'No recorded courses yet.')+
+`<h3>Reminders (e.g. Send Recorded Lectures)</h3><div class=bar><button class=b onclick=edRM()>+ Add Reminder</button></div>`+T(['Reminder','Course','Days','Time','Start','End','Repeat',''],db.rm.map(r=>[E(r.name),E(g(db.rc,r.rc)?.name||'—'),(r.days||[]).map(d=>DAYS[d].slice(0,3)).join(', '),r.time,r.a,r.b||'—',r.f,`<button class=lk onclick=edRM(${r.id})>Edit</button><button class="lk bad" onclick=dlRM(${r.id})>Delete</button>`]),'No reminders set.')+`<h3>Coming up (next 30 days)</h3>`+T(['Date','Day','Time','Reminder','Course',''],rd.map(rmRow),'Nothing due in the next 30 days.')}
+function vRCD(){const c=g(db.rc,V.rcid),j=rcc(c),es=db.re.filter(e=>e.rc==c.id);return `<p><a class=lk onclick="V.rcid=null;render()">← All courses</a></p><h2>${E(c.name)}</h2><p class=mut>${E(c.sub)} · ${c.inst?E(tn(c.inst)):''} · ${c.lv||''} · ${c.date||''}${c.notes?' · '+E(c.notes):''}</p><div class=cards>${card('Total Revenue',fm(j.rev,c.cur))}${card('Instructor Share ('+c.share+'%)',fm(j.share,c.cur))}${card('Course Cost',fm(c.cost,c.cur))}${card('A+ Recorded Profit',fm(j.prof,c.cur),cl(j.prof))}${card('Profit in '+B(),f(j.bprof),cl(j.bprof))}${card('Students (entered / linked)',c.n+' / '+es.length)}${card('Exchange rate',c.cur==B()?'1 (base)':(+c.rx).toFixed(6)+' · '+c.rt)}</div><div class=bar><button class=b onclick=edRE()>+ Enrol Student</button></div>`+T(['Student','Enrollment Date','Course Price','Paid','Remaining','Status',''],es.map(e=>[E(sn(e.s)),e.date||'',fm(e.price,c.cur),fm(e.paid,c.cur),fm(e.price-e.paid,c.cur),`<span class=pill>${pst(e)}</span>`,`<button class=lk onclick=edRE(${e.id})>Edit</button><button class="lk bad" onclick="db.re=db.re.filter(z=>z.id!=${e.id});save();render()">Remove</button>`]),'No students linked (optional).')}
+/* ---- unified subjects (Live / Recorded Course / Project) ---- */
+const SUBT=[['Live','Live'],['Recorded','Recorded Course'],['Project','Project']];
+function newSub(){if(!db.t.length&&false)return;
+form('Add New Subject',[{k:'name',l:'Subject / Course / Project Name',r:1,w:1},{k:'uni',l:'University'},{k:'type',l:'Subject Type',t:'sel',o:SUBT},{k:'inst',l:'Instructor / Engineer',t:'sel',o:[['','—'],...tO()],q:1},{k:'lv',l:'Academic Level',t:'sel',o:LV},
+{k:'tc',l:'Teacher Currency',t:'sel',o:curO(),v:'Live'},{k:'tr',l:'Teacher Hourly Cost',t:'number',v:'Live'},{k:'sc',l:'Student Currency',t:'sel',o:curO(),v:'Live'},{k:'sr',l:'Student Hourly Price',t:'number',v:'Live'},
+{k:'cur',l:'Currency',t:'sel',o:curO(),v:'Recorded,Project'},{k:'rx',l:'Currency → '+B()+' rate',t:'number',v:'Recorded,Project'},{k:'price',l:'Full Course / Project Price',t:'number',v:'Recorded,Project'},{k:'share',l:'Instructor / Engineer Profit Share %',t:'number',v:'Recorded,Project'},
+{k:'cost',l:'Course Cost',t:'number',v:'Recorded'},{k:'n',l:'Number of Students',t:'number',v:'Recorded'},
+{k:'studs',l:'Students (Ctrl/Cmd-click for several)',t:'multi',o:sO(),w:1,v:'Live',q:1},{k:'s',l:'Student',t:'sel',o:[['','—'],...sO()],v:'Project'},{k:'status',l:'Project Status',t:'sel',o:['Not Started','In Progress','Completed','Cancelled'].map(a=>[a,a]),v:'Project'},{k:'due',l:'Due Date',t:'date',v:'Project'},{k:'paid0',l:'Amount Paid (so far)',t:'number',v:'Project'},
+{k:'date',l:'Date',t:'date',v:'Recorded,Project'},{k:'notes',l:'Notes',t:'area',w:1}],
+{type:'Live',uni:'',studs:'',tc:B(),sc:B(),tr:db.set.tr,sr:db.set.sr,cur:B(),rx:rfor(B()),date:today(),status:'In Progress',cost:0,paid0:0},o=>{
+ if(o.type=='Live'){const ce=liveChk(o,0);if(ce)return ce;
+  db.sub.push({id:db.id++,name:o.name,type:'Live',uni:o.uni,inst:+o.inst,studs:o.studs.split(',').filter(a=>a!=='').map(Number),lv:o.lv,tc:o.tc,tr:m(o.tr||db.set.tr),sc:o.sc,sr:m(o.sr||db.set.sr)});return}
+ const rx=o.cur==B()?1:parseFloat(o.rx);if(!(rx>0))return RX;if(!o.price)return 'Price is required';if(o.share==='')return 'Profit share % is required';
+ const base={name:o.name,sub:o.name,uni:o.uni,lv:o.lv,cur:o.cur,rx,rt:rty(o.cur,rx,0),bc:B(),share:parseFloat(o.share)||0,notes:o.notes};
+ if(o.type=='Recorded'){const r={id:db.id++,...base,inst:+o.inst||0,cost:m(o.cost),price:m(o.price),n:parseFloat(o.n)||0,date:o.date};db.rc.push(r);lnk(r,'Recorded',o.name)}
+ else{const r={id:db.id++,...base,t:+o.inst||0,s:+o.s||0,status:o.status,rev:m(o.price),start:o.date,due:o.due,paid0:m(o.paid0)};db.pr.push(r);lnk(r,'Project',o.name)}},
+o=>{if(o.type=='Live')return `Per hour: teacher cost <b>${fm(m(o.tr),o.tc)}</b> · student price <b>${fm(m(o.sr),o.sc)}</b>. Each lesson's duration × these rates is calculated when you record lessons.`;
+ const rev0=o.type=='Recorded'?Math.round(m(o.price)*(parseFloat(o.n)||0)):m(o.price),sh=Math.round(rev0*(parseFloat(o.share)||0)/100),pf=rev0-sh-(o.type=='Recorded'?m(o.cost):0);
+ return `<b>Revenue:</b> ${fm(rev0,o.cur)} · <b>${o.type=='Recorded'?'Instructor':'Engineer'} Share:</b> ${fm(sh,o.cur)} · <b>A+ Profit:</b> <span class=${cl(pf)}>${fm(pf,o.cur)}</span>`});
+sync('cur','rx');tog('type')}
+function edSub(id){const z=g(db.sub,id);form('Edit Live Subject',[{k:'name',l:'Subject Name',r:1,w:1},{k:'uni',l:'University'},{k:'inst',l:'Instructor',t:'sel',o:[['','— Select —'],...tO()],r:1,q:1},{k:'studs',l:'Students (Ctrl/Cmd-click for several)',t:'multi',o:sO(),w:1,r:1,q:1},{k:'lv',l:'Academic Level',t:'sel',o:LV},{k:'tc',l:'Teacher Currency',t:'sel',o:curO()},{k:'tr',l:'Teacher Hourly Cost',t:'number'},{k:'sc',l:'Student Currency',t:'sel',o:curO()},{k:'sr',l:'Student Hourly Price',t:'number'}],
+{...z,uni:z.uni||'',inst:z.inst||'',studs:(z.studs||[]).join(','),tr:z.tr!=null?z.tr/1000:db.set.tr,sr:z.sr!=null?z.sr/1000:db.set.sr,tc:z.tc||B(),sc:z.sc||B()},o=>{const ce=liveChk(o,id);if(ce)return ce;
+ Object.assign(z,{name:o.name,uni:o.uni,inst:+o.inst,studs:o.studs.split(',').filter(a=>a!=='').map(Number),lv:o.lv,tc:o.tc,tr:m(o.tr),sc:o.sc,sr:m(o.sr)})})}
+const dlSub=id=>{if(db.l.some(l=>l.sub==id))return note('This subject is used by recorded lessons, so it cannot be deleted.');ask('Delete this subject?',()=>{db.sub=db.sub.filter(z=>z.id!=id);save();render()})};
+function vSubj(){const q=(V.SQ||'').toLowerCase(),ty=V.SF||'';
+const rows=db.sub.filter(z=>(!ty||(z.type||'Live')==ty)&&z.name.toLowerCase().includes(q)).map(z=>{const tp=z.type||'Live';let inst='—',info='',act='';
+ if(tp=='Live'){inst=z.inst?tn(z.inst):'—';info=(z.tr!=null?`Teacher ${fm(z.tr,z.tc)}/h · Student ${fm(z.sr,z.sc)}/h · `:'')+db.l.filter(l=>l.sub==z.id).length+' lessons';act=`<button class=lk onclick=edSub(${z.id})>Edit</button><button class="lk bad" onclick=dlSub(${z.id})>Delete</button>`}
+ else if(tp=='Recorded'){const c=db.rc.find(c=>c.subj==z.id);if(c){inst=c.inst?tn(c.inst):'—';info=`Price ${fm(c.price,c.cur)} × ${c.n} students · Instructor ${c.share}% · A+ profit ${fm(rcc(c).prof,c.cur)}`;act=`<button class=lk onclick="edRC(${c.id})">Edit</button><button class=lk onclick="V.nav='Recorded Courses';V.rcid=${c.id};render()">Open</button>`}}
+ else{const p=db.pr.find(p=>p.subj==z.id);if(p){inst=p.t?tn(p.t):'—';info=`Price ${fm(p.rev,p.cur)} · Engineer ${p.share}% · ${p.status} · A+ profit ${fm(pj(p).prof,p.cur)}`;act=`<button class=lk onclick="edPR(${p.id})">Edit</button><button class=lk onclick="V.nav='Projects';V.prid=${p.id};render()">Open</button>`}}
+ return[E(z.name),E(z.uni||'—'),`<span class=pill>${wl(tp)}</span>`,E(inst),E(subStuds(z).join(', ')||'—'),info,needsRev(z)?'<span class=pill style="color:var(--bad)">Needs review</span>':'',act]});
+const rvN=db.sub.filter(needsRev).length,rvNote=rvN?`<p class=neg><b>${rvN} subject(s) need review.</b> They could not be linked to an instructor and student automatically. Edit them to set the instructor and students; until then they will not appear in the Add Lesson subject list. Nothing was deleted.</p>`:'';
+return `<h2>Subjects</h2><p class=mut>One list for Live subjects, Recorded Courses and Projects. Recorded courses and projects are also managed in their own pages; they are the same records.</p>${rvNote}<div class=bar><input id=sbq placeholder="Search subjects" value="${E(V.SQ||'')}" oninput="V.SQ=this.value;render()"><select id=sbf onchange="V.SF=this.value;render()"><option value="">All types</option>${SUBT.map(a=>`<option value="${a[0]}" ${a[0]==ty?'selected':''}>${a[1]}</option>`).join('')}</select><button class=b onclick=newSub()>+ Add New Subject</button></div>`+T(['Subject','University','Type','Instructor','Student(s)','Details','Review',''],rows,'No subjects yet.')}
+/* ---- charts / dashboard ---- */
+let CH=[];
+const ch=(id,type,lab,data,name,col)=>CH.push(new Chart($('#'+id),{type,data:{labels:lab,datasets:[{label:name,data,backgroundColor:col,borderColor:col,tension:.3}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}}));
+function vDash(){const F=V.F,x=FL(F),Z=TOT(x),ev=EV(x),tprof=ev.filter(e=>e.t).reduce((a,e)=>a+e.p,0),sb=db.s.map(z=>({z,v:SS(z.id)})).filter(r=>r.v.rem>0),sbT=sb.reduce((a,r)=>a+r.v.rem,0),mo=today().slice(0,7),mev=ev.filter(e=>e.d.startsWith(mo)),ms=a=>mev.reduce((s,e)=>s+e[a],0),
+up=occ(today(),addD(today(),14)).filter(o=>!o.done).slice(0,15),rd=remDue(today(),addD(today(),7));
+setTimeout(()=>{const mk=e=>e.d.slice(0,7),tl=e=>e.t?tn(e.t):'—';const[ml,mr]=gE(ev,mk,e=>e.rev),[,mc]=gE(ev,mk,e=>e.cost),[,mp]=gE(ev,mk,e=>e.p),[tl1,tr]=gE(ev,tl,e=>e.rev),[,tp]=gE(ev,tl,e=>e.p),[sl,sr]=gE(ev,e=>e.s?sn(e.s):e.wt=='Recorded'?'Recorded courses':'—',e=>e.rev),[ll,lp]=gE(ev,e=>e.lv||'Unspecified',e=>e.p),[wl,wp]=gE(ev,e=>e.wt,e=>e.p);
+ch('c1','line',ml,mr,'Revenue','#3d79bd');ch('c2','line',ml,mc,'Costs','#c28b3c');ch('c3','line',ml,mp,'Profit','#1d7a4d');ch('c4','bar',tl1,tr,'Revenue','#7fb2ee');ch('c5','bar',tl1,tp,'Profit','#5fb58a');ch('c6','bar',sl,sr,'Revenue','#b9a27a');ch('c7','bar',ll,lp,'Profit','#6a8fd1');ch('c8','bar',wl,wp,'Profit','#d1a36a')},0);
+return `<h2>Dashboard</h2><div class=bar>${fi('F','a','date','From date')}${fi('F','b','date','To date')}${fs('F','t',tO(),'All teachers')}${fs('F','s',sO(),'All students')}${fs('F','lv',lvF,'All levels')}${fs('F','wt',WTO,'All work types')}${fs('F','cur',cF(),'All currencies')}<button class=b2 onclick="V.F={};render()">Clear</button></div>
+${mixed()?`<p class=pill>Some records were saved under a different base currency; combined totals add each record's stored base amount.</p>`:''}
+<h3 style="margin-top:4px">Upcoming timetable</h3><p class=mut>DONE on a Live session opens a form to record the actual lesson (saved in Lessons; no payment is recorded); other session types are simply marked completed. Either way only that one session is affected and it stays in the history. DELETE lets you move that one session to a new date/time — it never removes the weekly schedule.</p>${T(['Date','Day','Time','Teacher','Students','Subject','Level','Type','Actions'],up.map(o=>[o.date,dow(o.date),tm(o)+(o.mv?' (resch.)':''),E(o.e.t?tn(o.e.t):'—'),E(studs(o.e)||'—'),E(o.e.sub),o.e.lv||'—',wl(o.e.wt)+(o.e.sched=='rec'?' · weekly':''),`<button class=b onclick="doneFlow(${oa(o)})">DONE</button> <button class=b2 onclick="rsOc(${oa(o)})" title="Reschedule this session (nothing is deleted)">DELETE</button>`]),'No classes scheduled in the next 14 days.')}
+<h3>Upcoming recorded-course reminders (next 7 days)</h3>${T(['Date','Day','Time','Reminder','Course',''],rd.map(rmRow),'No reminders due in the next 7 days.')}
+<p class=mut>Combined figures are stored in ${B()}. EGP/KWD views convert the same totals at the current exchange rate (Settings → Exchange Rates); no rate is ever invented. Teacher profit = profit from work done by teachers/instructors (the same figures as "Profit by teacher").</p><div class=cards>${dp('TOTAL A+ ACADEMY PROFIT',Z.p)}${dp('TOTAL TEACHER PROFIT',tprof)}${card('EGP Profit',fx(Z.p,'EGP'))}${card('KWD Profit',fx(Z.p,'KWD'))}</div><div class=cards>${card('Total Students',db.s.length)}${card('Total Teachers',db.t.length)}${card('Total Lessons',Z.s.n)}${card('Total Teaching Hours',h2(Z.s.h))}${card('Total Revenue',f(Z.rev))}${card('Total Costs',f(Z.cost))}${card('Total A+ Profit',f(Z.p),cl(Z.p))}${card('Live Profit',f(Z.L.p),cl(Z.L.p))}${card('Project Profit',f(Z.P.p),cl(Z.P.p))}${card('Recorded Profit',f(Z.R.p),cl(Z.R.p))}${card('Avg Profit / Live Lesson',f(Z.s.n?Math.round(Z.s.p/Z.s.n):0))}${card('Student Outstanding Balances',f(sbT),sbT>0?'neg':'pos')}${card("This Month's Revenue",f(ms('rev')))}${card("This Month's Costs",f(ms('cost')))}${card("This Month's Profit",f(ms('p')),cl(ms('p')))}</div>
+<h3>Student outstanding balances (live + recorded + projects)</h3>${T(['Student','Charged','Paid','Outstanding'],sb.sort((p,q)=>q.v.rem-p.v.rem).map(r=>[E(r.z.name),f(r.v.tot),f(r.v.paid),`<b class=neg>${f(r.v.rem)}</b>`]),'No outstanding balances.')}<div class=g>${[['c1','Revenue over time'],['c2','Costs over time'],['c3','Profit over time'],['c4','Revenue by teacher'],['c5','Profit by teacher'],['c6','Revenue by student'],['c7','Profit by academic level'],['c8','Profit by work type (Live / Project / Recorded)']].map(a=>`<div class=ch><p>${a[1]} (${B()})</p><div><canvas id=${a[0]}></canvas></div></div>`).join('')}</div>`}
+/* ---- teachers / students / lessons / payments views ---- */
+const stats=(s,extra)=>`<div class=cards>${card('Total Lessons',s.n)}${card('Total Hours',h2(s.h))}${extra}</div>`;
+function vTeachers(){if(V.tid)return vTP();const q=V.tq.toLowerCase(),ls=db.t.filter(t=>t.name.toLowerCase().includes(q));
+return `<h2>Teachers</h2><div class=bar><input id=tq placeholder="Search teachers by name" value="${E(V.tq)}" oninput="V.tq=this.value;render()"><button class=b onclick=edT()>+ Add Teacher</button></div>`+T(['Name','Phone','Email','Specialization','Default Cost/hr','Status',''],ls.map(t=>[`<a class=lk onclick="V.tid=${t.id};render()">${E(t.name)}</a>`,E(t.phone),E(t.email),E(t.spec),fm(t.rate,t.cur),`<span class=pill>${t.status}</span>`,`<button class=lk onclick=edT(${t.id})>Edit</button><button class="lk bad" onclick=dlT(${t.id})>Delete</button>`]),'No teachers found.')}
+function vTP(){const t=g(db.t,V.tid),s=TS(t.id),ls=db.l.filter(l=>l.t==t.id).sort((a,b)=>b.date.localeCompare(a.date)),h=s.h||1;
+return `<p><a class=lk onclick="V.tid=null;render()">← All teachers</a></p><h2>${E(t.name)}</h2><p class=mut>${E(t.spec)} ${E(t.phone)} ${E(t.email)} · pays in ${t.cur} · ${t.status}${t.notes?' · '+E(t.notes):''}</p><p class=mut>Amounts below are in ${B()} (converted at each lesson's saved rate).</p>`+stats(s,card('Owed to Teacher',f(s.cost))+card('Paid to Teacher',f(s.paid))+card('Remaining Owed',f(s.rem),s.rem>0?'neg':'pos')+card('Revenue Generated',f(s.rev))+card('Academy Profit',f(s.p),cl(s.p))+card('Avg Revenue / hr',f(s.h?Math.round(s.rev/h):0))+card('Avg Cost / hr',f(s.h?Math.round(s.cost/h):0))+card('Avg Profit / hr',f(s.h?Math.round(s.p/h):0))+card('Margin',pc(s.p,s.rev)))+`<div class=bar><button class=b onclick="edL(0,{t:${t.id}})">+ Add Lesson</button><button class=b2 onclick="edP('tp',0,${t.id})">+ Record Payment</button></div>`+tFin(t.id)+twk(t.id)+ptt('t',t.id)+`<h3>Lessons</h3>`+T(LH('t'),ls.map(l=>lrow(l,'t')))+`<h3>Payments to this teacher</h3>`+T(PHT,db.tp.filter(p=>p.p==t.id).map(p=>prow('tp',p)))}
+function vStudents(){if(V.sid)return vSP();const q=V.sq.toLowerCase(),ls=db.s.filter(t=>t.name.toLowerCase().includes(q));
+return `<h2>Students</h2><div class=bar><input id=sq placeholder="Search students by name" value="${E(V.sq)}" oninput="V.sq=this.value;render()"><button class=b onclick=edS()>+ Add Student</button></div>`+T(['Name','University','Country','Major','Level','Phone / WhatsApp','Status','Balance ('+B()+')',''],ls.map(t=>[`<a class=lk onclick="V.sid=${t.id};render()">${E(t.name)}</a>`,E(t.uni),E(t.country),E(t.major),t.lv||'—',E(t.phone),`<span class=pill>${t.status}</span>`,f(SS(t.id).rem),`<button class=lk onclick=edS(${t.id})>Edit</button><button class="lk bad" onclick=dlS(${t.id})>Delete</button>`]),'No students found.')}
+function vSP(){const t=g(db.s,V.sid),s=SS(t.id),ls=db.l.filter(l=>l.s==t.id).sort((a,b)=>b.date.localeCompare(a.date));
+return `<p><a class=lk onclick="V.sid=null;render()">← All students</a></p><h2>${E(t.name)}</h2><p class=mut>${E(t.uni)} ${E(t.country)} ${E(t.major)} · ${t.lv||''} · bills in ${t.cur} · ${E(t.phone)} ${E(t.email)} · ${t.status}${t.notes?' · '+E(t.notes):''}</p><p class=mut>Amounts below are in ${B()}.</p>`+stats(s,card('Total Charged',f(s.tot))+card('Live charges',f(s.rev))+card('Recorded course charges',f(s.rcC))+card('Project charges',f(s.prC))+card('Total Paid',f(s.paid))+card('Remaining',f(s.rem),s.rem>0?'neg':'pos')+card('Teacher Costs',f(s.cost))+card('Academy Profit',f(s.p),cl(s.p)))+`<div class=bar><button class=b onclick="edL(0,{s:${t.id}})">+ Add Lesson</button><button class=b2 onclick="edP('sp',0,${t.id})">+ Record Payment</button></div>`+ptt('s',t.id)+`<h3>Lesson history</h3>`+T(LH('s'),ls.map(l=>lrow(l,'s')))+`${stT(t.id)}<h3>Payments from this student</h3>`+T(PH,db.sp.filter(p=>p.p==t.id).map(p=>prow('sp',p)))}
+function vLessons(){const F=V.LF,ls=FL(F).ls.sort((a,b)=>b.date.localeCompare(a.date)),s=S(ls);
+return `<h2>Lessons (Live)</h2><div class=bar>${fi('LF','a','date','From date')}${fi('LF','b','date','To date')}${fs('LF','t',tO(),'All teachers')}${fs('LF','s',sO(),'All students')}${fs('LF','sub',bO(),'All subjects')}${fs('LF','lv',lvF,'All levels')}${fs('LF','cur',cF(),'All currencies')}${fs('LF','st',ST.map(a=>[a,a]),'All statuses')}<input id=LF_q placeholder="Search" value="${E(F.q||'')}" oninput="V.LF.q=this.value;render()"><button class=b2 onclick="V.LF={};render()">Clear</button><button class=b onclick=edL()>+ Add Lesson</button></div>
+<p class=mut>${ls.length} lessons shown · Revenue ${f(s.rev)} · Teacher costs ${f(s.cost)} · Profit <span class=${cl(s.p)}>${f(s.p)}</span> (only Completed lessons are counted; totals in ${B()})</p>`+T(['Date','Teacher','Student','Subject','Level','Hours','Teacher Rate','Student Rate','Teacher Cost','Charge','Profit ('+B()+')','Margin',''],ls.map(l=>{const r=lrow(l,'t'),c=C(l);return[r[0],E(tn(l.t)),E(sn(l.s)),r[2],l.lv||'—',r[3],r[4],r[5],r[6],r[7],r[8],pc(c.p,c.chg),r[9]]}),'No lessons match.')}
+function vPay(){const pt=(k,tc)=>T(['Date',tc?'Teacher':'Student','Amount','Rate','In '+B(),...(tc?['Source']:[]),'Method','Notes',''],db[k].slice().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>{const r=prow(k,p);return[r[0],E(tc?tn(p.p):sn(p.p)),...r.slice(1)]}));
+return `<h2>Payments</h2><p class=mut>Each payment keeps its original amount, currency and exchange rate; balances are in ${B()}.</p><h3>Student payments (money received)</h3><div class=bar><button class=b onclick="edP('sp')">+ Student Payment</button></div>${pt('sp',0)}<h3>Student balances</h3>`+T(['Student','Charged','Paid','Outstanding'],db.s.map(x=>{const s=SS(x.id);return[E(x.name),f(s.tot),f(s.paid),`<b class=${s.rem>0?'neg':'pos'}>${f(s.rem)}</b>`]}))+`<h3>Teacher payments (money paid out)</h3><div class=bar><button class=b onclick="edP('tp')">+ Teacher Payment</button></div>${pt('tp',1)}<h3>Teacher balances</h3>`+T(['Teacher','Earned','Paid','Remaining'],db.t.map(x=>{const s=TS(x.id);return[E(x.name),f(s.cost),f(s.paid),`<b class=${s.rem>0?'neg':'pos'}>${f(s.rem)}</b>`]}))}
+/* ---- reports ---- */
+function range(){const R=V.RP,d=R.d;if(R.p=='custom')return[R.a,R.b];if(R.p=='daily')return[d,d];if(R.p=='weekly'){const s=wkS(d);return[s,addD(s,6)]}return[d.slice(0,7)+'-01',d.slice(0,7)+'-31']}
+function ds(a,b,F){const B_=B(),M=h=>`${h} (${B_})`,FF={...F,a,b},x=FL(FF),ls=x.ls.sort((p,q)=>p.date.localeCompare(q.date)),Z=TOT(x),inR=d=>(!a||(d||'')>=a)&&(!b||(d||'')<=b),cu=p=>!F.cur||p.cur==F.cur,s=Z.s;
+const EVs=EV(x),tprof=EVs.filter(e=>e.t).reduce((q,e)=>q+e.p,0),VCs=VC();
+const stRows=db.s.filter(t=>!F.s||t.id==F.s).map(t=>{const y=S(ls.filter(l=>l.s==t.id)),es=db.re.filter(e=>e.s==t.id&&x.rc.some(c=>c.id==e.rc)),
+ rcC=es.reduce((q,e)=>{const c=g(db.rc,e.rc);return q+(c?k_(e.price,c.rx):0)},0),rcP=es.reduce((q,e)=>{const c=g(db.rc,e.rc);return q+(c?k_(e.paid,c.rx):0)},0),
+ ps=x.pr.filter(p=>p.s==t.id),prC=ps.reduce((q,p)=>q+pj(p).brev,0),prP=ps.reduce((q,p)=>q+k_(pj(p).paid,p.rx),0);
+ return[t.name,t.lv||'',y.n,y.h,y.rev+rcC+prC,sum(db.sp.filter(p=>p.p==t.id&&inR(p.date)&&cu(p)))+rcP+prP,SS(t.id).rem]});
+return{
+fin:{n:'Financial',h:['From','To','Lessons','Hours',M('Revenue'),M('Teacher Costs'),M('Profit'),'Margin %'],r:[[a||'All',b||'All',s.n,s.h,s.rev,s.cost,s.p,s.rev?s.p/s.rev*100:0]]},
+overall:{n:'Overall Profit',tot:1,h:['Work Type',M('Revenue'),M('Costs'),M('Profit')],r:[['Live',Z.L.rev,Z.L.cost,Z.L.p],['Project',Z.P.rev,Z.P.cost,Z.P.p],['Recorded Courses',Z.R.rev,Z.R.cost,Z.R.p]]},
+teacher:{n:'Teachers',tot:1,h:['Teacher','Lessons','Hours',M('Revenue'),M('Teacher Cost'),M('Profit'),M('Paid in Period'),M('Balance All-Time')],r:db.t.filter(t=>!F.t||t.id==F.t).map(t=>{const y=S(ls.filter(l=>l.t==t.id));return[t.name,y.n,y.h,y.rev,y.cost,y.p,sum(db.tp.filter(p=>p.p==t.id&&inR(p.date)&&cu(p))),TS(t.id).rem]})},
+student:{n:'Students',tot:1,h:['Student','Academic Level','Lessons','Hours',M('Charges'),M('Paid in Period'),M('Balance All-Time')],r:stRows},
+sum_:{n:'Summary',h:['Metric',...VCs.map(c=>`Amount (${c})`)],r:[['Total Revenue',Z.rev],['Total Costs',Z.cost],['Total Profit',Z.p],['Teacher Profit',tprof],['Student Charges',stRows.reduce((q,r)=>q+r[4],0)],['Student Payments',stRows.reduce((q,r)=>q+r[5],0)],['Outstanding Balances',stRows.reduce((q,r)=>q+r[6],0)]].map(([k,v])=>[k,...VCs.map(c=>conv(v,c))])},
+lesson:{n:'Live Lessons',tot:1,h:['Date','Teacher','Student','Subject','Subject Type','Academic Level','Work Type','Status','Hours','Teacher Currency','Teacher Rate (Original)','Student Currency','Student Rate (Original)','Teacher Cost (Original)','Student Charge (Original)','Teacher Exchange Rate','Student Exchange Rate','Rate Type','Base Currency',M('Teacher Cost'),M('Student Charge'),M('Profit'),'Start Time','End Time','University'],r:ls.map(l=>{const c=C(l),o=O(l);return[l.date,tn(l.t),sn(l.s),bn(l.sub),'Live',l.lv||'','Live',l.st,l.d,l.tc,l.tr,l.sc,l.sr,o.cost,o.chg,l.trx,l.srx,l.rt,l.bc,c.cost,c.chg,c.p,l.ts||'',l.te||'',uni(l.sub)]})},
+proj:{n:'Projects',tot:1,h:['Project','Subject','Engineer','Student','Academic Level','Status','Start Date','Currency','Revenue (Original)','Engineer Share %','Engineer Share (Original)','A+ Profit (Original)','Paid (Original)','Outstanding (Original)','Exchange Rate','Rate Type','Base Currency',M('Revenue'),M('Engineer Share'),M('Project Profit'),'University'],r:x.pr.map(p=>{const j=pj(p);return[p.name,p.sub||'',p.t?tn(p.t):'',p.s?sn(p.s):'',p.lv||'',p.status,p.start||'',p.cur,p.rev,p.share,j.share,j.prof,j.paid,j.out,p.rx,p.rt,p.bc,j.brev,j.bshare,j.bprof,uni(p.subj)]})},
+rec:{n:'Recorded Courses',tot:1,h:['Course','Subject','Instructor','Academic Level','Date','Currency','Selling Price (Original)','Students','Revenue (Original)','Instructor Share %','Instructor Share (Original)','Course Cost (Original)','Recorded Profit (Original)','Exchange Rate','Rate Type','Base Currency',M('Revenue'),M('Instructor Share'),M('Course Cost'),M('Recorded Profit'),'University'],r:x.rc.map(c=>{const j=rcc(c);return[c.name,c.sub||'',c.inst?tn(c.inst):'',c.lv||'',c.date||'',c.cur,c.price,c.n,j.rev,c.share,j.share,c.cost,j.prof,c.rx,c.rt,c.bc,j.brev,j.bshare,j.bcost,j.bprof,uni(c.subj)]})},
+ledger:{n:'Ledger',tot:1,h:['Work Type','Subject','Subject Type','Academic Level','Teacher','Student','Date','Status','Original Currency','Original Amount (Original)','Exchange Rate',M('Converted Amount'),M('Revenue'),M('Teacher Cost'),M('Profit'),M('Payment'),M('Balance')],
+r:[...ls.map(l=>{const c=C(l),o=O(l),ok=l.st=='Completed';return['Live',bn(l.sub),'Live',l.lv||'',tn(l.t),sn(l.s),l.date,l.st,l.sc,ok?o.chg:0,l.srx,c.chg,c.chg,c.cost,c.p,'','']}),
+...x.pr.map(p=>{const j=pj(p),bp=k_(j.paid,p.rx);return['Project',p.name,'Project',p.lv||'',p.t?tn(p.t):'',p.s?sn(p.s):'',p.start||'',p.status,p.cur,p.rev,p.rx,j.brev,j.brev,j.bshare,j.bprof,bp,j.brev-bp]}),
+...x.rc.map(c=>{const j=rcc(c),es=db.re.filter(e=>e.rc==c.id),pd=es.reduce((q,e)=>q+k_(e.paid,c.rx),0),pe=es.reduce((q,e)=>q+k_(e.price,c.rx),0);return['Recorded Course',c.name,'Recorded Course',c.lv||'',c.inst?tn(c.inst):'','',c.date||'','Active',c.cur,j.rev,c.rx,j.brev,j.brev,j.bshare+j.bcost,j.bprof,es.length?pd:'',es.length?pe-pd:'']})]},
+tt:{n:'Timetable',h:['Date','Day','Start Time','End Time','Work Type','Subject','Academic Level','Teacher','Students','Schedule','Status'],r:occ(a||'2000-01-01',b||addD(today(),400)).filter(o=>(!F.t||o.e.t==F.t)&&(!F.lv||o.e.lv==F.lv)&&(!F.wt||o.e.wt==F.wt)&&(!F.s||(o.e.s||[]).includes(+F.s))).map(o=>[o.date,dow(o.date),o.st||'',o.en||'',wl(o.e.wt),o.e.sub,o.e.lv||'',o.e.t?tn(o.e.t):'',studs(o.e),o.e.sched=='rec'?'Weekly recurring':'One-time',o.done?'Done':o.mv?'Rescheduled':'Scheduled'])},
+pay:{n:'Payments',h:['Type','Date','Name','Method','Currency','Amount (Original)','Exchange Rate',M('Amount'),'Notes','Payment Source','Source Detail'],r:[...db.sp.filter(p=>inR(p.date)&&cu(p)&&(!F.s||p.p==F.s)).map(p=>['Student payment',p.date,sn(p.p),p.meth,p.cur,p.amt,p.rx,p.bamt,p.notes,'','']),...db.tp.filter(p=>inR(p.date)&&cu(p)&&(!F.t||p.p==F.t)).map(p=>['Teacher payment',p.date,tn(p.p),p.meth,p.cur,p.amt,p.rx,p.bamt,p.notes,srcName(p),(p.src=='Other'?p.srcd:lkName(p))||'']),...(F.s||F.t||F.wt&&F.wt!='Project'?[]:db.pp.filter(p=>inR(p.date)).map(p=>{const j=g(db.pr,p.pr)||{};return['Project payment',p.date,j.name||'',p.meth,j.cur,p.amt,j.rx,k_(p.amt,j.rx||1),p.notes,'','']}))]}}}
+const isM=h=>/\((Original|[A-Z]{3})\)$/.test(h),isR=h=>/Exchange Rate/.test(h);
+const fc=(h,v)=>isM(h)?(v==null||v===''?'—':n3(v)):h=='Hours'?h2(v):h=='Margin %'?(+v).toFixed(1)+'%':isR(h)?(v==null||v===''?'':(+v).toFixed(6)):E(v);
+const RT=[['Summary — Revenue, Costs, Profit, Teacher Profit, Student Charges / Payments / Balances','sum_'],['A. Financial Report (Live Lessons)','fin'],['Overall Academy Profit (Live + Project + Recorded)','overall'],['B. Teacher Report','teacher'],['C. Student Report (Live + Recorded + Projects)','student'],['D. Lesson Report (Live)','lesson'],['Project Report','proj'],['Recorded Course Report','rec'],['All-Work Ledger (original + converted)','ledger'],['Payments in period','pay'],['Timetable in period','tt']];
+function vRep(){const R=V.RP,[a,b]=range(),D=ds(a,b,R.f);
+return `<h2>Reports</h2><div class=bar><select onchange="V.RP.p=this.value;render()">${['daily','weekly','monthly','custom'].map(x=>`<option ${R.p==x?'selected':''}>${x}</option>`).join('')}</select>${R.p=='custom'?fi('RP','a','date','From')+fi('RP','b','date','To'):fi('RP','d','date','Pick a day in the period')}<span class=mut>${a||'start'} → ${b||'end'}</span></div>
+<div class=bar>${fsr('t',tO(),'All teachers')}${fsr('s',sO(),'All students')}${fsr('lv',lvF,'All levels')}${fsr('wt',WTO,'All work types')}${fsr('sub',bO(),'All subjects')}${fsr('cur',cF(),'All currencies')}<button class=b2 onclick="V.RP.f={};render()">Clear filters</button></div>
+<div class=bar><button class=b onclick="xp('full')">Export Full Report (.xlsx)</button>${[['lesson','Live lessons'],['proj','Projects'],['rec','Recorded'],['overall','Overall profit'],['teacher','Teacher report'],['student','Student report'],['fin','Financial report'],['pay','Payment report'],['sum_','Summary'],['ledger','All-work ledger'],['tt','Timetable'],['all','All lessons (all dates)']].map(z=>`<button class=b2 onclick="xp('${z[0]}')">${z[1]}</button>`).join('')}</div><p class=mut>Combined figures are in ${B()}; original amounts and currencies are kept alongside.</p>`+
+RT.map(([t,k])=>`<h3>${t}</h3>`+T(D[k].h,D[k].r.map(r=>r.map((v,i)=>fc(D[k].h[i],v))),'No data in this period.')).join('')}
+function sheet(o){const h=o.h,mo=h.map(isM),d=o.r.map(r=>r.map((v,i)=>mo[i]?(v==null||v===''?'':(+v||0)/1000):h[i]=='Hours'?+(+v).toFixed(2):v));
+if(o.tot&&d.length)d.push(h.map((x,i)=>i==0?'TOTAL':(isM(x)&&!/Original|Rate/.test(x))||x=='Hours'||x=='Lessons'||x=='Students'&&0?d.reduce((a,r)=>a+(+r[i]||0),0):''));
+const ws=XLSX.utils.aoa_to_sheet([h,...d]);ws['!cols']=h.map(x=>({wch:Math.max(14,x.length+3)}));
+Object.keys(ws).forEach(k=>{if(k[0]!='!'&&ws[k].t=='n'){const c=XLSX.utils.decode_cell(k);if(c.r>0&&mo[c.c])ws[k].z='#,##0.000';if(c.r>0&&isR(h[c.c]))ws[k].z='0.000000';if(c.r>0&&h[c.c]=='Margin %')ws[k].z='0.0'}});return ws}
+async function xp(k){let dl=null;try{if(typeof claude!='undefined')dl=await claude.use('downloads')}catch(e){}
+const all=k=='all',[a,b]=all?['','']:range(),D=ds(a,b,all?{}:V.RP.f),wb=XLSX.utils.book_new();(k=='full'?['sum_','fin','overall','teacher','student','lesson','proj','rec','ledger','pay','tt']:[all?'lesson':k]).forEach(x=>XLSX.utils.book_append_sheet(wb,sheet(D[x]),D[x].n));
+const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}),blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fn=`APlus-Hub-${k}-${today()}.xlsx`;
+if(dl){try{await dl.save({filename:fn,data:blob})}catch(e){}}else{const u=URL.createObjectURL(blob),el=document.createElement('a');el.href=u;el.download=fn;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}}
+/* ---- Monthly Cash Flow Report (read-only; uses the existing payment, charge and earning records) ---- */
+const WT4=[['Live','Live Sessions'],['Recorded','Recorded Courses'],['Project','Projects'],['Other','Other']],wtN=k=>(WT4.find(a=>a[0]==k)||[0,k||'Unassigned'])[1];
+const cfPrev=ym=>{let[y,mo]=ym.split('-').map(Number);mo--;if(!mo){mo=12;y--}return y+'-'+String(mo).padStart(2,'0')};
+const cx=n=>VC().map(c=>fx(n,c)).join(' · ');
+const pctC=(a,b)=>b?((a-b)/Math.abs(b)*100).toFixed(1)+'%':(a?'n/a (previous month is zero)':'0.0%');
+function cfRows(ym,F){const a=ym+'-01',b=ym+'-31',inM=d=>(d||'')>=a&&(d||'')<=b,st=[],tc=[];
+ db.sp.forEach(p=>{if(inM(p.date))st.push({date:p.date,who:sn(p.p),sid:p.p,wt:'Live',svc:'Student payment (not tagged to a work type)',amt:p.amt,cur:p.cur,rx:p.rx,base:p.bamt,meth:p.meth||'',notes:p.notes||'',bad:!g(db.s,p.p)})});
+ db.pp.forEach(p=>{if(!inM(p.date))return;const j=g(db.pr,p.pr)||{};st.push({date:p.date,who:j.s?sn(j.s):'—',sid:j.s||0,wt:'Project',svc:'Project: '+(j.name||'(project deleted)'),amt:p.amt,cur:j.cur||B(),rx:j.rx||1,base:k_(p.amt,j.rx||1),meth:p.meth||'',notes:p.notes||'',bad:!j.id})});
+ db.tp.forEach(p=>{if(inM(p.date))tc.push({date:p.date,who:tn(p.p),tid:p.p,wt:p.src||'',svc:p.src?srcName(p)+(p.lk?' · '+lkName(p):'')+(p.src=='Other'&&p.srcd?': '+p.srcd:''):'Unassigned (recorded before Payment Source existed)',amt:p.amt,cur:p.cur,rx:p.rx,base:p.bamt,meth:p.meth||'',notes:p.notes||'',bad:!g(db.t,p.p)})});
+ const okf=(r,sd)=>(!F.cur||r.cur==F.cur)&&(!F.meth||r.meth==F.meth)&&(!F.wt||r.wt==F.wt)&&(sd=='s'?(!F.s||r.sid==F.s):(!F.t||r.tid==F.t)),srt=(x,y)=>x.date.localeCompare(y.date);
+ return{st:st.filter(r=>okf(r,'s')).sort(srt),tc:tc.filter(r=>okf(r,'t')).sort(srt),allSt:st,allTc:tc}}
+const cfGrp=(rows,kf,lf)=>{const o={};rows.forEach(r=>{const k=kf(r),z=o[k]||(o[k]={k,l:lf?lf(r):k,n:0,base:0,orig:0});z.n++;z.base+=r.base;z.orig+=r.amt});return Object.values(o).sort((p,q)=>q.base-p.base)};
+const cfAge=(d,E)=>d?Math.floor((new Date(E+'T00:00:00Z')-new Date(d+'T00:00:00Z'))/864e5):null;
+const BK=['0–30 days','31–60 days','61–90 days','Over 90 days','Undated'];
+function cfOutS(E,F){const o={},Z=id=>o[id]||(o[id]={id,live:{ch:0,pd:0},rec:{ch:0,pd:0},prj:{ch:0,pd:0},items:[],pay:0,od:0,undated:0});
+ db.l.forEach(l=>{if(l.st!='Completed'||l.date>E||(F.s&&l.s!=F.s))return;const z=Z(l.s);z.live.ch+=l.bchg;z.items.push({d:l.date,a:l.bchg})});
+ db.sp.forEach(p=>{if(p.date>E||(F.s&&p.p!=F.s))return;const z=Z(p.p);z.live.pd+=p.bamt;z.pay+=p.bamt});
+ db.re.forEach(e=>{const c=g(db.rc,e.rc);if(!c||(F.s&&e.s!=F.s))return;const d=e.date||c.date||'';if(d&&d>E)return;const z=Z(e.s),ch=k_(e.price,c.rx),pd=k_(e.paid,c.rx);z.rec.ch+=ch;z.rec.pd+=pd;z.pay+=pd;z.items.push({d,a:ch});if(pd)z.undated+=pd});
+ db.pr.forEach(p=>{if(p.status=='Cancelled'||!p.s||(F.s&&p.s!=F.s)||(p.start&&p.start>E))return;const z=Z(p.s),ch=k_(p.rev,p.rx),pd=k_((p.paid0||0)+db.pp.filter(x=>x.pr==p.id&&x.date<=E).reduce((q,x)=>q+x.amt,0),p.rx);z.prj.ch+=ch;z.prj.pd+=pd;z.pay+=pd;z.items.push({d:p.start||'',a:ch});if(p.paid0)z.undated+=k_(p.paid0,p.rx);if(p.due&&p.due<E&&ch-pd>0)z.od+=ch-pd});
+ return Object.values(o).map(z=>{const out=z.live.ch-z.live.pd+z.rec.ch-z.rec.pd+z.prj.ch-z.prj.pd,ch=z.live.ch+z.rec.ch+z.prj.ch,bk=[0,0,0,0,0];let rest=z.pay;
+  z.items.slice().sort((x,y)=>(x.d||'').localeCompare(y.d||'')).forEach(it=>{const take=Math.min(Math.max(rest,0),it.a);rest-=take;const left=it.a-take;if(left<=0)return;const ag=cfAge(it.d,E);bk[ag==null?4:ag<=30?0:ag<=60?1:ag<=90?2:3]+=left});
+  return{...z,ch,out,bk,name:sn(z.id),credit:z.pay>ch?z.pay-ch:0}}).filter(z=>z.ch||z.pay).sort((x,y)=>y.out-x.out)}
+function cfLiab(E,F){return db.t.filter(t=>!F.t||t.id==F.t).map(t=>{const live=db.l.filter(l=>l.t==t.id&&l.st=='Completed'&&l.date<=E).reduce((q,l)=>q+l.bcost,0),
+ rec=db.rc.filter(c=>c.inst==t.id&&(!c.date||c.date<=E)).reduce((q,c)=>q+rcc(c).bshare,0),prj=db.pr.filter(p=>p.t==t.id&&p.status!='Cancelled'&&(!p.start||p.start<=E)).reduce((q,p)=>q+pj(p).bshare,0),
+ ps=db.tp.filter(p=>p.p==t.id&&p.date<=E),pd=k=>sum(ps.filter(p=>p.src==k)),un=sum(ps.filter(p=>!p.src)),
+ cats=[['Live',live],['Recorded',rec],['Project',prj],['Other',0]].map(([k,e])=>({k,earn:e,paid:pd(k),rem:e-pd(k)})),earn=live+rec+prj,paid=sum(ps);
+ return{id:t.id,name:t.name,cats,un,nUn:ps.filter(p=>!p.src).length,earn,paid,rem:earn-paid}}).filter(z=>z.earn||z.paid)}
+function cfMetrics(ym,F){const R=cfRows(ym,F),E=ym+'-31',rec=R.st.reduce((q,r)=>q+r.base,0),pay=R.tc.reduce((q,r)=>q+r.base,0),os=cfOutS(E,F).reduce((q,z)=>q+z.out,0),tl=cfLiab(E,F).reduce((q,z)=>q+z.rem,0);return{rec,pay,net:rec-pay,os,tl,R}}
+function cfAll(){const C=V.CF,ym=C.m||today().slice(0,7),F={cur:C.cur,wt:C.wt,s:+C.s||0,t:+C.t||0,meth:C.meth},E=ym+'-31',M=cfMetrics(ym,F),P=cfMetrics(cfPrev(ym),F),R=M.R,
+ OS=cfOutS(E,F),TL=cfLiab(E,F),flags=[];
+ const recU=db.re.filter(e=>e.paid>0).reduce((q,e)=>{const c=g(db.rc,e.rc);return q+(c?k_(e.paid,c.rx):0)},0),prjU=db.pr.filter(p=>p.paid0>0).reduce((q,p)=>q+k_(p.paid0,p.rx),0);
+ if(recU)flags.push(`Recorded-course payments (${f(recU)} in total) are stored only as a running total per enrolment, with no payment date, so they cannot be placed in a month. They are NOT in the monthly cash received above, but they are included in outstanding student balances.`);
+ if(prjU)flags.push(`Project "amount paid so far" entries (${f(prjU)} in total) have no payment date, so they are excluded from monthly cash received but included in outstanding balances. Only project payments recorded in Payments are dated.`);
+ if(R.allSt.some(r=>r.wt=='Live'))flags.push('Student payments recorded on the Payments page are not tagged to a work type. They are listed under Live Sessions / general and applied against the student\'s overall balance.');
+ const un=R.allTc.filter(r=>!r.wt);if(un.length)flags.push(`${un.length} teacher payment(s) in this month have no Payment Source (recorded before that field existed): ${f(un.reduce((q,r)=>q+r.base,0))}. They count as cash paid but appear as "Unassigned". Edit them in Payments to assign a source.`);
+ const bad=[...R.allSt,...R.allTc].filter(r=>r.bad);if(bad.length)flags.push(`${bad.length} payment(s) refer to a student, teacher or project that no longer exists (shown as "—").`);
+ if(VC().some(c=>conv(1000,c)==null))flags.push('An exchange rate is missing, so some EGP/KWD equivalents show "rate unavailable". Totals in '+B()+' use each payment\'s own saved rate.');
+ flags.push('Other academy expenses and other cash movements are not recorded anywhere in this system, so they are not included. Net cash movement is therefore receipts minus teacher payments only.');
+ flags.push('Cash, bank or wallet balances are not tracked in this system, so an opening or closing cash balance cannot be determined.');
+ return{ym,F,M,P,R,OS,TL,flags,E}}
+const cfSel=(k,opts,all)=>`<select onchange="V.CF.${k}=this.value;render()"><option value="">${all}</option>${opts.map(x=>`<option value="${E(x[0])}" ${String(x[0])==String(V.CF[k])?'selected':''}>${E(x[1])}</option>`).join('')}</select>`;
+function vCF(){const A=cfAll(),{M,P,R,OS,TL}=A,C=V.CF,meths=[...new Set([...db.sp,...db.tp,...db.pp].map(p=>p.meth).filter(Boolean))].map(x=>[x,x]);
+ const pt=(h,g_)=>T(h,g_.map(z=>[E(z.l),z.n,f(z.base),cx(z.base)]),'None in this month.');
+ const cur=rows=>cfGrp(rows,r=>r.cur).map(z=>[E(z.k),z.n,fm(z.orig,z.k),f(z.base)]);
+ const txH=(w)=>[ 'Date',w,'Amount','Currency','Method','Related service','Rate','In '+B(),'Notes'],
+  tx=rows=>rows.map(r=>[r.date,E(r.who),n3(r.amt),E(r.cur),E(r.meth||'—'),E(r.svc),(+r.rx).toFixed(6),f(r.base),E(r.notes)]);
+ const cmp=(l,a,b,money)=>[l,money?f(a):a,money?f(b):b,money?f(a-b):a-b,pctC(a,b)];
+ const sOut=OS.reduce((q,z)=>q+z.out,0),sOd=OS.reduce((q,z)=>q+z.od,0),bkT=[0,0,0,0,0];OS.forEach(z=>z.bk.forEach((v,i)=>bkT[i]+=v));
+ const tEarn=TL.reduce((q,z)=>q+z.earn,0),tPaid=TL.reduce((q,z)=>q+z.paid,0),tRem=tEarn-tPaid;
+ const cats=['Live','Recorded','Project','Other'];
+ return `<h2>Monthly Cash Flow Report</h2><p class=mut>Actual money received and paid, placed in the month of the payment date. This is <b>cash movement</b>, not accounting profit: unpaid student charges and unpaid teacher earnings are not cash. Amounts are in ${B()} using each payment's own saved exchange rate; EGP/KWD equivalents use the current rate.</p>
+<div class=bar><label class=mut>Month <input type=month value="${E(A.ym)}" oninput="if(this.value){V.CF.m=this.value;render()}"></label>${cfSel('cur',curO(),'All currencies')}${cfSel('wt',WT4,'All work types')}${cfSel('s',sO(),'All students')}${cfSel('t',tO(),'All teachers')}${cfSel('meth',meths,'All methods')}<button class=b2 onclick="V.CF={m:'${A.ym}',cur:'',wt:'',s:'',t:'',meth:''};render()">Clear filters</button><button class=b onclick="xpCF()">Export to Excel (.xlsx)</button></div>
+<p class=mut>Currency, work type, method and month filters apply to cash received and paid. The student filter applies to receipts and outstanding student balances; the teacher filter applies to teacher payments and liabilities. Outstanding balances are measured at the end of the selected month (${A.E.slice(0,7)}).</p>
+<div class=cards>${card('Cash received from students',f(M.rec),'pos')}${card('Cash paid to teachers',f(M.pay),'neg')}${card('Net cash movement (before other expenses)',f(M.net),cl(M.net))}</div>
+<p class=mut>Received: ${cx(M.rec)}<br>Paid: ${cx(M.pay)}<br>Net: ${cx(M.net)}</p>
+<h3>1. Cash received from students</h3><p>${R.st.length} payment transaction(s) · total <b>${f(M.rec)}</b></p>
+<div class=g2><div><h4>By work type</h4>${pt(['Work type','Payments',B(),'EGP / KWD'],cfGrp(R.st,r=>r.wt,r=>wtN(r.wt)))}</div><div><h4>By payment method</h4>${pt(['Method','Payments',B(),'EGP / KWD'],cfGrp(R.st,r=>r.meth||'Not recorded',r=>r.meth||'Not recorded'))}</div></div>
+<h4>By currency (original amounts)</h4>${T(['Currency','Payments','Original total',B()],cur(R.st),'None in this month.')}
+<h4>Transactions</h4>${T(txH('Student'),tx(R.st),'No student payments in this month.')}
+<h3>2. Payments made to teachers</h3><p>${R.tc.length} payment transaction(s) · total <b>${f(M.pay)}</b></p>
+<div class=g2><div><h4>By payment source</h4>${pt(['Source','Payments',B(),'EGP / KWD'],cfGrp(R.tc,r=>r.wt||'-',r=>r.wt?wtN(r.wt):'Unassigned'))}</div><div><h4>By teacher</h4>${pt(['Teacher','Payments',B(),'EGP / KWD'],cfGrp(R.tc,r=>r.tid,r=>r.who))}</div></div>
+<div class=g2><div><h4>By payment method</h4>${pt(['Method','Payments',B(),'EGP / KWD'],cfGrp(R.tc,r=>r.meth||'Not recorded',r=>r.meth||'Not recorded'))}</div><div><h4>By currency (original amounts)</h4>${T(['Currency','Payments','Original total',B()],cur(R.tc),'None in this month.')}</div></div>
+<h4>Transactions</h4>${T(txH('Teacher'),tx(R.tc),'No teacher payments in this month.')}
+<h3>3. Net cash movement</h3>${T(['Item',B(),'EGP / KWD'],[['Student cash receipts',f(M.rec),cx(M.rec)],['Teacher cash payments',f(M.pay),cx(M.pay)],['<b>Net cash movement before other expenses</b>',`<b class=${cl(M.net)}>${f(M.net)}</b>`,cx(M.net)],['Other academy expenses / other cash transactions','<span class=mut>Not recorded in this system</span>',''],['Net operating cash movement after other expenses','<span class=mut>Cannot be calculated — no expense records exist</span>','']])}
+<h3>4. Opening and closing cash balance</h3><p class=mut>Cash, bank accounts and wallets are not tracked in this system, so an opening balance, other cash movements and an actual closing balance cannot be determined. Net cash movement above is a change in cash for the month, not available cash.</p>
+<h3>5. Outstanding student balances (as of ${A.E.slice(0,7)} month end)</h3><div class=cards>${card('Total outstanding',f(sOut),sOut>0?'neg':'pos')}${card('Overdue (projects past due date)',f(sOd),sOd>0?'neg':'')}</div><p class=mut>${cx(sOut)}. Live lessons and recorded courses have no due dates, so overdue amounts can only be shown for projects.</p>
+${T(['Student','Live Sessions','Recorded Courses','Projects','Total outstanding','Overdue',...BK],OS.map(z=>{const l=z.live.ch-z.live.pd,r=z.rec.ch-z.rec.pd,p=z.prj.ch-z.prj.pd;return[E(z.name),f(l),f(r),f(p),`<b class=${z.out>0?'neg':'pos'}>${f(z.out)}</b>${z.credit?' <span class=pill>credit</span>':''}`,f(z.od),...z.bk.map(f)]}).concat(OS.length?[['<b>TOTAL</b>',f(OS.reduce((q,z)=>q+z.live.ch-z.live.pd,0)),f(OS.reduce((q,z)=>q+z.rec.ch-z.rec.pd,0)),f(OS.reduce((q,z)=>q+z.prj.ch-z.prj.pd,0)),`<b>${f(sOut)}</b>`,f(sOd),...bkT.map(f)]]:[]),'No student charges up to this date.')}
+<p class=mut>Live Sessions = completed lesson charges minus the student's general payments. Age uses oldest-first allocation of all payments against the oldest charges (by lesson date, enrolment date or project start date). A "credit" means the student has paid more than was charged.</p>
+<h3>6. Outstanding teacher liabilities (as of ${A.E.slice(0,7)} month end)</h3><div class=cards>${card('Accrued earnings (all time)',f(tEarn))}${card('Payments made against them',f(tPaid))}${card('Remaining unpaid',f(tRem),tRem>0?'neg':'pos')}</div><p class=mut>${cx(tRem)}. Includes unpaid amounts from earlier months.</p>
+${T(['Teacher','Work type','Accrued','Paid','Remaining'],TL.flatMap(z=>[...z.cats.filter(c=>c.earn||c.paid).map(c=>[E(z.name),wtN(c.k),f(c.earn),f(c.paid),`<span class=${c.rem<0?'neg':''}>${f(c.rem)}</span>${c.rem<0?' <span class=neg>(excess paid)</span>':''}`]),...(z.nUn?[[E(z.name),'Unassigned (older payments)',f(0),f(z.un),f(-z.un)]]:[]),[`<b>${E(z.name)} — total</b>`,'',`<b>${f(z.earn)}</b>`,`<b>${f(z.paid)}</b>`,`<b class=${z.rem>0?'neg':'pos'}>${f(z.rem)}</b>`]]).concat(TL.length?[['<b>ALL TEACHERS</b>','',`<b>${f(tEarn)}</b>`,`<b>${f(tPaid)}</b>`,`<b>${f(tRem)}</b>`]]:[]),'No teacher earnings up to this date.')}
+<h3>7. Comparison with ${cfPrev(A.ym)}</h3>${T(['Measure',A.ym+' ('+B()+')',cfPrev(A.ym)+' ('+B()+')','Difference','Change'],[cmp('Student cash receipts',M.rec,P.rec,1),cmp('Teacher cash payments',M.pay,P.pay,1),cmp('Net cash movement',M.net,P.net,1),['Other recorded expenses','Not tracked','Not tracked','—','—'],cmp('Outstanding student balances (month end)',M.os,P.os,1),cmp('Outstanding teacher liabilities (month end)',M.tl,P.tl,1)])}
+<h3>8. Data checks</h3>${A.flags.map(x=>`<p class=mut>• ${x}</p>`).join('')}${cfRecon(A)}`}
+function cfRecon(A){const R=A.R,a=A.ym+'-01',b=A.ym+'-31',inM=d=>(d||'')>=a&&(d||'')<=b,sp=db.sp.filter(p=>inM(p.date)).reduce((q,p)=>q+p.bamt,0),pp=db.pp.filter(p=>inM(p.date)).reduce((q,p)=>q+k_(p.amt,(g(db.pr,p.pr)||{rx:1}).rx||1),0),tp=db.tp.filter(p=>inM(p.date)).reduce((q,p)=>q+p.bamt,0),
+ fl=A.F.cur||A.F.wt||A.F.s||A.F.t||A.F.meth,rs=R.allSt.reduce((q,r)=>q+r.base,0),rt=R.allTc.reduce((q,r)=>q+r.base,0);
+ return `<p class=${rs==sp+pp&&rt==tp?'pos':'neg'}>${rs==sp+pp&&rt==tp?'✓':'✗'} Reconciliation: all student payments dated in the month on the Payments page = ${f(sp+pp)}; all teacher payments = ${f(tp)}. The report's unfiltered totals ${rs==sp+pp&&rt==tp?'match':'DO NOT match'} these.${fl?' (Filters are active, so the totals above may be lower.)':''}</p>`}
+async function xpCF(){let dl=null;try{if(typeof claude!='undefined')dl=await claude.use('downloads')}catch(e){}
+ const A=cfAll(),{M,P,R,OS,TL}=A,K=n=>n==null?'':n/1000,KE=n=>{const v=conv(n,'EGP');return v==null?'':v/1000},KK=n=>{const v=conv(n,'KWD');return v==null?'':v/1000},wb=XLSX.utils.book_new(),add=(n,h,r)=>{const ws=XLSX.utils.aoa_to_sheet([h,...r]);ws['!cols']=h.map(x=>({wch:Math.max(14,String(x).length+3)}));XLSX.utils.book_append_sheet(wb,ws,n)},
+ am=n=>[K(n),KE(n),KK(n)],AH=['Amount ('+B()+')','Equivalent (EGP)','Equivalent (KWD)'];
+ const fl=A.F,filt=[A.ym,fl.cur||'all currencies',fl.wt?wtN(fl.wt):'all work types',fl.s?sn(fl.s):'all students',fl.t?tn(fl.t):'all teachers',fl.meth||'all methods'].join(' | ');
+ const sOut=OS.reduce((q,z)=>q+z.out,0),tE=TL.reduce((q,z)=>q+z.earn,0),tP=TL.reduce((q,z)=>q+z.paid,0);
+ add('Summary',['Item','Count',...AH,'Note'],[['Monthly Cash Flow Report','','','','',filt],['Cash received from students',R.st.length,...am(M.rec),'Actual payments by payment date'],['Cash paid to teachers',R.tc.length,...am(M.pay),'Actual payments by payment date'],['Net cash movement before other expenses','',...am(M.net),'Receipts minus teacher payments. Not accounting profit.'],['Other expenses / other cash movements','','','','','Not recorded in the system'],['Opening / closing cash balance','','','','','Not tracked in the system'],['Outstanding student balances (month end)','',...am(sOut),''],['Accrued teacher earnings (all time to month end)','',...am(tE),''],['Teacher payments against earnings','',...am(tP),''],['Outstanding teacher liabilities','',...am(tE-tP),'']]);
+ const th=['Date','Name','Amount (Original)','Currency','Method','Related service','Exchange Rate','Amount ('+B()+')','Notes'],tr=rows=>rows.map(r=>[r.date,r.who,K(r.amt),r.cur,r.meth,r.svc,+r.rx,K(r.base),r.notes]);
+ add('Student receipts',th,tr(R.st));add('Teacher payments',th,tr(R.tc));
+ add('Outstanding students',['Student','Live Sessions ('+B()+')','Recorded Courses ('+B()+')','Projects ('+B()+')','Total outstanding ('+B()+')','Overdue ('+B()+')',...BK.map(b=>b+' ('+B()+')')],OS.map(z=>[z.name,K(z.live.ch-z.live.pd),K(z.rec.ch-z.rec.pd),K(z.prj.ch-z.prj.pd),K(z.out),K(z.od),...z.bk.map(K)]));
+ add('Teacher liabilities',['Teacher','Work type','Accrued ('+B()+')','Paid ('+B()+')','Remaining ('+B()+')'],TL.flatMap(z=>[...z.cats.filter(c=>c.earn||c.paid).map(c=>[z.name,wtN(c.k),K(c.earn),K(c.paid),K(c.rem)]),...(z.nUn?[[z.name,'Unassigned (older payments)',0,K(z.un),K(-z.un)]]:[]),[z.name,'TOTAL',K(z.earn),K(z.paid),K(z.rem)]]));
+ const cp=(l,a,b)=>[l,K(a),K(b),K(a-b),pctC(a,b)];
+ add('Comparison',['Measure',A.ym+' ('+B()+')',cfPrev(A.ym)+' ('+B()+')','Difference ('+B()+')','Change'],[cp('Student cash receipts',M.rec,P.rec),cp('Teacher cash payments',M.pay,P.pay),cp('Net cash movement',M.net,P.net),['Other recorded expenses','Not tracked','Not tracked','',''],cp('Outstanding student balances',M.os,P.os),cp('Outstanding teacher liabilities',M.tl,P.tl)]);
+ add('Data checks',['Note'],A.flags.map(x=>[x]));
+ const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}),blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fn=`APlus-Hub-CashFlow-${A.ym}.xlsx`;
+ if(dl){try{await dl.save({filename:fn,data:blob})}catch(e){}}else{const u=URL.createObjectURL(blob),el=document.createElement('a');el.href=u;el.download=fn;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}}
+/* ---- Phase 1: data protection — full backup, validated restore, corrupted-data guard, save-failure guard ---- */
+const DATAV=5,BKFMT='aplus-hub-backup',ARRK=['t','s','sub','l','sp','tp','tt','pr','pp','rc','re','rm'];
+const hash=s=>{let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(16)+'-'+s.length};
+const stamp=()=>new Date().toISOString().replace(/[-:]/g,'').replace(/\..*/,'').replace('T','-');
+const fin_=(sf)=>{const k=db;try{db=sf;const Z=TOT(FL({}));return{rev:Z.rev,cost:Z.cost,profit:Z.p,charged:sf.s.reduce((q,x)=>q+SS(x.id).tot,0),studentPaid:sf.s.reduce((q,x)=>q+SS(x.id).paid,0),studentRem:sf.s.reduce((q,x)=>q+SS(x.id).rem,0),teacherCost:sf.t.reduce((q,x)=>q+TS(x.id).cost,0),teacherPaid:sf.t.reduce((q,x)=>q+TS(x.id).paid,0),studentPayments:sum(sf.sp),teacherPayments:sum(sf.tp),projectPayments:sf.pp.reduce((q,p)=>q+p.amt,0)}}finally{db=k}};
+const cnt_=d=>{const o={};ARRK.forEach(k=>o[k]=(d[k]||[]).length);o.cur=(d.cur||[]).length;o.rates=Object.keys(d.rates||{}).length;return o};
+/* structural check of a whole dataset (used for backup files; the app's own start-up check is deliberately lenient so existing data is never refused) */
+function dbCheck(d){const w=[],isO=x=>x&&typeof x=='object'&&!Array.isArray(x);
+ if(!isO(d))return{err:'the data is not an object'};
+ for(const k of ARRK){if(d[k]===undefined)return{err:'the list "'+k+'" is missing'};if(!Array.isArray(d[k]))return{err:'"'+k+'" is not a list'};if(d[k].some(r=>!isO(r)))return{err:'a record in "'+k+'" is not valid'}}
+ if(!isO(d.set)||typeof d.set.base!='string'||!d.set.base)return{err:'the settings or base currency are missing'};
+ if(!Array.isArray(d.cur))return{err:'the currency list is missing'};if(!isO(d.rates))return{err:'the saved exchange rates are missing'};if(!isO(d.rd))return{err:'the reminder history is missing'};
+ if(typeof d.id!='number'||!isFinite(d.id))return{err:'the id counter is missing'};
+ const need={l:['d','bcost','bchg'],sp:['amt','bamt'],tp:['amt','bamt'],pr:['rev','rx'],pp:['amt','pr'],rc:['price','n','rx'],re:['price','paid','rc','s']};
+ for(const k in need)for(const r of d[k])for(const f of need[k])if(typeof r[f]!='number'||!isFinite(r[f]))return{err:'a record in "'+k+'" has a missing or non-numeric "'+f+'"'};
+ let mx=0;for(const k of ARRK){const seen=new Set();for(const r of d[k]){if(typeof r.id!='number'||!isFinite(r.id))return{err:'a record in "'+k+'" has no numeric id'};if(seen.has(r.id))w.push('Duplicate id '+r.id+' in "'+k+'" (kept exactly as it is in the backup)');seen.add(r.id);mx=Math.max(mx,r.id)}}
+ if(d.id<=mx)w.push('The id counter ('+d.id+') is not above the highest record id ('+mx+'); new records could reuse an id');
+ const orph=d.l.filter(l=>!d.t.some(t=>t.id==l.t)||!d.s.some(s=>s.id==l.s)).length;if(orph)w.push(orph+' lesson(s) refer to a teacher or student that is not in the backup (kept as they are)');
+ return{err:'',warns:w}}
+function mkBackup(d){const o={format:BKFMT,formatVersion:1,app:'A+ Hub Academy',exportedAt:new Date().toISOString(),dataVersion:d.v,baseCurrency:d.set.base,settings:d.set,counts:cnt_(d),totals:fin_(d),checksum:hash(JSON.stringify(d)),data:d};return JSON.stringify(o)}
+/* validates a backup file's text completely, without touching any stored data */
+function chkBackup(text){const bad=err=>({ok:false,err});let o;
+ if(typeof text!='string'||!text.trim())return bad('The file is empty.');
+ try{o=JSON.parse(text)}catch(e){return bad('The file is not valid JSON, so it is not an A+ Hub backup (or it is damaged).')}
+ if(!o||typeof o!='object'||o.format!==BKFMT)return bad('This is not an A+ Hub Academy full-data backup file.');
+ if(o.formatVersion!==1)return bad('Unsupported backup format version ('+o.formatVersion+'). This app supports version 1.');
+ if(!o.data||typeof o.data!='object')return bad('The backup contains no data.');
+ if(o.data.v!==DATAV)return bad('Unsupported data version ('+o.data.v+'). This app supports version '+DATAV+'.');
+ const c=dbCheck(o.data);if(c.err)return bad('The backup data is not valid: '+c.err+'.');
+ if(hash(JSON.stringify(o.data))!==o.checksum)return bad('The checksum does not match: the file was changed or is damaged.');
+ const cn=cnt_(o.data);if(!o.counts||JSON.stringify(cn)!==JSON.stringify(o.counts))return bad('The record counts in the file header do not match its data.');
+ let f;try{f=fin_(o.data)}catch(e){return bad('Financial totals could not be calculated from this data ('+(e&&e.message||e)+').')}
+ if(JSON.stringify(f)!==JSON.stringify(o.totals))return bad('The financial totals stored in the backup do not match its data.');
+ return{ok:true,obj:o,warns:c.warns,counts:cn,totals:f}}
+async function dlFile(fn,data,type){let dl=null;try{if(typeof claude!='undefined')dl=await claude.use('downloads')}catch(e){}
+ const blob=new Blob([data],{type});if(dl){await dl.save({filename:fn,data:blob});return 'saved'}
+ const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);return 'started'}
+const fmtD=s=>{try{return new Date(s).toLocaleString()}catch(e){return s}};
+async function doBackup(){if(LOCK)return note('There is no readable data to back up. Use the recovery options on this page.');
+ let txt;try{txt=mkBackup(db)}catch(e){return note('The backup could not be created ('+E(e&&e.message||e)+'). Nothing was changed.')}
+ const v=chkBackup(txt);
+ const fn=`APlus-FullBackup-${stamp()}${v.ok?'':'-UNVERIFIED'}.json`;
+ try{const r=await dlFile(fn,txt,'application/json');
+  if(!v.ok){render();return note('<b class=neg>The file was saved but it did NOT pass its own check, so treat it as unverified.</b><br>'+E(v.err)+'<br>It holds your data as it is now, but Restore will refuse it. Keep it anyway and tell me about this message.')}try{localStorage.setItem('aplus_lastbackup',JSON.stringify({t:new Date().toISOString(),fn}))}catch(e){}
+  note(`<b>Backup created and checked.</b> ${fn} — ${Object.entries(v.counts).filter(a=>a[1]).map(a=>a[1]+' '+a[0]).join(', ')}; checksum verified; financial totals match. ${r=='saved'?'The file was passed to the downloads service.':'The browser started the download.'} Check that the file is in your Downloads folder, and keep a copy somewhere other than this computer.`);render()}
+ catch(e){note('The backup file could not be delivered ('+E(e&&e.message||e)+'). Try again.')}}
+const storageOK=()=>{if(LOCK||!LASTGOOD)return false;try{localStorage.setItem('aplus',LASTGOOD);return localStorage.getItem('aplus')===LASTGOOD}catch(e){return false}};
+function sbn(){let b=document.querySelector('#sbn');if(!b){b=document.createElement('div');b.id='sbn';document.body.appendChild(b)}
+ if(SAVEBAD){b.innerHTML=`<b>Changes are NOT being saved.</b> ${E(SAVEBAD)} Your last saved data on this device is unchanged, and the change you just made was undone. Free up browser storage or allow site data, then repeat the change. <button class=b onclick="doBackup()">Download a backup now</button>`;b.style.display='block'}else b.style.display='none'}
+function safetyKeys(){const k=[];try{for(let i=0;i<localStorage.length;i++){const n=localStorage.key(i);if(/^aplus_(safety|unreadable)_/.test(n))k.push(n)}}catch(e){}return k.sort().reverse()}
+async function dlSafety(k){try{const t=localStorage.getItem(k);await dlFile(k+(k.startsWith('aplus_safety_')?'.json':'.txt'),t,'text/plain');note('The saved copy was passed to the downloads service. Check your Downloads folder.')}catch(e){note('Could not download it: '+E(e&&e.message||e))}}
+function bkUI(){let lb='';try{lb=JSON.parse(localStorage.getItem('aplus_lastbackup')||'null')}catch(e){}
+ const kb=Math.round(JSON.stringify(db).length/1024),sk=safetyKeys();
+ return `<h3>Full Data Backup &amp; Restore</h3><div class=cd style="max-width:760px"><p>Your data lives only in this browser. A full backup is a single file with <b>everything</b>: all records, IDs, amounts, original currencies, saved exchange rates, dates, links between records and settings. Keep copies off this computer. This is separate from the Reports and Excel exports, which cannot be restored.</p>
+<div class=bar><button class=b onclick="doBackup()">Download Full Data Backup</button><button class=b2 onclick="document.querySelector('#rf').click()">Restore from backup file…</button><input id=rf type=file accept=".json,application/json" style="display:none" onchange="pickRestore(this)"></div>
+<p class=mut>${lb?'Last backup from this browser: '+E(fmtD(lb.t))+' ('+E(lb.fn)+')':'<b class=neg>No backup has been made from this browser yet.</b>'} · Data size about ${kb} KB (browsers usually allow about 5,000 KB).</p>
+<p class=mut>Restore replaces the current data after you confirm. It first saves a copy of the current data in this browser and checks the result; if anything fails the current data is left as it was.</p>
+${sk.length?'<p class=mut><b>Safety copies kept in this browser</b> (made automatically before a restore; the newest 3 are kept):</p>'+T(['Copy','Made','Size',''],sk.map(k=>{let sz=0;try{sz=Math.round(localStorage.getItem(k).length/1024)}catch(e){}return[E(k),E(fmtD(k.replace(/^aplus_(safety|unreadable)_/,'').replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)$/,'$1-$2-$3T$4:$5:$6Z'))),sz+' KB',`<button class=lk onclick="dlSafety('${k}')">Download</button>`]})):''}</div>`}
+async function pickRestore(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;
+ if(f.size>25e6)return note('That file is too large to be an A+ Hub backup. Nothing was changed.');
+ let text;try{text=await f.text()}catch(e){return note('The file could not be read ('+E(e&&e.message||e)+'). Nothing was changed.')}
+ const v=chkBackup(text);
+ if(!v.ok)return modal(`<h3 style="margin-top:0">This file cannot be restored</h3><p class=neg>${E(v.err)}</p><p>Nothing was changed. Your current data is untouched.</p><div class=r><button class=b onclick=close()>Close</button></div>`);
+ RESTORE=v;const cur=LOCK?{}:cnt_(db),bk=v.counts;
+ modal(`<h3 style="margin-top:0">Restore this backup?</h3><p><b class=neg>Restoring REPLACES all current data in this browser</b> with the contents of this file. Records are never merged.</p>
+<p class=mut>File: ${E(f.name)}<br>Made: ${E(fmtD(v.obj.exportedAt))} · base currency ${E(v.obj.baseCurrency)} · data version ${v.obj.dataVersion}<br>Checks passed: structure, checksum, record counts, financial totals.</p>
+${T(['Records','In this browser now','In the backup'],Object.keys(bk).filter(k=>bk[k]||cur[k]).map(k=>[k,LOCK?'—':cur[k],bk[k]]))}
+${v.warns.length?'<p class=neg><b>Notes about this backup:</b></p>'+v.warns.map(x=>'<p class=mut>• '+E(x)+'</p>').join(''):''}
+<p>${LOCK?'The unreadable stored value will be kept as a separate saved copy first.':'A safety copy of your current data will be saved in this browser first.'} If anything fails, your current data stays as it is.</p>
+<label><input type=checkbox id=rc_ok onchange="document.querySelector('#rc_go').disabled=!this.checked"> I understand that this replaces my current data.</label><div id=er></div>
+<div class=r><button class=b2 onclick=close()>Cancel</button><button class="b bad" id=rc_go disabled onclick="applyRestore()">Replace current data with this backup</button></div>`)}
+let RESTORE=null;
+function applyRestore(){const v=RESTORE;if(!v||!v.ok)return;const btn=document.querySelector('#rc_go');if(btn){if(btn.dataset&&btn.dataset.busy)return;btn.disabled=true;btn.dataset.busy=1}
+ const fail=m=>{RESTORE=null;modal(`<h3 style="margin-top:0">Restore did not complete</h3><p class=neg>${E(m)}</p><p><b>Your previous data is in place and unchanged.</b></p><div class=r><button class=b onclick=close()>Close</button></div>`)};
+ let prev=null;try{prev=localStorage.getItem('aplus')}catch(e){return fail('Browser storage cannot be read ('+(e&&e.message||e)+').')}
+ /* 1. safety copy of what is there now */
+ const sk=(LOCK?'aplus_unreadable_':'aplus_safety_')+stamp();let copy=null;
+ try{copy=LOCK?prev:mkBackup(db);if(copy!==null){if(!LOCK){const c=chkBackup(copy);if(!c.ok)throw new Error('the safety copy failed its own check: '+c.err)}
+  localStorage.setItem(sk,copy);if(localStorage.getItem(sk)!==copy)throw new Error('the safety copy could not be verified')}}
+ catch(e){try{localStorage.removeItem(sk)}catch(x){}return fail('The safety copy of the current data could not be saved ('+(e&&e.message||e)+'), so nothing was replaced.')}
+ /* 2. write the backup data and verify what the browser really holds */
+ const ns=JSON.stringify(v.obj.data);let err='';
+ try{localStorage.setItem('aplus',ns);const back=localStorage.getItem('aplus');if(back!==ns)throw new Error('the browser did not keep exactly what was written');
+  const p=JSON.parse(back),c=dbCheck(p);if(c.err)throw new Error(c.err);if(JSON.stringify(cnt_(p))!==JSON.stringify(v.counts))throw new Error('record counts differ after restore');
+  if(JSON.stringify(fin_(p))!==JSON.stringify(v.totals))throw new Error('financial totals differ after restore');
+  /* 3. only now switch the running app over */
+  db=p;LOCK='';SAVEBAD='';LASTGOOD=ns;RESTORE=null}
+ catch(e){err=e&&e.message||String(e)}
+ if(err){let rb='';try{if(prev===null)localStorage.removeItem('aplus');else{localStorage.setItem('aplus',prev);if(localStorage.getItem('aplus')!==prev)rb=' WARNING: the original value could not be re-verified; use the safety copy "'+sk+'".'}}catch(e){rb=' WARNING: the original value could not be put back; use the safety copy "'+sk+'" in Settings.'}
+  return fail('Validation failed: '+err+'.'+rb)}
+ const ks=safetyKeys();ks.slice(3).forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+ sbn();V.nav='Settings';V.tid=V.sid=V.prid=V.rcid=null;render();
+ modal(`<h3 style="margin-top:0">Restore completed and checked</h3><p>The data was written, read back from the browser and compared with the backup: record counts and financial totals match (student charges ${f(v.totals.charged)}, student payments ${f(v.totals.studentPayments)}, teacher payments ${f(v.totals.teacherPayments)}, profit ${f(v.totals.profit)}).</p><p class=mut>A safety copy of the previous data is kept in Settings as ${E(sk)}.</p><div class=r><button class=b onclick=close()>OK</button></div>`)}
+function recoveryPage(){let raw=null;try{raw=localStorage.getItem('aplus')}catch(e){}
+ return `<h2 class=neg>Your saved data could not be loaded</h2><div class=cd style="max-width:760px"><p><b>${E(LOCK)}</b></p><p><b>Nothing has been changed or deleted.</b> The app has not saved anything this session, and it will not replace your stored data with an empty database. Saving is switched off until this is resolved.</p>
+<p><b>What to do</b></p><ol><li>${raw!==null?'Download the unreadable stored data below and keep it. It can sometimes be repaired by hand.':'Check that this site is allowed to store data in the browser (not a private window, site data not blocked).'}</li><li>Close other tabs of this app, then press Retry.</li><li>If it still fails, restore your latest Full Data Backup file.</li></ol>
+<div class=bar><button class=b onclick="location.reload()">Retry loading</button><button class=b2 onclick="document.querySelector('#rf').click()">Restore from backup file…</button>${raw!==null?'<button class=b2 onclick="dlRaw()">Download the unreadable stored data</button>':''}<input id=rf type=file accept=".json,application/json" style="display:none" onchange="pickRestore(this)"></div>
+<p class=mut>Restoring first keeps the unreadable value as a separate saved copy, then replaces it only if the backup passes every check.</p></div>`}
+async function dlRaw(){try{const t=localStorage.getItem('aplus');await dlFile('APlus-unreadable-data-'+stamp()+'.txt',t,'text/plain');note('The stored data was passed to the downloads service. Check your Downloads folder.')}catch(e){note('Could not download it: '+E(e&&e.message||e))}}
+/* ---- settings & exchange rates ---- */
+function setBase(v){if(v==B())return;ask(`Change the Academy Base Currency to ${v}? Existing records keep their original amounts, currencies, rates and base amounts. The saved exchange-rate table is cleared and must be refreshed or entered again.`,()=>{db.set.base=v;db.rates={};db.rst='';save();render()},'Change')}
+function setMR(c){const v=parseFloat($('#mr_'+c).value);if(v>0){db.rates[c]={r:v,t:new Date().toISOString(),type:'Manual'};save();render()}}
+async function refreshRates(){const b=B();db.rst='Updating…';render();
+try{const r=await fetch('https://open.er-api.com/v6/latest/'+b);if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(j.result!=='success')throw new Error('API error');
+let n=0;db.cur.forEach(c=>{const v=j.rates&&j.rates[c.c];if(c.c!=b&&v>0){db.rates[c.c]={r:1/v,t:new Date().toISOString(),type:'Live'};n++}});db.rst='Updated '+new Date().toLocaleString()+' ('+n+' rates)'}
+catch(e){db.rst='Live rates unavailable ('+(e.message||'request blocked')+'). Enter rates manually.'}save();render()}
+function addCur(){form('Add Currency',[{k:'c',l:'Currency code (e.g. GBP)',r:1},{k:'n',l:'Name',r:1}],{},o=>{const c=o.c.toUpperCase();if(!/^[A-Z]{3}$/.test(c))return 'Use a 3-letter code';if(db.cur.some(x=>x.c==c))return 'Already in the list';db.cur.push({c,n:o.n})})}
+function vSet(){const s=db.set;return `<h2>Settings</h2><div class=cd style="max-width:520px"><div class=fg><label class=w>Academy name<input id=s_name value="${E(s.name)}"></label><label>Academy Base Currency<select onchange="setBase(this.value)">${curO().map(o=>`<option value="${o[0]}" ${o[0]==B()?'selected':''}>${o[1]}</option>`).join('')}</select></label><label>&nbsp;</label><label>Default teacher rate/hr<input id=s_tr type=number step=any min=0 value="${E(s.tr)}"></label><label>Default student rate/hr<input id=s_sr type=number step=any min=0 value="${E(s.sr)}"></label></div><p class=mut>Defaults only pre-fill new lessons; rates can always be changed per lesson. Data is stored in this browser.</p><div class=r><button class=b onclick="Object.assign(db.set,{name:$('#s_name').value||'A+ Hub Academy',tr:$('#s_tr').value,sr:$('#s_sr').value});save();render()">Save settings</button></div></div>
+${bkUI()}
+<h3>Exchange Rates <span class=mut>(1 unit of currency = X ${B()})</span></h3><div class=bar><button class=b onclick=refreshRates()>Refresh live rates</button><button class=b2 onclick=addCur()>+ Add currency</button><span class=mut>${E(db.rst||'Rates have not been loaded.')}</span></div>
+<p class=mut>Rates are never invented: if a rate is unavailable, enter it manually. Each transaction stores the rate used when it was recorded, so changing rates later never alters old records.</p>`+T(['Currency','Current Rate','Last Updated','Status','Manual rate'],db.cur.map(c=>{const r=c.c==B()?null:db.rates[c.c];return[c.c+' — '+E(c.n),c.c==B()?'1 (base)':r?(+r.r).toFixed(6):'<span class=neg>Unavailable</span>',r?new Date(r.t).toLocaleString():'—',c.c==B()?'Base':r?r.type:'No rate',c.c==B()?'':`<input id=mr_${c.c} type=number step=any min=0 style="width:110px" placeholder="rate"><button class=lk onclick="setMR('${c.c}')">Set</button>`]}))}
+/* ---- shell ---- */
+const NAV=['Dashboard','Timetable','Teachers','Students','Subjects','Lessons','Projects','Recorded Courses','Payments','Reports','Cash Flow','Settings'],VW={Dashboard:vDash,Timetable:vTT,Teachers:vTeachers,Students:vStudents,Subjects:vSubj,Lessons:vLessons,Projects:vPR,'Recorded Courses':vRC,Payments:vPay,Reports:vRep,'Cash Flow':vCF,Settings:vSet};
+function render(){if(LOCK){$('#nv').innerHTML=`<h1>A+ Hub Academy</h1><small>Recovery mode</small>`;$('#v').innerHTML=recoveryPage();return}const a=document.activeElement?.id,pos=document.activeElement?.selectionStart;CH.forEach(c=>c.destroy());CH=[];
+$('#nv').innerHTML=`<h1>${E(db.set.name)}</h1><small>Management System</small>`+NAV.map(n=>`<a class="${V.nav==n?'on':''}" onclick="V.nav='${n}';V.tid=V.sid=V.prid=V.rcid=null;render()">${n}</a>`).join('');
+$('#v').innerHTML=VW[V.nav]();if(a&&$('#'+a)&&!$('#m').innerHTML){try{const e=$('#'+a);e.focus();e.setSelectionRange(pos,pos)}catch(x){}}}
+try{Chart.defaults.color=getComputedStyle(document.documentElement).getPropertyValue('--ink')||'#12305a'}catch(e){}
+save();render();sbn();
+if(!LOCK&&!Object.keys(db.rates).length)refreshRates();
+</script></body></html>

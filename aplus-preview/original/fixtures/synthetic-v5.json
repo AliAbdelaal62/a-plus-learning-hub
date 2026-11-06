@@ -1,0 +1,807 @@
+{
+ "v": 5,
+ "id": 152,
+ "set": {
+  "name": "DEV A+ Hub (synthetic)",
+  "tr": "10",
+  "sr": "15",
+  "base": "KWD"
+ },
+ "cur": [
+  {
+   "c": "EGP",
+   "n": "Egyptian Pound"
+  },
+  {
+   "c": "KWD",
+   "n": "Kuwaiti Dinar"
+  },
+  {
+   "c": "SAR",
+   "n": "Saudi Riyal"
+  },
+  {
+   "c": "USD",
+   "n": "US Dollar"
+  }
+ ],
+ "rates": {
+  "EGP": {
+   "r": 0.0064,
+   "t": "2026-01-01T00:00:00.000Z",
+   "type": "Manual"
+  },
+  "SAR": {
+   "r": 0.082,
+   "t": "2026-01-01T00:00:00.000Z",
+   "type": "Manual"
+  },
+  "USD": {
+   "r": 0.307,
+   "t": "2026-01-01T00:00:00.000Z",
+   "type": "Manual"
+  }
+ },
+ "t": [
+  {
+   "id": 100,
+   "name": "DEV Teacher 01",
+   "phone": "000",
+   "email": "",
+   "spec": "DEV",
+   "cur": "KWD",
+   "rate": 10000,
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 101,
+   "name": "DEV Teacher 02",
+   "phone": "000",
+   "email": "",
+   "spec": "DEV",
+   "cur": "EGP",
+   "rate": 60000,
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 102,
+   "name": "DEV Teacher 03",
+   "phone": "000",
+   "email": "",
+   "spec": "DEV",
+   "cur": "KWD",
+   "rate": 12500,
+   "status": "Active",
+   "notes": ""
+  }
+ ],
+ "s": [
+  {
+   "id": 103,
+   "name": "DEV Student 01",
+   "uni": "DEV Univ",
+   "country": "",
+   "major": "",
+   "lv": "Undergraduate",
+   "cur": "KWD",
+   "phone": "",
+   "email": "",
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 104,
+   "name": "DEV Student 02",
+   "uni": "DEV Univ",
+   "country": "",
+   "major": "",
+   "lv": "High School",
+   "cur": "SAR",
+   "phone": "",
+   "email": "",
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 105,
+   "name": "DEV Student 03",
+   "uni": "DEV Univ",
+   "country": "",
+   "major": "",
+   "lv": "Postgraduate",
+   "cur": "EGP",
+   "phone": "",
+   "email": "",
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 106,
+   "name": "DEV Student 04",
+   "uni": "DEV Univ",
+   "country": "",
+   "major": "",
+   "lv": "",
+   "cur": "KWD",
+   "phone": "",
+   "email": "",
+   "status": "Active",
+   "notes": ""
+  },
+  {
+   "id": 107,
+   "name": "DEV Student 05",
+   "uni": "DEV Univ",
+   "country": "",
+   "major": "",
+   "lv": "High School",
+   "cur": "USD",
+   "phone": "",
+   "email": "",
+   "status": "Active",
+   "notes": ""
+  }
+ ],
+ "sub": [
+  {
+   "id": 108,
+   "name": "DEV Math",
+   "type": "Live",
+   "uni": "DEV Univ",
+   "inst": 100,
+   "studs": [
+    103,
+    104
+   ]
+  },
+  {
+   "id": 109,
+   "name": "DEV Physics",
+   "type": "Live",
+   "uni": "DEV Univ",
+   "inst": 101,
+   "studs": [
+    105
+   ]
+  },
+  {
+   "id": 110,
+   "name": "DEV Chemistry",
+   "type": "Live",
+   "uni": "DEV Univ",
+   "inst": 102,
+   "studs": [
+    106,
+    103
+   ]
+  },
+  {
+   "id": 129,
+   "name": "DEV Project Alpha",
+   "type": "Project",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 131,
+   "name": "DEV Project Beta",
+   "type": "Project",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 133,
+   "name": "DEV Project Gamma",
+   "type": "Project",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 135,
+   "name": "DEV Project Delta",
+   "type": "Project",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 139,
+   "name": "DEV Course A",
+   "type": "Recorded",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 141,
+   "name": "DEV Course B",
+   "type": "Recorded",
+   "uni": "DEV Univ"
+  },
+  {
+   "id": 143,
+   "name": "DEV Course C",
+   "type": "Recorded",
+   "uni": "DEV Univ"
+  }
+ ],
+ "l": [
+  {
+   "id": 111,
+   "date": "2026-08-03",
+   "t": 100,
+   "s": 103,
+   "sub": 108,
+   "lv": "",
+   "d": 2,
+   "tr": 10000,
+   "sr": 15000,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "KWD",
+   "trx": 1,
+   "srx": 1,
+   "bc": "KWD",
+   "bcost": 20000,
+   "bchg": 30000,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 112,
+   "date": "2026-08-10",
+   "t": 100,
+   "s": 104,
+   "sub": 108,
+   "lv": "",
+   "d": 1.5,
+   "tr": 10000,
+   "sr": 45000,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "SAR",
+   "trx": 1,
+   "srx": 0.082,
+   "bc": "KWD",
+   "bcost": 15000,
+   "bchg": 5535,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 113,
+   "date": "2026-08-12",
+   "t": 101,
+   "s": 105,
+   "sub": 109,
+   "lv": "",
+   "d": 2,
+   "tr": 60000,
+   "sr": 90000,
+   "st": "Completed",
+   "tc": "EGP",
+   "sc": "EGP",
+   "trx": 0.0064,
+   "srx": 0.0064,
+   "bc": "KWD",
+   "bcost": 768,
+   "bchg": 1152,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 114,
+   "date": "2026-09-02",
+   "t": 102,
+   "s": 106,
+   "sub": 110,
+   "lv": "",
+   "d": 1,
+   "tr": 12500,
+   "sr": 18000,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "KWD",
+   "trx": 1,
+   "srx": 1,
+   "bc": "KWD",
+   "bcost": 12500,
+   "bchg": 18000,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 115,
+   "date": "2026-09-04",
+   "t": 100,
+   "s": 103,
+   "sub": 108,
+   "lv": "",
+   "d": 1,
+   "tr": 10000,
+   "sr": 15000,
+   "st": "Cancelled",
+   "tc": "KWD",
+   "sc": "KWD",
+   "trx": 1,
+   "srx": 1,
+   "bc": "KWD",
+   "bcost": 10000,
+   "bchg": 15000,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 116,
+   "date": "2026-09-06",
+   "t": 102,
+   "s": 103,
+   "sub": 110,
+   "lv": "",
+   "d": 0.75,
+   "tr": 12500,
+   "sr": 16000,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "KWD",
+   "trx": 1,
+   "srx": 1,
+   "bc": "KWD",
+   "bcost": 9375,
+   "bchg": 12000,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 117,
+   "date": "2026-09-09",
+   "t": 101,
+   "s": 105,
+   "sub": 109,
+   "lv": "",
+   "d": 1,
+   "tr": 60000,
+   "sr": 90000,
+   "st": "No Show",
+   "tc": "EGP",
+   "sc": "EGP",
+   "trx": 0.0064,
+   "srx": 0.0064,
+   "bc": "KWD",
+   "bcost": 384,
+   "bchg": 576,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 118,
+   "date": "2026-10-07",
+   "t": 102,
+   "s": 107,
+   "sub": 110,
+   "lv": "",
+   "d": 1.3,
+   "tr": 12500,
+   "sr": 33333,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "USD",
+   "trx": 1,
+   "srx": 0.307,
+   "bc": "KWD",
+   "bcost": 16250,
+   "bchg": 13303,
+   "rt": "Manual",
+   "notes": ""
+  },
+  {
+   "id": 119,
+   "date": "2026-10-01",
+   "t": 100,
+   "s": 104,
+   "sub": 108,
+   "lv": "",
+   "d": 2,
+   "tr": 10000,
+   "sr": 45000,
+   "st": "Completed",
+   "tc": "KWD",
+   "sc": "SAR",
+   "trx": 1,
+   "srx": 0.081,
+   "bc": "KWD",
+   "bcost": 20000,
+   "bchg": 7290,
+   "rt": "Manual",
+   "notes": ""
+  }
+ ],
+ "sp": [
+  {
+   "id": 120,
+   "p": 103,
+   "date": "2026-08-05",
+   "cur": "KWD",
+   "amt": 20000,
+   "rx": 1,
+   "rt": "Same",
+   "bamt": 20000,
+   "bc": "KWD",
+   "meth": "Cash",
+   "notes": ""
+  },
+  {
+   "id": 121,
+   "p": 104,
+   "date": "2026-08-11",
+   "cur": "SAR",
+   "amt": 60000,
+   "rx": 0.082,
+   "rt": "Manual",
+   "bamt": 4920,
+   "bc": "KWD",
+   "meth": "Bank",
+   "notes": ""
+  },
+  {
+   "id": 122,
+   "p": 105,
+   "date": "2026-08-13",
+   "cur": "EGP",
+   "amt": 100000,
+   "rx": 0.0064,
+   "rt": "Manual",
+   "bamt": 640,
+   "bc": "KWD",
+   "meth": "Cash",
+   "notes": ""
+  },
+  {
+   "id": 123,
+   "p": 107,
+   "date": "2026-10-08",
+   "cur": "USD",
+   "amt": 12345,
+   "rx": 0.307,
+   "rt": "Manual",
+   "bamt": 3790,
+   "bc": "KWD",
+   "meth": "Bank",
+   "notes": ""
+  },
+  {
+   "id": 124,
+   "p": 106,
+   "date": "2026-09-03",
+   "cur": "KWD",
+   "amt": 10000,
+   "rx": 1,
+   "rt": "Same",
+   "bamt": 10000,
+   "bc": "KWD",
+   "meth": "KNET",
+   "notes": ""
+  }
+ ],
+ "tp": [
+  {
+   "id": 125,
+   "p": 100,
+   "date": "2026-08-15",
+   "cur": "KWD",
+   "amt": 10000,
+   "rx": 1,
+   "rt": "Same",
+   "bamt": 10000,
+   "bc": "KWD",
+   "meth": "Cash",
+   "notes": "",
+   "src": "Live",
+   "srcd": "",
+   "lk": 0
+  },
+  {
+   "id": 126,
+   "p": 101,
+   "date": "2026-08-20",
+   "cur": "EGP",
+   "amt": 120000,
+   "rx": 0.0064,
+   "rt": "Manual",
+   "bamt": 768,
+   "bc": "KWD",
+   "meth": "Bank",
+   "notes": "",
+   "src": "Live",
+   "srcd": "",
+   "lk": 0
+  },
+  {
+   "id": 127,
+   "p": 102,
+   "date": "2026-09-10",
+   "cur": "KWD",
+   "amt": 5000,
+   "rx": 1,
+   "rt": "Same",
+   "bamt": 5000,
+   "bc": "KWD",
+   "meth": "Cash",
+   "notes": "",
+   "src": "Other",
+   "srcd": "DEV bonus",
+   "lk": 0
+  },
+  {
+   "id": 128,
+   "p": 100,
+   "date": "2026-07-01",
+   "cur": "KWD",
+   "amt": 3000,
+   "rx": 1,
+   "rt": "Same",
+   "bamt": 3000,
+   "bc": "KWD",
+   "meth": "Cash",
+   "notes": ""
+  }
+ ],
+ "tt": [
+  {
+   "id": 150,
+   "sched": "rec",
+   "wt": "Live",
+   "date": "2026-08-03",
+   "day": "Monday",
+   "dw": 1,
+   "a": "2026-08-03",
+   "b": "",
+   "st": "16:00",
+   "en": "18:00",
+   "t": 100,
+   "lv": "",
+   "s": [
+    103,
+    104
+   ],
+   "sub": "DEV Math",
+   "notes": "",
+   "ex": {
+    "2026-08-10": {
+     "done": 1
+    },
+    "2026-08-17": {
+     "cancelled": 1
+    }
+   }
+  },
+  {
+   "id": 151,
+   "sched": "one",
+   "wt": "Live",
+   "date": "2026-10-05",
+   "day": "Monday",
+   "st": "10:00",
+   "en": "11:00",
+   "t": 102,
+   "lv": "",
+   "s": [
+    106
+   ],
+   "sub": "DEV Chemistry",
+   "notes": "",
+   "ex": {},
+   "done": 1
+  }
+ ],
+ "pr": [
+  {
+   "id": 130,
+   "name": "DEV Project Alpha",
+   "sub": "",
+   "subj": 129,
+   "uni": "DEV Univ",
+   "t": 100,
+   "s": 103,
+   "lv": "",
+   "status": "In Progress",
+   "cur": "KWD",
+   "rev": 100000,
+   "share": 40,
+   "rx": 1,
+   "rt": "Manual",
+   "bc": "KWD",
+   "start": "2026-08-15",
+   "due": "",
+   "paid0": 10000,
+   "notes": ""
+  },
+  {
+   "id": 132,
+   "name": "DEV Project Beta",
+   "sub": "",
+   "subj": 131,
+   "uni": "DEV Univ",
+   "t": 101,
+   "s": 105,
+   "lv": "",
+   "status": "In Progress",
+   "cur": "EGP",
+   "rev": 500000,
+   "share": 30,
+   "rx": 0.0064,
+   "rt": "Manual",
+   "bc": "KWD",
+   "start": "2026-09-01",
+   "due": "",
+   "paid0": 0,
+   "notes": ""
+  },
+  {
+   "id": 134,
+   "name": "DEV Project Gamma",
+   "sub": "",
+   "subj": 133,
+   "uni": "DEV Univ",
+   "t": 102,
+   "s": 106,
+   "lv": "",
+   "status": "Cancelled",
+   "cur": "KWD",
+   "rev": 50000,
+   "share": 50,
+   "rx": 1,
+   "rt": "Manual",
+   "bc": "KWD",
+   "start": "2026-09-05",
+   "due": "",
+   "paid0": 0,
+   "notes": ""
+  },
+  {
+   "id": 136,
+   "name": "DEV Project Delta",
+   "sub": "",
+   "subj": 135,
+   "uni": "DEV Univ",
+   "t": 102,
+   "s": 107,
+   "lv": "",
+   "status": "In Progress",
+   "cur": "USD",
+   "rev": 12345,
+   "share": 35,
+   "rx": 0.307,
+   "rt": "Manual",
+   "bc": "KWD",
+   "start": "2026-10-03",
+   "due": "",
+   "paid0": 1111,
+   "notes": ""
+  }
+ ],
+ "pp": [
+  {
+   "id": 137,
+   "pr": 130,
+   "date": "2026-09-12",
+   "amt": 20000,
+   "meth": "Bank",
+   "notes": ""
+  },
+  {
+   "id": 138,
+   "pr": 132,
+   "date": "2026-10-02",
+   "amt": 100000,
+   "meth": "Cash",
+   "notes": ""
+  }
+ ],
+ "rc": [
+  {
+   "id": 140,
+   "name": "DEV Course A",
+   "sub": "",
+   "subj": 139,
+   "uni": "DEV Univ",
+   "inst": 102,
+   "lv": "",
+   "cur": "KWD",
+   "rx": 1,
+   "rt": "Manual",
+   "bc": "KWD",
+   "cost": 5000,
+   "price": 30000,
+   "n": 3,
+   "share": 30,
+   "date": "2026-08-20",
+   "notes": ""
+  },
+  {
+   "id": 142,
+   "name": "DEV Course B",
+   "sub": "",
+   "subj": 141,
+   "uni": "DEV Univ",
+   "inst": 101,
+   "lv": "",
+   "cur": "SAR",
+   "rx": 0.082,
+   "rt": "Manual",
+   "bc": "KWD",
+   "cost": 0,
+   "price": 100000,
+   "n": 2,
+   "share": 25,
+   "date": "2026-09-15",
+   "notes": ""
+  },
+  {
+   "id": 144,
+   "name": "DEV Course C",
+   "sub": "",
+   "subj": 143,
+   "uni": "DEV Univ",
+   "inst": 100,
+   "lv": "",
+   "cur": "USD",
+   "rx": 0.307,
+   "rt": "Manual",
+   "bc": "KWD",
+   "cost": 777,
+   "price": 12345,
+   "n": 1,
+   "share": 30,
+   "date": "2026-10-04",
+   "notes": ""
+  }
+ ],
+ "re": [
+  {
+   "id": 145,
+   "rc": 144,
+   "s": 107,
+   "date": "2026-10-05",
+   "price": 12345,
+   "paid": 7777
+  },
+  {
+   "id": 146,
+   "rc": 140,
+   "s": 103,
+   "date": "2026-08-21",
+   "price": 30000,
+   "paid": 30000
+  },
+  {
+   "id": 147,
+   "rc": 140,
+   "s": 106,
+   "date": "2026-08-22",
+   "price": 30000,
+   "paid": 10000
+  },
+  {
+   "id": 148,
+   "rc": 142,
+   "s": 104,
+   "date": "2026-09-16",
+   "price": 100000,
+   "paid": 0
+  }
+ ],
+ "rm": [
+  {
+   "id": 149,
+   "name": "DEV send lectures",
+   "rc": 140,
+   "days": [
+    1,
+    4
+   ],
+   "time": "18:00",
+   "a": "2026-08-20",
+   "b": "",
+   "f": "weekly"
+  }
+ ],
+ "rd": {
+  "149|2026-09-07": 1
+ }
+}

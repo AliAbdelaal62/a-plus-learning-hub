@@ -1,0 +1,19 @@
+{
+  "name": "aplus-hub-localhost",
+  "version": "3.0.0",
+  "private": true,
+  "description": "A+ Hub Academy management system, running locally on Node.js + SQLite. No cloud dependency.",
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "start:synthetic": "node scripts/start-synthetic.js",
+    "build:public": "node tools/make-public.js",
+    "migrate:dry-run": "node --no-warnings scripts/migrate-legacy.js",
+    "backup": "node --no-warnings scripts/backup.js",
+    "restore": "node --no-warnings scripts/restore.js",
+    "verify": "node --no-warnings scripts/verify-db.js",
+    "test": "node tools/run-all.js",
+    "test:legacy": "node tools/run-all.js"
+  },
+  "devDependencies": {}
+}

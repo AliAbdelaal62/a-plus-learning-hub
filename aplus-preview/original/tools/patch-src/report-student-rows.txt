@@ -1,0 +1,7 @@
+const stRows=db.s.filter(t=>!F.s||t.id==F.s).map(t=>{const y=S(ls.filter(l=>l.s==t.id)),es=db.re.filter(e=>e.s==t.id&&x.rc.some(c=>c.id==e.rc)),
+ rcC=es.reduce((q,e)=>{const c=g(db.rc,e.rc);return q+(c?k_(e.price,c.rx):0)},0),ps=x.pr.filter(p=>p.s==t.id),prC=ps.reduce((q,p)=>q+pj(p).brev,0),
+ bb=(p,par)=>p.bamt!=null?p.bamt:k_(p.amt,(par&&par.rx)||1),
+ cpD=(F.wt&&F.wt!='Recorded')?0:db.re.filter(e=>e.s==t.id).reduce((q,e)=>{const c=g(db.rc,e.rc);if(!c||(F.t&&c.inst!=F.t))return q;return q+db.cp.filter(z=>z.re==e.id&&inR(z.date)&&(!F.cur||z.cur==F.cur)).reduce((u,z)=>u+bb(z,c),0)},0),
+ ppD=(F.wt&&F.wt!='Project')?0:db.pr.filter(p=>p.s==t.id&&(!F.t||p.t==F.t)).reduce((q,p)=>q+db.pp.filter(z=>z.pr==p.id&&inR(z.date)&&(!F.cur||(z.cur||p.cur)==F.cur)).reduce((u,z)=>u+bb(z,p),0),0),
+ opn=db.re.filter(e=>e.s==t.id).reduce((q,e)=>{const c=g(db.rc,e.rc);return q+(c&&(!F.cur||c.cur==F.cur)?k_((e.paid||0)-db.cp.filter(z=>z.re==e.id).reduce((u,z)=>u+z.amt,0),c.rx):0)},0)+db.pr.filter(p=>p.s==t.id&&p.status!='Cancelled'&&(!F.cur||p.cur==F.cur)).reduce((q,p)=>q+k_(p.paid0||0,p.rx),0);
+ return[t.name,t.lv||'',y.n,y.h,y.rev+rcC+prC,sum(db.sp.filter(p=>p.p==t.id&&inR(p.date)&&cu(p)))+cpD+ppD,opn,SS(t.id).rem]});
