@@ -66,40 +66,24 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     onCookie(jar);
   }
 
+  const { callHandler } = require('./dispatch.js');
+  const handlers = require('./shims/misc.js').handlers;
   function dispatch(method, url, headers = {}, body) {
-    const h = { host: 'localhost:' + PORT, 'sec-fetch-site': 'same-origin' };
-    for (const [k, v] of Object.entries(headers || {})) h[k.toLowerCase()] = String(v);
-    if (jar) h.cookie = jar;
-    const text = body == null ? '' : String(body);
-    const req = {
-      method: String(method || 'GET').toUpperCase(), url, headers: h,
-      __json() {
-        if (text.length > 8 * 1024 * 1024) { const e = new Error('request too large'); e.code = 413; throw e; }
-        if (!text) return {};
-        try { return JSON.parse(text); } catch (_) { const e = new Error('body is not valid JSON'); e.code = 400; throw e; }
-      },
-    };
-    const res = {
-      statusCode: 0, _headers: {}, headersSent: false, ended: false, body: null,
-      writeHead(code, hd) { this.statusCode = code; this._headers = hd || {}; this.headersSent = true; },
-      end(b) { this.body = b; this.ended = true; },
-    };
-    const handler = globalThis.__APLUS_HANDLER;
+    const handler = handlers[PORT];
     if (!handler) throw new Error('A+ Hub preview server is not running');
-    handler(req, res);
-    if (!res.ended) throw new Error('A+ Hub preview: request did not complete synchronously: ' + method + ' ' + url);
-    const out = {};
-    for (const [k, v] of Object.entries(res._headers)) out[k.toLowerCase()] = String(v);
-    if (out['set-cookie']) applySetCookie(out['set-cookie']);
-    const bytes = res.body == null ? new Uint8Array(0) : typeof res.body === 'string' ? new TextEncoder().encode(res.body) : new Uint8Array(res.body.buffer, res.body.byteOffset, res.body.byteLength);
-    return { status: res.statusCode, headers: out, body: bytes, text: () => new TextDecoder().decode(bytes) };
+    const h = { host: 'localhost:' + PORT, 'sec-fetch-site': 'same-origin', ...headers };
+    if (jar) h.cookie = jar;
+    const r = callHandler(handler, method, url, h, body);
+    if (r.headers['set-cookie']) applySetCookie(r.headers['set-cookie']);
+    return r;
   }
 
   function snapshotFiles() {
+    try { db().prepare('PRAGMA wal_checkpoint(TRUNCATE)').get(); } catch (_) {}
     const out = [];
     const walk = (d) => {
       out.push([d, null]);
-      for (const n of fs.readdirSync(d)) { const p = d + '/' + n; const st = fs.statSync(p); if (st.isDirectory()) walk(p); else out.push([p, FS.readFile(p)]); }
+      for (const n of fs.readdirSync(d)) { const p = d + '/' + n; const st = fs.statSync(p); if (st.isDirectory()) walk(p); else if (!p.endsWith('-shm')) out.push([p, FS.readFile(p)]); }
     };
     for (const d of PERSIST_DIRS) if (fs.existsSync(d)) walk(d);
     return out;
