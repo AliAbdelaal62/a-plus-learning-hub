@@ -6,6 +6,13 @@
 globalThis.Buffer = globalThis.Buffer || require('buffer').Buffer;
 globalThis.process = globalThis.process || { env: {}, platform: 'browser', version: 'v22.0.0', versions: {}, nextTick: (f, ...a) => Promise.resolve().then(() => f(...a)), exit() {}, on() {}, cwd: () => '/app' };
 const { createRuntime } = require('./core.js');
+const { zipSync, unzipSync } = require('fflate');
+const LS_KEY = 'aplus-preview-files-v1';
+// Snapshots are compressed and written synchronously to localStorage when they fit, so a write followed immediately by
+// a page navigation (as the original pages do after sign-in) is never lost; IndexedDB keeps a copy as well.
+function pack(files) { const o = {}; for (const [p, b] of files) o[p.slice(1) + (b === null ? '/' : '')] = b === null ? new Uint8Array(0) : b; return zipSync(o, { level: 6 }); }
+function unpack(u8) { const o = unzipSync(u8); return Object.entries(o).map(([k, v]) => (k.endsWith('/') ? ['/' + k.slice(0, -1), null] : ['/' + k, v])); }
+const b64 = { enc(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }, dec(s) { const b = atob(s); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; } };
 
 const IDB_NAME = 'aplus-hub-experimental-preview', STORE = 'files', KEY = 'snapshot-v1', COOKIE_KEY = 'aplus-preview-session';
 const idb = () => new Promise((res, rej) => { const r = indexedDB.open(IDB_NAME, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
@@ -19,7 +26,12 @@ const rel = (u) => { const x = new URL(u, location.href); return x.pathname + x.
 async function main() {
   const status = document.getElementById('aplus-boot');
   let snapshot = null;
-  try { snapshot = await idbGet(); } catch (e) { console.warn('[A+ Hub preview] browser storage unavailable; data will not be kept', e); }
+  try {
+    const fromIdb = await idbGet(); let fromLs = null;
+    try { const raw = localStorage.getItem(LS_KEY); if (raw) fromLs = JSON.parse(raw); } catch (_) {}
+    const best = [fromIdb, fromLs].filter(Boolean).sort((a, b) => b.at - a.at)[0];
+    if (best) snapshot = unpack(best.zip instanceof Uint8Array ? best.zip : b64.dec(best.zip));
+  } catch (e) { console.warn('[A+ Hub preview] browser storage unavailable; data will not be kept', e); }
   const rt = await createRuntime({
     locateFile: (f) => '/aplus/' + f,
     snapshot,
@@ -29,7 +41,12 @@ async function main() {
   window.__APLUS_PREVIEW__ = rt;
 
   let saveTimer = null, saving = Promise.resolve();
-  const save = () => { saving = saving.then(() => idbPut(rt.snapshot())).catch((e) => console.error('[A+ Hub preview] could not save', e)); return saving; };
+  const save = () => {
+    const rec = { at: Date.now(), zip: pack(rt.snapshot()) };
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ at: rec.at, zip: b64.enc(rec.zip) })); } catch (_) { try { localStorage.removeItem(LS_KEY); } catch (__) {} }
+    saving = saving.then(() => idbPut(rec)).catch((e) => console.error('[A+ Hub preview] could not save', e));
+    return saving;
+  };
   const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); };
   if (rt.created || !snapshot) await save();
   setInterval(save, 60000); // scheduled automatic backups run inside the original scheduler
@@ -108,15 +125,14 @@ async function main() {
       '. <button type="button" id="aplus-preview-reset" style="all:revert;font:inherit;cursor:pointer">Reset synthetic data</button></div>';
     document.body.appendChild(box);
     box.querySelector('#aplus-preview-more').onclick = () => { const d = box.querySelector('#aplus-preview-details'); const open = d.style.display !== 'none'; d.style.display = open ? 'none' : 'block'; box.querySelector('#aplus-preview-more').textContent = open ? 'details' : 'hide'; };
-    box.querySelector('#aplus-preview-reset').onclick = async () => { if (!confirm('Delete all synthetic preview data in this browser and start again?')) return; clearInterval(); await idbClear(); localStorage.removeItem(COOKIE_KEY); location.reload(); };
+    box.querySelector('#aplus-preview-reset').onclick = async () => { if (!confirm('Delete all synthetic preview data in this browser and start again?')) return; window.__aplusResetting = true; await idbClear(); localStorage.removeItem(COOKIE_KEY); localStorage.removeItem(LS_KEY); location.reload(); };
   }
 
   // Serve "/" through the original handler: team sign-in when signed out, otherwise index.html with token + CURRENT_USER.
   const page = rt.dispatch('GET', '/', {});
   if (status) status.textContent = '';
-  window.addEventListener('pagehide', () => { save(); });
   document.open(); document.write(page.text()); document.close();
-  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { save(); }); previewBadge(); };
+  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { if (!window.__aplusResetting) save(); }); previewBadge(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', after); else after();
 }
 
