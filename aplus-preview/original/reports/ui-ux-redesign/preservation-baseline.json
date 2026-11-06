@@ -1,0 +1,12 @@
+{
+  "src/finance.js": "0628a96db184b7acc3011849f13bba984bfd49c0df5c14a176a57d7aa6b879df",
+  "src/ledger.js": "4fd38a25de8c06d9f03bdf36eccbd8cd4e093547043c39dd2c9601b9c7c89320",
+  "src/student-account.js": "c325ee4e091d9344bc9444f310e861c0d5a1f1fc4fbab0ea8dbff255aeb2b7c4",
+  "src/teacher-portal.js": "bec9da5447bdde5f305e8fd62f255368bf2401f497b61ed54f5e21f3ce1788d1",
+  "src/server.js": "35be9924e1479486603091299ed5bc7d9dde12861d21142e4c23333343693225",
+  "src/save.js": "5f8a25c72c42675ae9591e77e15ff336a272b37014316c12e73342bd1c645a2e",
+  "src/management.js": "6c41310e8b7344dbb398edde88c362b5d1cbaddb429b58f55333b82799cdacd3",
+  "src/treasury.js": "8d9c1c782104d81af6068f286c1afbfa0dcde711ab2fcf33a54efd93c80f40de",
+  "src/client/ledger-ui.js": "7a3b5eee4937aeae1f2a2f35b09c62c7632eb50ec65bed263d2e8d846b07950a",
+  "src/client/teacher-ui.js": "dabfe131121f41aa5b62c427b7d39d4f3d1897784dd1755762952a395bf0935f"
+}

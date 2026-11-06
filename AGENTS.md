@@ -33,3 +33,8 @@ use the editor.
 - Staff access is role-based via `user_roles` + security-definer helpers (`is_staff`, `can_edit`, `my_teacher_id`); admin/coordinator write, teacher-only accounts see just their own lessons/schedule — keeps permissions enforced in the database, not the UI.
 - Simple record pages use the shared `CrudPage` field config (`src/components/crud-page.tsx`) — one place for list/search/edit behavior.
 - All UI text goes through `src/lib/i18n.tsx` (`t(key)`); the document `dir` follows the language — the app is bilingual.
+
+## Project rules (experimental preview)
+- `/` forwards to `/aplus/index.html`, which runs the original app's server code in the browser (`aplus-preview/`, built by `bun aplus-preview/build.ts` into `public/aplus/`); original sources in `aplus-preview/original/` are never edited — adaptations happen at build time or in shims, so parity with the original is preserved.
+- Preview data is saved compressed to localStorage synchronously on every write (plus IndexedDB), because the original pages navigate immediately after writes and async saves were lost.
+- The earlier simplified rebuild (`src/routes/_authenticated/*`) is kept but no longer linked from `/`.

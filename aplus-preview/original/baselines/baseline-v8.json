@@ -1,0 +1,500 @@
+{
+ "note": "Regression baseline from SYNTHETIC fixture only, computed by the untouched v8 production reference.",
+ "source": "production-reference/aplus-hub-academy-v8.html",
+ "fixture": "fixtures/synthetic-v5.json",
+ "fixtureSha": "332c2933a6bfccb9",
+ "fixedClock": "2026-10-26T12:00:00Z",
+ "snapshot": {
+  "counts": {
+   "t": 3,
+   "s": 5,
+   "sub": 10,
+   "l": 9,
+   "sp": 5,
+   "tp": 4,
+   "tt": 2,
+   "pr": 4,
+   "pp": 2,
+   "rc": 3,
+   "re": 4,
+   "rm": 1
+  },
+  "idsUnique": true,
+  "nextIdAboveMax": true,
+  "orphans": [],
+  "studentBalances": {
+   "DEV Student 01": {
+    "n": 2,
+    "h": 2.75,
+    "rev": 42000,
+    "cost": 29375,
+    "p": 12625,
+    "tot": 172000,
+    "paid": 80000,
+    "rem": 92000,
+    "paidL": 20000,
+    "rcC": 30000,
+    "rcP": 30000,
+    "prC": 100000,
+    "prP": 30000
+   },
+   "DEV Student 02": {
+    "n": 2,
+    "h": 3.5,
+    "rev": 12825,
+    "cost": 35000,
+    "p": -22175,
+    "tot": 21025,
+    "paid": 4920,
+    "rem": 16105,
+    "paidL": 4920,
+    "rcC": 8200,
+    "rcP": 0,
+    "prC": 0,
+    "prP": 0
+   },
+   "DEV Student 03": {
+    "n": 1,
+    "h": 2,
+    "rev": 1152,
+    "cost": 768,
+    "p": 384,
+    "tot": 4352,
+    "paid": 1280,
+    "rem": 3072,
+    "paidL": 640,
+    "rcC": 0,
+    "rcP": 0,
+    "prC": 3200,
+    "prP": 640
+   },
+   "DEV Student 04": {
+    "n": 1,
+    "h": 1,
+    "rev": 18000,
+    "cost": 12500,
+    "p": 5500,
+    "tot": 48000,
+    "paid": 20000,
+    "rem": 28000,
+    "paidL": 10000,
+    "rcC": 30000,
+    "rcP": 10000,
+    "prC": 0,
+    "prP": 0
+   },
+   "DEV Student 05": {
+    "n": 1,
+    "h": 1.3,
+    "rev": 13303,
+    "cost": 16250,
+    "p": -2947,
+    "tot": 20883,
+    "paid": 6519,
+    "rem": 14364,
+    "paidL": 3790,
+    "rcC": 3790,
+    "rcP": 2388,
+    "prC": 3790,
+    "prP": 341
+   }
+  },
+  "teacherBalances": {
+   "DEV Teacher 01": {
+    "n": 3,
+    "h": 5.5,
+    "rev": 42825,
+    "cost": 55000,
+    "p": -12175,
+    "paid": 13000,
+    "rem": 42000
+   },
+   "DEV Teacher 02": {
+    "n": 1,
+    "h": 2,
+    "rev": 1152,
+    "cost": 768,
+    "p": 384,
+    "paid": 768,
+    "rem": 0
+   },
+   "DEV Teacher 03": {
+    "n": 3,
+    "h": 3.05,
+    "rev": 43303,
+    "cost": 38125,
+    "p": 5178,
+    "paid": 5000,
+    "rem": 33125
+   }
+  },
+  "teacherByWorkType": {
+   "DEV Teacher 01": {
+    "cats": [
+     {
+      "k": "Live",
+      "label": "Live Sessions",
+      "earn": 55000,
+      "paid": 10000,
+      "rem": 45000
+     },
+     {
+      "k": "Recorded",
+      "label": "Recorded Courses",
+      "earn": 1137,
+      "paid": 0,
+      "rem": 1137
+     },
+     {
+      "k": "Project",
+      "label": "Projects",
+      "earn": 40000,
+      "paid": 0,
+      "rem": 40000
+     },
+     {
+      "k": "Other",
+      "label": "Other",
+      "earn": 0,
+      "paid": 0,
+      "rem": 0
+     }
+    ],
+    "un": 3000,
+    "nUn": 1,
+    "earn": 96137,
+    "paid": 13000,
+    "rem": 83137
+   },
+   "DEV Teacher 02": {
+    "cats": [
+     {
+      "k": "Live",
+      "label": "Live Sessions",
+      "earn": 768,
+      "paid": 768,
+      "rem": 0
+     },
+     {
+      "k": "Recorded",
+      "label": "Recorded Courses",
+      "earn": 4100,
+      "paid": 0,
+      "rem": 4100
+     },
+     {
+      "k": "Project",
+      "label": "Projects",
+      "earn": 960,
+      "paid": 0,
+      "rem": 960
+     },
+     {
+      "k": "Other",
+      "label": "Other",
+      "earn": 0,
+      "paid": 0,
+      "rem": 0
+     }
+    ],
+    "un": 0,
+    "nUn": 0,
+    "earn": 5828,
+    "paid": 768,
+    "rem": 5060
+   },
+   "DEV Teacher 03": {
+    "cats": [
+     {
+      "k": "Live",
+      "label": "Live Sessions",
+      "earn": 38125,
+      "paid": 0,
+      "rem": 38125
+     },
+     {
+      "k": "Recorded",
+      "label": "Recorded Courses",
+      "earn": 27000,
+      "paid": 0,
+      "rem": 27000
+     },
+     {
+      "k": "Project",
+      "label": "Projects",
+      "earn": 1327,
+      "paid": 0,
+      "rem": 1327
+     },
+     {
+      "k": "Other",
+      "label": "Other",
+      "earn": 0,
+      "paid": 5000,
+      "rem": -5000
+     }
+    ],
+    "un": 0,
+    "nUn": 0,
+    "earn": 66452,
+    "paid": 5000,
+    "rem": 61452
+   }
+  },
+  "lessonAmounts": [
+   [
+    111,
+    "Completed",
+    {
+     "cost": 20000,
+     "chg": 30000,
+     "p": 10000
+    }
+   ],
+   [
+    112,
+    "Completed",
+    {
+     "cost": 15000,
+     "chg": 5535,
+     "p": -9465
+    }
+   ],
+   [
+    113,
+    "Completed",
+    {
+     "cost": 768,
+     "chg": 1152,
+     "p": 384
+    }
+   ],
+   [
+    114,
+    "Completed",
+    {
+     "cost": 12500,
+     "chg": 18000,
+     "p": 5500
+    }
+   ],
+   [
+    115,
+    "Cancelled",
+    {
+     "cost": 0,
+     "chg": 0,
+     "p": 0
+    }
+   ],
+   [
+    116,
+    "Completed",
+    {
+     "cost": 9375,
+     "chg": 12000,
+     "p": 2625
+    }
+   ],
+   [
+    117,
+    "No Show",
+    {
+     "cost": 0,
+     "chg": 0,
+     "p": 0
+    }
+   ],
+   [
+    118,
+    "Completed",
+    {
+     "cost": 16250,
+     "chg": 13303,
+     "p": -2947
+    }
+   ],
+   [
+    119,
+    "Completed",
+    {
+     "cost": 20000,
+     "chg": 7290,
+     "p": -12710
+    }
+   ]
+  ],
+  "projects": [
+   [
+    "DEV Project Alpha",
+    {
+     "share": 40000,
+     "prof": 60000,
+     "paid": 30000,
+     "out": 70000,
+     "brev": 100000,
+     "bshare": 40000,
+     "bprof": 60000
+    }
+   ],
+   [
+    "DEV Project Beta",
+    {
+     "share": 150000,
+     "prof": 350000,
+     "paid": 100000,
+     "out": 400000,
+     "brev": 3200,
+     "bshare": 960,
+     "bprof": 2240
+    }
+   ],
+   [
+    "DEV Project Gamma",
+    {
+     "share": 25000,
+     "prof": 25000,
+     "paid": 0,
+     "out": 50000,
+     "brev": 50000,
+     "bshare": 25000,
+     "bprof": 25000
+    }
+   ],
+   [
+    "DEV Project Delta",
+    {
+     "share": 4321,
+     "prof": 8024,
+     "paid": 1111,
+     "out": 11234,
+     "brev": 3790,
+     "bshare": 1327,
+     "bprof": 2463
+    }
+   ]
+  ],
+  "courses": [
+   [
+    "DEV Course A",
+    {
+     "rev": 90000,
+     "share": 27000,
+     "prof": 58000,
+     "brev": 90000,
+     "bshare": 27000,
+     "bcost": 5000,
+     "bprof": 58000
+    }
+   ],
+   [
+    "DEV Course B",
+    {
+     "rev": 200000,
+     "share": 50000,
+     "prof": 150000,
+     "brev": 16400,
+     "bshare": 4100,
+     "bcost": 0,
+     "bprof": 12300
+    }
+   ],
+   [
+    "DEV Course C",
+    {
+     "rev": 12345,
+     "share": 3704,
+     "prof": 7864,
+     "brev": 3790,
+     "bshare": 1137,
+     "bcost": 239,
+     "bprof": 2414
+    }
+   ]
+  ],
+  "total": {
+   "s": {
+    "n": 7,
+    "h": 10.55,
+    "rev": 87280,
+    "cost": 93893,
+    "p": -6613
+   },
+   "L": {
+    "rev": 87280,
+    "cost": 93893,
+    "p": -6613
+   },
+   "P": {
+    "rev": 106990,
+    "cost": 42287,
+    "p": 64703
+   },
+   "R": {
+    "rev": 110190,
+    "cost": 37476,
+    "p": 72714
+   },
+   "rev": 304460,
+   "cost": 173656,
+   "p": 130804
+  },
+  "reportKeys": [
+   "fin",
+   "overall",
+   "teacher",
+   "student",
+   "sum_",
+   "lesson",
+   "proj",
+   "rec",
+   "ledger",
+   "tt",
+   "pay"
+  ],
+  "fin": {
+   "rev": 304460,
+   "cost": 173656,
+   "profit": 130804,
+   "charged": 266260,
+   "studentPaid": 112719,
+   "studentRem": 153541,
+   "teacherCost": 93893,
+   "teacherPaid": 18768,
+   "studentPayments": 39350,
+   "teacherPayments": 18768,
+   "projectPayments": 120000
+  },
+  "counts2": {
+   "t": 3,
+   "s": 5,
+   "sub": 10,
+   "l": 9,
+   "sp": 5,
+   "tp": 4,
+   "tt": 2,
+   "pr": 4,
+   "pp": 2,
+   "rc": 3,
+   "re": 4,
+   "rm": 1,
+   "cur": 4,
+   "rates": 3
+  },
+  "backupRoundTrip": true,
+  "pageDigests": {
+   "Dashboard": "7493:2603966768",
+   "Timetable": "1905:468518843",
+   "Teachers": "1208:974752206",
+   "Students": "1948:612457007",
+   "Subjects": "4191:4066393651",
+   "Lessons": "6812:858818609",
+   "Projects": "2068:2995436002",
+   "Recorded Courses": "3988:3757227212",
+   "Payments": "4533:3746270566",
+   "Reports": "13197:2989739829",
+   "Cash Flow": "13595:3415688990",
+   "Settings": "3460:1210938723"
+  }
+ }
+}
