@@ -25,7 +25,7 @@ function walk(dir: string, out: string[] = []) {
 function embedded() {
   const files: Record<string, string> = {};
   const add = (p: string) => { files["/app/" + relative(ORIG, p).split("\\").join("/")] = readFileSync(p, "utf8"); };
-  if (TEST) { for (const p of walk(ORIG)) if (!/[\\/]vendor[\\/]/.test(p)) add(p); return files; }
+  if (TEST) { for (const p of walk(ORIG)) add(p); return files; }
   for (const p of walk(join(ORIG, "src"))) add(p);
   for (const p of walk(join(ORIG, "db"))) add(p);
   for (const n of ["index.html", "team-login.html", "team-login.js"]) add(join(ORIG, "public", n));

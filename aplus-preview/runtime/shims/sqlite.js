@@ -25,32 +25,40 @@ function bindArgs(args) {
   return args.map(conv);
 }
 
+// node:sqlite reports engine failures as Error{code:'ERR_SQLITE_ERROR', errcode, errstr} with SQLite's own message
+function sq(fn) {
+  try { return fn(); } catch (e) {
+    if (e && !e.code && !(e instanceof TypeError)) { e.code = 'ERR_SQLITE_ERROR'; if (e.errcode === undefined) e.errcode = 1; if (!e.errstr) e.errstr = 'SQL logic error'; }
+    throw e;
+  }
+}
+
 class StatementSync {
   constructor(owner, sql) {
     this._owner = owner; this.sourceSQL = sql;
-    this._st = owner._d.prepare(sql);
+    this._st = sq(() => owner._d.prepare(sql));
     if (registry) registry.register(this, this._st, this);
   }
-  _bind(args) { const st = this._st; st.reset(); st.clearBindings?.(); if (args.length) st.bind(bindArgs(args)); return st; }
+  _bind(args) { const st = this._st; st.reset(); if (args.length) sq(() => st.bind(bindArgs(args))); else st.bind([]); return st; }
   run(...args) {
     const st = this._bind(args);
-    try { st.step(); } finally { st.reset(); }
+    try { sq(() => st.step()); } finally { st.reset(); }
     const d = this._owner._d;
     return { changes: d.getRowsModified(), lastInsertRowid: this._owner._lastId() };
   }
   get(...args) {
     const st = this._bind(args);
-    try { return st.step() ? st.getAsObject() : undefined; } finally { st.reset(); }
+    try { return sq(() => st.step()) ? st.getAsObject() : undefined; } finally { st.reset(); }
   }
   all(...args) {
     const st = this._bind(args); const out = [];
-    try { while (st.step()) out.push(st.getAsObject()); } finally { st.reset(); }
+    try { while (sq(() => st.step())) out.push(st.getAsObject()); } finally { st.reset(); }
     return out;
   }
   *iterate(...args) {
     // a separate statement so nested queries inside the loop cannot disturb the cursor
-    const st = this._owner._d.prepare(this.sourceSQL);
-    try { if (args.length) st.bind(bindArgs(args)); while (st.step()) yield st.getAsObject(); } finally { st.free(); }
+    const st = sq(() => this._owner._d.prepare(this.sourceSQL));
+    try { if (args.length) st.bind(bindArgs(args)); while (sq(() => st.step())) yield st.getAsObject(); } finally { st.free(); }
   }
   setReadBigInts() { return this; }
   setAllowBareNamedParameters() { return this; }
@@ -68,13 +76,13 @@ class DatabaseSync {
       const p = String(this._file).startsWith('/') ? String(this._file) : '/' + String(this._file);
       const dir = p.slice(0, p.lastIndexOf('/')) || '/';
       try { S.FS.stat(dir); } catch (_) { const e = new Error('unable to open database file'); e.code = 'ERR_SQLITE_ERROR'; throw e; }
-      S.__p = p; try { this._d = new S.Database(); } finally { S.__p = null; }
+      S.__p = p; try { this._d = sq(() => new S.Database()); } finally { S.__p = null; }
     }
     this._lid = null;
   }
   get isOpen() { return !!this._d; }
   _lastId() { if (!this._lid) this._lid = this._d.prepare('SELECT last_insert_rowid() AS id'); this._lid.step(); const id = this._lid.get()[0]; this._lid.reset(); return id; }
-  exec(sql) { if (!this._d) throw new Error('database is not open'); this._d.exec(sql); }
+  exec(sql) { if (!this._d) throw new Error('database is not open'); sq(() => this._d.exec(sql)); }
   prepare(sql) { if (!this._d) throw new Error('database is not open'); return new StatementSync(this, sql); }
   close() { if (!this._d) throw new Error('database is not open'); this._d.close(); this._d = null; this._lid = null; }
 }
