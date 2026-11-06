@@ -16,6 +16,7 @@ const PREVIEW_ACCOUNTS = [
   { username: 'dev.coordinator', display_name: 'DEV Coordinator (synthetic)', role: 'Coordinator' },
   { username: 'dev.accountant', display_name: 'DEV Accountant (synthetic)', role: 'Accountant' },
   { username: 'dev.teacher', display_name: 'DEV Teacher (synthetic)', role: 'Teacher' },
+  { username: 'dev.student', display_name: 'DEV Student (synthetic)', role: 'Student' },
 ];
 
 async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () => {}, log = (...a) => console.info('[A+ Hub preview]', ...a), clock } = {}) {
@@ -50,6 +51,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     db().exec('BEGIN');
     try {
       for (const a of PREVIEW_ACCOUNTS) {
+        if (a.role === 'Student') continue;
         if (a.role === 'Teacher' && !teacher) continue;
         TEAM.createUser(db(), { ...a, password: PREVIEW_PASSWORD, active: 1, teacher_id: a.role === 'Teacher' ? teacher.id : undefined }, 'preview-setup');
       }
@@ -57,6 +59,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     } catch (e) { db().exec('ROLLBACK'); throw e; }
   }
 
+  const extension = require('../extensions/service').install(db, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { token: server.token, clock, cookieName: COOKIE });
   let jar = cookie;
   function applySetCookie(v) {
     if (!v) return;
@@ -73,7 +76,17 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     if (!handler) throw new Error('A+ Hub preview server is not running');
     const h = { host: 'localhost:' + PORT, 'sec-fetch-site': 'same-origin', ...headers };
     if (jar) h.cookie = jar;
-    const r = callHandler(handler, method, url, h, body);
+    const normalized = {}; for (const [k,v] of Object.entries(h)) normalized[k.toLowerCase()] = v;
+    const write = !['GET','HEAD'].includes(String(method).toUpperCase());
+    const before = write ? require('../original/src/state').assemble(db()) : null;
+    let r = extension.handler(String(method).toUpperCase(), url, normalized, body);
+    if (!r) r = callHandler(handler, method, url, h, body);
+    if (write && r.status >= 200 && r.status < 300 && before) extension.observe(before, require('../original/src/state').assemble(db()));
+    if (String(method).toUpperCase() === 'GET' && ['/', '/index.html'].includes(url) && extension.actor(normalized)?.role === 'Student') {
+      const original = fs.readFileSync('/app/public/index.html', 'utf8');
+      const html = require('../extensions/ui').studentPage(original, server.token, extension.actor(normalized));
+      const bytes = Buffer.from(html); r = { status:200, headers:{'content-type':'text/html'}, body:bytes, text:()=>html };
+    }
     if (r.headers['set-cookie']) applySetCookie(r.headers['set-cookie']);
     return r;
   }

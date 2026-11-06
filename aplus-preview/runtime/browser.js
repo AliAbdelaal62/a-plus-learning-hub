@@ -48,6 +48,9 @@ async function main() {
     return saving;
   };
   const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); };
+  window.__APLUS_SAVE__ = save;
+  // Additive extension upgrades also need persistence on existing snapshots.
+  await save();
   if (rt.created || !snapshot) await save();
   setInterval(save, 60000); // scheduled automatic backups run inside the original scheduler
 
@@ -132,7 +135,7 @@ async function main() {
   const page = rt.dispatch('GET', '/', {});
   if (status) status.textContent = '';
   document.open(); document.write(page.text()); document.close();
-  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { if (!window.__aplusResetting) save(); }); previewBadge(); };
+  const after = () => { document.addEventListener('click', clickGuard, true); window.addEventListener('pagehide', () => { if (!window.__aplusResetting) save(); }); previewBadge(); require('../extensions/ui').mount(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', after); else after();
 }
 

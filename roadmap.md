@@ -8,4 +8,9 @@
 - [x] Browser-test sign-in, Arabic/RTL, dark mode, add student + reload persistence, role menus (admin/teacher/accountant)
 - [ ] Original browser (Playwright) test suites not yet run against the preview runtime
 - [ ] Remaining UI workflows not yet clicked through individually (payments, batch payments, treasury, restore, exports/downloads, team management)
+- [ ] Add Admin-managed student identity and scoped original-interface portal
+- [ ] Add reconciled student KWD financial/service views, original installments and real approvals
+- [ ] Add scoped bilingual student/teacher statements and accurately labeled print-to-PDF
+- [ ] Add persistent operation-based notifications and released educational workflows
+- [ ] Run security/finance/persistence regression tests and browser workflows for enhancements
 - [ ] Known limitations: data lives only in this browser; no scheduled background backups/reminders while tab closed; no real server-side security boundary
