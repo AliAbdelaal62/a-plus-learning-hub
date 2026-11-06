@@ -36,7 +36,8 @@ async function main() {
 
   function call(method, url, headers, body) {
     const r = rt.dispatch(method, rel(url), headers, body);
-    if (String(method).toUpperCase() !== 'GET') scheduleSave();
+    // save at once: the original pages often reload or navigate right after a write (sign-in, restore, team changes)
+    if (String(method).toUpperCase() !== 'GET') save();
     return r;
   }
 
