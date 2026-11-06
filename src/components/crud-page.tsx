@@ -75,7 +75,7 @@ export function CrudPage({
   const students = useLookup("students");
   const subjects = useLookup("subjects");
   const lookups = { teachers: teachers.data ?? [], students: students.data ?? [], subjects: subjects.data ?? [] };
-  const nameOf = (ref: LookupTable, id: unknown) => (lookups[ref].find((r) => r.id === id)?.name as string) ?? "—";
+  const nameOf = (ref: LookupTable, id: unknown) => (lookups[ref].find((r) => r.id === id)?.["name"] as string) ?? "—";
 
   const list = useQuery({
     queryKey: [table, "list"],
@@ -121,7 +121,7 @@ export function CrudPage({
         if (f.type === "bool") v = Boolean(v);
         payload[f.key] = v;
       }
-      const id = values.id as string | undefined;
+      const id = values["id"] as string | undefined;
       const res = id
         ? await supabase.from(table).update(payload as never).eq("id", id)
         : await supabase.from(table).insert(payload as never);
@@ -229,7 +229,7 @@ export function CrudPage({
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editing?.id ? t("edit") : t("add")} — {t(title)}</DialogTitle>
+            <DialogTitle>{editing?.["id"] ? t("edit") : t("add")} — {t(title)}</DialogTitle>
           </DialogHeader>
           {editing && (
             <form
@@ -312,7 +312,7 @@ function FieldInput({
         <option value="">—</option>
         {lookups[f.ref].map((r) => (
           <option key={r.id} value={r.id}>
-            {r.name as string}
+            {r["name"] as string}
           </option>
         ))}
       </select>
