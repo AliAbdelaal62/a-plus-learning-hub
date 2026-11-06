@@ -23,4 +23,32 @@ const http = {
     return server;
   },
 };
+// Minimal in-process client (http.request / http.get) used only by the original HTTP-level tests.
+function emitter() {
+  const ls = {};
+  return { on(n, f) { (ls[n] = ls[n] || []).push(f); return this; }, once(n, f) { return this.on(n, f); }, emit(n, ...a) { (ls[n] || []).forEach((f) => f(...a)); }, setEncoding() {} };
+}
+http.request = function request(opts, cb) {
+  if (typeof opts === 'string') opts = new URL(opts);
+  const chunks = []; const rq = emitter();
+  rq.write = (c) => { chunks.push(typeof c === 'string' ? c : new TextDecoder().decode(c)); return true; };
+  rq.setTimeout = () => rq; rq.destroy = () => {};
+  rq.end = (c) => {
+    if (c) rq.write(c);
+    setTimeout(() => {
+      const handler = handlers[+opts.port];
+      if (!handler) return rq.emit('error', Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+      try {
+        const { callHandler } = require('../dispatch.js');
+        const r = callHandler(handler, opts.method || 'GET', opts.path || '/', opts.headers || {}, chunks.join(''));
+        const rs = emitter(); rs.statusCode = r.status; rs.headers = r.headers;
+        if (cb) cb(rs);
+        setTimeout(() => { if (r.body.length) rs.emit('data', require('buffer').Buffer.from(r.body)); rs.emit('end'); }, 0);
+      } catch (e) { rq.emit('error', e); }
+    }, 0);
+    return rq;
+  };
+  return rq;
+};
+http.get = function get(opts, cb) { const r = http.request(opts, cb); r.end(); return r; };
 module.exports = { os, http, handlers };
