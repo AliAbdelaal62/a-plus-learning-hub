@@ -31,6 +31,9 @@ function embedded() {
   for (const n of ["index.html", "team-login.html", "team-login.js"]) add(join(ORIG, "public", n));
   for (const p of walk(join(ORIG, "fixtures"))) add(p);
   add(join(ORIG, "package.json"));
+  for (const p of walk(join(HERE, "extensions"))) {
+    if (p.endsWith('.sql') || p.endsWith('.css')) files['/app/preview/' + relative(join(HERE, 'extensions'), p)] = readFileSync(p, 'utf8');
+  }
   return files;
 }
 
