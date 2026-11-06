@@ -1,7 +1,7 @@
 'use strict';
 // Browser stand-in for the parts of Node's `crypto` the original uses: sha256, random bytes, scrypt (same Node defaults
 // N=16384, r=8, p=1, so password hashes are compatible) and constant-time comparison.
-const { Buffer } = require('buffer');
+const { Buffer } = require('aplus-shim:buffer');
 const { sha256 } = require('@noble/hashes/sha256');
 const { scrypt } = require('@noble/hashes/scrypt');
 const bytes = (x, e) => (typeof x === 'string' ? Buffer.from(x, e || 'utf8') : x);

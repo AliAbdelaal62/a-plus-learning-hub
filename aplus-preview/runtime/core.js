@@ -22,7 +22,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
   const S = await initSqlJs({ locateFile });
   globalThis.__APLUS_SQL = S;
   const FS = S.FS;
-  const fs = require('fs');
+  const fs = require('aplus-shim:fs');
   const mk = (d) => { if (!fs.existsSync(d)) FS.mkdirTree(d); };
   mk('/tmp');
   for (const [p, txt] of Object.entries(EMBED)) { mk(p.slice(0, p.lastIndexOf('/'))); FS.writeFile(p, txt); }

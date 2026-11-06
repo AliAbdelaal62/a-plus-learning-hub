@@ -1,7 +1,7 @@
 'use strict';
 // Browser stand-in for Node's `fs` (synchronous calls only), on top of the in-memory Emscripten file system that the
 // SQLite engine also uses. The whole /app/data and /app/backups tree is saved to browser storage by the runtime.
-const { Buffer } = require('buffer');
+const { Buffer } = require('aplus-shim:buffer');
 const FS = () => globalThis.__APLUS_SQL.FS;
 const CODES = { 44: 'ENOENT', 20: 'EEXIST', 54: 'ENOTDIR', 31: 'EISDIR', 55: 'ENOTEMPTY', 28: 'EINVAL' };
 function wrap(fn, op, p) {

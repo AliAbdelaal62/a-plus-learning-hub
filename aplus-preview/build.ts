@@ -47,7 +47,7 @@ const plugin: BunPlugin = {
       http: join(SHIMS, "http.js"), path: require.resolve("path-browserify"), "node:path": require.resolve("path-browserify"),
       buffer: require.resolve("buffer/"),
     };
-    build.onResolve({ filter: /^(node:sqlite|node:fs|fs|crypto|node:crypto|os|http|path|node:path|buffer)$/ }, (a) => (/aplus-preview[\\/]/.test(a.importer) ? { path: map[a.path] } : undefined));
+    build.onResolve({ filter: /^aplus-shim:/ }, (a) => ({ path: map[a.path.slice(11)] }));
     build.onResolve({ filter: /^aplus-embedded$/ }, () => ({ path: "aplus-embedded", namespace: "aplus" }));
     build.onLoad({ filter: /.*/, namespace: "aplus" }, () => ({ contents: "module.exports=" + JSON.stringify(embedded()), loader: "js" }));
     build.onLoad({ filter: /sql-wasm-debug\.js$/ }, (a) => {
@@ -62,6 +62,7 @@ const plugin: BunPlugin = {
       const rel = relative(ORIG, a.path).split("\\").join("/");
       let s = readFileSync(a.path, "utf8");
       s = s.split("__dirname").join(JSON.stringify("/app/" + dirname(rel)));
+      s = s.replace(/require\((['"])(node:sqlite|node:fs|fs|crypto|node:crypto|os|http|path|node:path|buffer)\1\)/g, (_m, _q, n) => `require("aplus-shim:${n}")`);
       if (rel === "src/server.js") {
         // the page uses synchronous XMLHttpRequest, so the handler must finish synchronously (body is already in memory)
         s = replaceExact(s, "async function api(req, res, url)", "function api(req, res, url)", rel, 1);
