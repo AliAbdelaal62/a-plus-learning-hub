@@ -47,7 +47,7 @@ const plugin: BunPlugin = {
       http: join(SHIMS, "http.js"), path: require.resolve("path-browserify"), "node:path": require.resolve("path-browserify"),
       buffer: require.resolve("buffer/"),
     };
-    build.onResolve({ filter: /^(node:sqlite|node:fs|fs|crypto|node:crypto|os|http|path|node:path|buffer)$/ }, (a) => ({ path: map[a.path] }));
+    build.onResolve({ filter: /^(node:sqlite|node:fs|fs|crypto|node:crypto|os|http|path|node:path|buffer)$/ }, (a) => (/aplus-preview[\\/]/.test(a.importer) ? { path: map[a.path] } : undefined));
     build.onResolve({ filter: /^aplus-embedded$/ }, () => ({ path: "aplus-embedded", namespace: "aplus" }));
     build.onLoad({ filter: /.*/, namespace: "aplus" }, () => ({ contents: "module.exports=" + JSON.stringify(embedded()), loader: "js" }));
     build.onLoad({ filter: /sql-wasm-debug\.js$/ }, (a) => {
