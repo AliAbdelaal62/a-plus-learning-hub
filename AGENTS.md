@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Staff access is role-based via `user_roles` + security-definer helpers (`is_staff`, `can_edit`, `my_teacher_id`); admin/coordinator write, teacher-only accounts see just their own lessons/schedule — keeps permissions enforced in the database, not the UI.
+- Simple record pages use the shared `CrudPage` field config (`src/components/crud-page.tsx`) — one place for list/search/edit behavior.
+- All UI text goes through `src/lib/i18n.tsx` (`t(key)`); the document `dir` follows the language — the app is bilingual.
