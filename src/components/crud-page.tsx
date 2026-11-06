@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useI18n, type TKey } from "@/lib/i18n";
+import { useI18n, WEEKDAYS, type TKey } from "@/lib/i18n";
 import { canEdit, useAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,7 +91,7 @@ export function CrudPage({
     if (f.type === "ref" && f.ref) return nameOf(f.ref, v);
     if (f.type === "enum") return <Badge variant="secondary">{t(v as TKey)}</Badge>;
     if (f.type === "bool") return v ? t("yes") : t("no");
-    if (f.type === "weekday") return ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"][v as number] && (lang === "ar" ? ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])[v as number];
+    if (f.type === "weekday") return WEEKDAYS[lang][v as number];
     if (f.type === "time") return String(v).slice(0, 5);
     return String(v);
   };
@@ -299,7 +299,7 @@ function FieldInput({
     return (
       <select id={f.key} className={selectCls} value={v} required={f.required} onChange={(e) => onChange(e.target.value)}>
         <option value="">—</option>
-        {(lang === "ar" ? ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"] : ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]).map((d, i) => (
+        {WEEKDAYS[lang].map((d, i) => (
           <option key={i} value={i}>
             {d}
           </option>
