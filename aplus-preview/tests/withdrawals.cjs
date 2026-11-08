@@ -1,0 +1,35 @@
+ 'use strict';
+const assert=require('node:assert/strict'),path=require('node:path'),os=require('node:os');
+const {createRuntime}=require(path.join(os.tmpdir(),'aplus-node-core.cjs'));
+let rt,n=0;const check=(v,m)=>{assert.ok(v,m);n++;};
+const json=r=>JSON.parse(r.text()),get=p=>rt.dispatch('GET',p),post=(p,b={})=>rt.dispatch('POST',p,{'content-type':'application/json','x-aplus-token':rt.server.token},JSON.stringify(b));
+const login=username=>{post('/api/auth/logout');check(post('/api/auth/login',{username,password:'DevPreview-2026!'}).status===200,username+' login');};
+const db=()=>rt.server.ctx.db;
+const original=()=>JSON.stringify(['lessons','student_payments','teacher_payments','projects','project_payments','recorded_courses','course_enrollments','student_adjustments','billing_contracts','billing_installments'].map(t=>db().prepare('SELECT * FROM '+t+' ORDER BY id').all()));
+(async()=>{rt=await createRuntime({clock:()=>new Date('2026-11-08T10:00:00Z'),locateFile:f=>path.resolve('node_modules/sql.js/dist',f),log:()=>{}});try{
+ login('dev.admin');const st=json(get('/api/state')).state;const e=st.re.find(e=>e.s===st.s[0].id);check(!!e,'enrollment fixture exists');
+ const share=post('/api/preview/share',{student_id:e.s,kind:'Course',source_id:e.id,title:'Synthetic course link',body:'Lesson content',url:'https://example.com/lesson',released:1});check(share.status===200,'course material fixture');
+ const before=original(),req={enrollment_id:e.id,withdrawn_on:'2026-11-08',reason:'Student withdrawal requested by administration',acknowledge_finance:true,refund_requested:true};
+ const prior=json(get('/api/preview/student-statement?student='+e.s));
+ for(const role of ['dev.student','dev.teacher','dev.accountant']){login(role);check(post('/api/preview/course-withdrawals',req).status===403,'direct withdrawal denied to '+role);check(get('/api/preview/course-withdrawals').status===(role==='dev.accountant'?200:403),'withdrawal list permission for '+role);}
+ login('dev.student');check(json(get('/api/preview/student')).shares.some(s=>s.kind==='Course'&&s.source_id===e.id),'content visible before withdrawal');
+ login('dev.admin');
+ check(post('/api/preview/course-withdrawals',{...req,acknowledge_finance:false}).status===422,'financial acknowledgement required');
+ check(post('/api/preview/course-withdrawals',{...req,reason:''}).status===422,'reason required');
+ check(post('/api/preview/course-withdrawals',{...req,withdrawn_on:'2026-11-09'}).status===422,'future withdrawal denied');
+ check(post('/api/preview/course-withdrawals',{...req,enrollment_id:999999}).status===404,'missing enrollment denied');
+ check(post('/api/preview/course-withdrawals',req).status===200,'admin records withdrawal immediately');
+ check(original()===before,'all original financial and academic records preserved');
+ const after=json(get('/api/preview/student-statement?student='+e.s));for(const k of ['opening','charges','payments','student_adjustments','closing','services','installments'])check(JSON.stringify(prior[k])===JSON.stringify(after[k]),'financial statement unchanged '+k);
+ const count=db().prepare('SELECT count(*) n FROM preview_notifications').get().n;
+ check(post('/api/preview/course-withdrawals',req).status===200,'same retry idempotent');check(db().prepare('SELECT count(*) n FROM preview_notifications').get().n===count,'retry does not duplicate notification');
+ check(post('/api/preview/course-withdrawals',{...req,reason:'Different reason'}).status===409,'conflicting replacement denied');
+ check(post('/api/preview/share',{student_id:e.s,kind:'Course',source_id:e.id,title:'Cannot release more',body:'Denied',url:'',released:1}).status===422,'new course shares blocked after withdrawal');
+ login('dev.student');const portal=json(get('/api/preview/student')),course=portal.courses.find(c=>c.id===e.id);check(!!course.withdrawal,'student retains withdrawal history');check(course.materials.length===0,'no delivery links after withdrawal');check(!portal.shares.some(s=>s.kind==='Course'&&s.source_id===e.id),'released course content removed from student projection');check(json(get('/api/preview/notifications')).rows.some(n=>n.kind==='CourseWithdrawn'),'student notified');
+ login('dev.coordinator');const other=json(get('/api/preview/course-withdrawals')).rows.find(x=>x.id!==e.id&&!x.withdrawal);check(!!other,'second enrollment exists');check(post('/api/preview/course-withdrawals',{...req,enrollment_id:other.id,refund_requested:false}).status===200,'coordinator can record direct withdrawal');
+ check(original()===before,'coordinator cannot change finances by withdrawal');
+ const snap=rt.snapshot();await rt.stop();rt=await createRuntime({snapshot:snap,clock:()=>new Date('2026-11-08T10:00:00Z'),locateFile:f=>path.resolve('node_modules/sql.js/dist',f),log:()=>{}});
+ login('dev.admin');check(json(get('/api/preview/course-withdrawals')).rows.find(x=>x.id===e.id).withdrawal.refund_requested===1,'withdrawal and refund-review flag survive restart');
+ check(db().prepare("SELECT count(*) n FROM audit_log WHERE entity='preview-course-withdrawal'").get().n===2,'one audit record for each actual withdrawal');
+ console.log('WITHDRAWALS REGRESSION OK: '+n+' checks');
+ }finally{await rt.stop();}})().catch(e=>{console.error(e);process.exitCode=1;});

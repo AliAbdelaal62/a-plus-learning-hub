@@ -32742,6 +32742,12 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
  kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,\r
  UNIQUE(event_key,recipient_id)\r
 );\r
+\r
+CREATE TABLE IF NOT EXISTS preview_course_withdrawals(\r
+ enrollment_id INTEGER PRIMARY KEY REFERENCES course_enrollments(id),\r
+ withdrawn_on TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,\r
+ refund_requested INTEGER NOT NULL DEFAULT 0 CHECK(refund_requested IN(0,1))\r
+);\r
 ` };
   });
 
@@ -42331,6 +42337,65 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
     module.exports = { install };
   });
 
+  // aplus-preview/extensions/withdrawals.js
+  var require_withdrawals = __commonJS(function(exports, module) {
+    var { assemble } = require_state();
+    var { tx } = require_db();
+    var rules = require_rules();
+    var cairo = require_cairo();
+    var fail = (code, message) => {
+      throw Object.assign(new Error(message), { code });
+    };
+    function install(db, { clock, audit, notify }) {
+      const canManage = (u) => ["Admin", "Coordinator"].includes(u.role);
+      const find = (id) => db().prepare("SELECT * FROM preview_course_withdrawals WHERE enrollment_id=?").get(id);
+      function list(u) {
+        if (!canManage(u) && u.role !== "Accountant")
+          fail(403, "Administration or financial access required.");
+        const st = assemble(db());
+        return st.re.map((e) => {
+          const c = st.rc.find((c) => c.id === e.rc);
+          return { id: e.id, student: st.s.find((s) => s.id === e.s)?.name || "", course: c?.name || "", currency: c?.cur || "", price: e.price, recordedPaid: e.paid, withdrawal: find(e.id) || null };
+        });
+      }
+      function create(u, r) {
+        if (!canManage(u))
+          fail(403, "Administration access required.");
+        if (!Number.isInteger(r.enrollment_id))
+          fail(422, "Choose an existing course enrollment.");
+        const st = assemble(db()), e = st.re.find((e) => e.id === r.enrollment_id);
+        if (!e)
+          fail(404, "Course enrollment not found.");
+        if (typeof r.reason !== "string" || !rules.plain(r.reason, 500) || r.reason.trim().length < 3)
+          fail(422, "Enter a withdrawal reason.");
+        if (!rules.isDate(r.withdrawn_on) || r.withdrawn_on > cairo.today(clock()) || e.date && r.withdrawn_on < e.date)
+          fail(422, "Choose a withdrawal date between enrollment and today.");
+        if (r.acknowledge_finance !== true)
+          fail(422, "Confirm that withdrawal does not settle or refund money.");
+        if (typeof r.refund_requested !== "boolean")
+          fail(422, "Choose whether a refund review is requested.");
+        const old = find(e.id);
+        if (old) {
+          if (old.withdrawn_on === r.withdrawn_on && old.reason === r.reason.trim() && old.refund_requested === Number(r.refund_requested))
+            return old;
+          fail(409, "This enrollment is already withdrawn.");
+        }
+        return tx(db(), () => {
+          const row = { enrollment_id: e.id, withdrawn_on: r.withdrawn_on, reason: r.reason.trim(), actor: u.username, created_at: clock().toISOString(), refund_requested: Number(r.refund_requested) };
+          db().prepare("INSERT INTO preview_course_withdrawals(enrollment_id,withdrawn_on,reason,actor,created_at,refund_requested) VALUES(?,?,?,?,?,?)").run(...Object.values(row));
+          audit(u, "create", "course-withdrawal", e.id, null, row);
+          notify("course-withdrawal:" + e.id, "Student", e.s, "CourseWithdrawn", e.id);
+          const c = st.rc.find((c) => c.id === e.rc);
+          if (c?.inst)
+            notify("course-withdrawal:" + e.id, "Teacher", c.inst, "CourseWithdrawn", e.id);
+          return row;
+        });
+      }
+      return { list, create, find };
+    }
+    module.exports = { install };
+  });
+
   // aplus-preview/extensions/service.js
   var require_service = __commonJS(function(exports, module) {
     var crypto2 = require_crypto2();
@@ -42444,7 +42509,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         return id;
       };
       function educational(st, s) {
-        const label = (a, id) => a.find((x) => x.id === id)?.name || "", regs = db().prepare("SELECT * FROM service_registrations WHERE student_id=?").all(s), shares = db().prepare("SELECT id,kind,source_id,title,body,url,due_on FROM preview_shares WHERE student_id=? AND released=1").all(s), bookings = db().prepare("SELECT * FROM managed_sessions WHERE student_id=?").all(s);
+        const label = (a, id) => a.find((x) => x.id === id)?.name || "", regs = db().prepare("SELECT * FROM service_registrations WHERE student_id=?").all(s), shares = db().prepare("SELECT id,kind,source_id,title,body,url,due_on FROM preview_shares WHERE student_id=? AND released=1").all(s).filter((x) => x.kind !== "Course" || !WITHDRAWALS.find(x.source_id)), bookings = db().prepare("SELECT * FROM managed_sessions WHERE student_id=?").all(s);
         const teacherIds = new Set([...regs.map((r) => r.teacher_id), ...st.l.filter((l) => l.s === s).map((l) => l.t), ...st.tt.filter((t) => (t.s || []).includes(s)).map((t) => t.t)]), safeSt = { ...st, l: st.l.filter((l) => l.s === s), tt: st.tt.filter((t) => (t.s || []).includes(s)).map((t) => ({ ...t, s: [s] })), s: st.s.filter((x) => x.id === s) };
         const start = require_cairo().today(clock()), end = require_cairo().addDays(start, 13), schedule = [...teacherIds].filter(Boolean).flatMap((t) => require_teacher_portal().schedule(safeSt, t, bookings, { from: start, to: end }).map((r) => {
           const { students, ...safe } = r;
@@ -42461,7 +42526,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           subjects: st.sub.filter((x) => (x.studs || []).includes(s) || regs.some((r) => r.subject_id === x.id) || st.l.some((l) => l.s === s && l.sub === x.id)).map((x) => ({ id: x.id, name: x.name, type: x.type, teacher: label(st.t, x.inst) })),
           lessons: st.l.filter((l) => l.s === s && l.st === "Completed").map((l) => ({ id: l.id, date: l.date, subject: label(st.sub, l.sub), teacher: label(st.t, l.t), hours: l.d, status: l.st, attendance: db().prepare("SELECT status FROM lesson_attendance WHERE lesson_id=?").get(l.id)?.status || "", summary: shares.filter((x) => x.kind === "Lesson" && x.source_id === l.id) })),
           projects: st.pr.filter((p) => p.s === s).map((p) => ({ id: p.id, name: p.name, teacher: label(st.t, p.t), status: p.status, due: p.due, stages: db().prepare("SELECT id,title,due_on,status FROM project_stages WHERE project_id=?").all(p.id) })),
-          courses: st.re.filter((e) => e.s === s).map((e) => ({ id: e.id, name: label(st.rc, e.rc), materials: db().prepare("SELECT id,title,url,delivered_on,status FROM course_deliveries WHERE enrollment_id=? AND status IN('Sent','Confirmed')").all(e.id) })),
+          courses: st.re.filter((e) => e.s === s).map((e) => ({ id: e.id, name: label(st.rc, e.rc), withdrawal: WITHDRAWALS.find(e.id) ? { withdrawn_on: WITHDRAWALS.find(e.id).withdrawn_on, reason: WITHDRAWALS.find(e.id).reason, refund_requested: WITHDRAWALS.find(e.id).refund_requested } : null, materials: WITHDRAWALS.find(e.id) ? [] : db().prepare("SELECT id,title,url,delivered_on,status FROM course_deliveries WHERE enrollment_id=? AND status IN('Sent','Confirmed')").all(e.id) })),
           shares,
           submissions: db().prepare("SELECT s.id,s.share_id,s.body,s.url,s.updated_at,f.body feedback FROM preview_submissions s LEFT JOIN preview_feedback f ON f.submission_id=s.id AND f.published=1 WHERE s.student_id=?").all(s)
         };
@@ -42500,6 +42565,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         return db().prepare("SELECT * FROM preview_requests WHERE id=?").get(id);
       }
       const RESCHEDULE = require_rescheduling().install(db, { clock, request, audit, notify });
+      const WITHDRAWALS = require_withdrawals().install(db, { clock, audit, notify });
       function handler(method, path, headers, body) {
         const url = new URL(path, "http://localhost"), p = url.pathname, u = actor(headers), write2 = !["GET", "HEAD"].includes(method);
         let b;
@@ -42561,6 +42627,13 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           }
           if (!u)
             fail(401, "Sign in to access your account.");
+          if (p === "/api/preview/course-withdrawals") {
+            if (method === "GET")
+              return response({ ok: true, rows: WITHDRAWALS.list(u) });
+            if (method === "POST")
+              return response({ ok: true, withdrawal: WITHDRAWALS.create(u, parse()) });
+            fail(405, "Method not allowed.");
+          }
           if (method === "GET") {
             if (p === "/api/preview/student")
               return response({ ok: true, ...educational(assemble(db()), sid(u, url)) });
@@ -42780,6 +42853,8 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           return row ? { teacher: row.t } : null;
         }
         if (kind === "Course") {
+          if (WITHDRAWALS.find(id))
+            return null;
           row = st.re.find((e) => e.id === id && e.s === s);
           return row ? { teacher: st.rc.find((c) => c.id === row.rc)?.inst } : null;
         }
@@ -43148,13 +43223,13 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
     var sections = [
       { key: "workspace", en: "Workspace", ar: "مساحة العمل", routes: ["Dashboard", "Daily Desk"], pages: ["overview", "notifications"] },
       { key: "schedule", en: "Scheduling", ar: "المواعيد والجدولة", routes: ["Timetable", "Scheduling", "My Schedule"], pages: ["schedule", "requests"] },
-      { key: "academy", en: "Academy", ar: "الأكاديمية", routes: ["Students", "Teachers", "Subjects", "Lessons", "Recorded Courses", "Projects", "My Subjects", "My Projects", "Delivery"], pages: ["subjects", "lessons", "courses", "projects", "education"] },
+      { key: "academy", en: "Academy", ar: "الأكاديمية", routes: ["Students", "Teachers", "Subjects", "Lessons", "Recorded Courses", "Projects", "My Subjects", "My Projects", "Delivery"], pages: ["subjects", "lessons", "courses", "projects", "education", "withdrawals"] },
       { key: "finance", en: "Finance", ar: "المالية", routes: ["Payments", "Batch Payments", "Treasury", "Reports", "Cash Flow", "Billing", "Financial Summary"], pages: ["student-statement", "teacher-statement", "plans"] },
       { key: "operations", en: "Operations", ar: "التشغيل والمتابعة", routes: ["Registrations", "Attendance & Notes", "Follow-up Tasks"], pages: [] },
       { key: "administration", en: "Administration", ar: "الإدارة", routes: ["Teacher Preview", "Team", "Settings"], pages: ["accounts", "audit"] }
     ];
     var paths = { grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z", calendar: "M4 5h16v16H4z M4 10h16 M8 3v4 M16 3v4", book: "M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1z M12 5v15", file: "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h7", bell: "M6 9a6 6 0 0 1 12 0v6l2 3H4l2-3z M10 21h4", users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M17 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3", check: "M4 4h16v16H4z M8 12l3 3 5-6" };
-    var icons = { overview: "grid", notifications: "bell", schedule: "calendar", requests: "check", subjects: "book", lessons: "book", courses: "book", projects: "file", education: "book", "student-statement": "file", "teacher-statement": "file", plans: "calendar", accounts: "users", audit: "file" };
+    var icons = { overview: "grid", notifications: "bell", schedule: "calendar", requests: "check", subjects: "book", lessons: "book", courses: "book", projects: "file", education: "book", "student-statement": "file", "teacher-statement": "file", plans: "calendar", accounts: "users", audit: "file", withdrawals: "book" };
     var icon = (key) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + paths[icons[key] || "file"] + '"/></svg>';
     function integrate(scroll, pages, { lang = "en", active = null } = {}) {
       if (!scroll)
@@ -43259,6 +43334,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       let page = "overview", data = null, directory = null, selection = "", from = "", to = "", statement = null, extensionActive = student;
       const pages = student ? [["overview", "Overview", "نظرة عامة"], ["subjects", "My Subjects", "موادي"], ["schedule", "My Schedule", "جدولي"], ["requests", "My Change Requests", "طلبات تغيير مواعيدي"], ["lessons", "Previous Lessons", "الدروس السابقة"], ["courses", "Recorded Courses", "الدورات المسجلة"], ["projects", "Projects and Deliverables", "المشاريع والتسليمات"], ["student-statement", "Financial Summary and Statement", "الملخص المالي وكشف الحساب"], ["notifications", "Notifications", "الإشعارات"]] : [
         ...financial ? [["student-statement", "Student Statements", "كشوف الطلاب"], ["teacher-statement", "Teacher Statements", "كشوف المعلمين"], ["plans", "Installment Plans", "خطط الأقساط"]] : teacher ? [["teacher-statement", "Teacher Statement", "كشف المعلم"]] : [],
+        ...["Admin", "Coordinator", "Accountant"].includes(user.role) ? [["withdrawals", "Course Withdrawals", "انسحابات الكورسات"]] : [],
         ...user.role === "Admin" ? [["accounts", "Student Accounts", "حسابات الطلاب"]] : [],
         ...["Admin", "Accountant", "Coordinator", "Student", "Teacher"].includes(user.role) ? [["requests", "Pending Approvals", "طلبات الموافقة"]] : [],
         ...["Admin", "Coordinator", "Teacher"].includes(user.role) ? [["education", "Learning Materials & Assignments", "المحتوى والواجبات"]] : [],
@@ -43267,6 +43343,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
       ];
       const status = (s) => ({ Upcoming: tr("Upcoming", "قادم"), Due: tr("Due", "مستحق"), Overdue: tr("Overdue", "متأخر"), Paid: tr("Paid", "مدفوع"), "Partially paid": tr("Partially paid", "مدفوع جزئياً"), Cancelled: tr("Cancelled", "ملغى"), Pending: tr("Pending", "قيد الانتظار"), Approved: tr("Approved", "مقبول"), Rejected: tr("Rejected", "مرفوض") })[s] || s;
       const descriptions = {
+        withdrawals: ["Record a direct withdrawal. Historical charges and payments stay unchanged; refunds and fee settlements require separate financial processing.", "سجّل انسحابًا مباشرًا. الرسوم والمدفوعات السابقة محفوظة؛ رد الأموال وتسوية الرسوم يحتاجان إجراءً ماليًا منفصلًا."],
         overview: ["Your lessons, learning and next actions in one place.", "حصصك وموادك وخطواتك القادمة في مكان واحد."],
         schedule: ["Review upcoming lessons or request a different time.", "راجع حصصك القادمة أو اطلب موعدًا مختلفًا."],
         requests: ["Track requests and the decisions required before a change takes effect.", "تابع الطلبات والموافقات المطلوبة قبل تنفيذ أي تغيير."],
@@ -43283,6 +43360,10 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         audit: ["Review recorded administrative and financial changes.", "راجع التغييرات الإدارية والمالية المسجّلة."]
       };
       const translatedError = (message) => ({
+        "Enter a withdrawal reason.": tr("Enter a withdrawal reason.", "اكتب سبب الانسحاب."),
+        "Choose a withdrawal date between enrollment and today.": tr("Choose a withdrawal date between enrollment and today.", "اختر تاريخ انسحاب من تاريخ الاشتراك وحتى اليوم."),
+        "Confirm that withdrawal does not settle or refund money.": tr("Confirm that withdrawal does not settle or refund money.", "أكد أن الانسحاب لا يسجل تسوية أو رد أموال."),
+        "This enrollment is already withdrawn.": tr("This enrollment is already withdrawn.", "تم تسجيل انسحاب هذا الاشتراك بالفعل."),
         "Choose Egypt, Kuwait or the United Kingdom.": tr("Choose an available country.", "اختر دولة من القائمة المتاحة."),
         "This local time does not exist because of a daylight-saving change. Choose another time.": tr("This time is skipped by a daylight-saving change. Choose another time.", "هذا الوقت غير موجود بسبب الانتقال للتوقيت الصيفي. اختر وقتًا آخر."),
         "This local time occurs twice because of a daylight-saving change. Choose another time.": tr("This time occurs twice when clocks change. Choose another time.", "هذا الوقت يتكرر مرتين عند تغيير الساعة. اختر وقتًا آخر لتجنب الالتباس."),
@@ -43428,11 +43509,15 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         const a = api("accounts");
         return '<form id="extension-account-form"><div class="fg">' + field("id", "Account ID (blank for new)", "رقم الحساب (فارغ للجديد)", "number") + field("username", "Username", "اسم المستخدم") + field("display_name", "Display name", "الاسم الظاهر") + "<label>" + tr("Linked student", "الطالب المرتبط") + '<select name="student_id">' + a.students.map((s) => '<option value="' + s.id + '">' + esc(s.name) + "</option>").join("") + "</select></label>" + field("password", "Password (12+ characters)", "كلمة المرور (١٢ حرفاً أو أكثر)", "password") + "<label>" + tr("Status", "الحالة") + '<select name="active"><option value="1">' + tr("Active", "نشط") + '</option><option value="0">' + tr("Disabled", "معطل") + '</option></select></label></div><button class="b" type="submit">' + tr("Save account", "حفظ الحساب") + "</button></form>" + table([tr("ID", "الرقم"), tr("Username", "اسم المستخدم"), tr("Student", "الطالب"), tr("Status", "الحالة")], a.accounts.map((x) => [text(x.id), text(x.username), text(a.students.find((s) => s.id === x.student_id)?.name), text(x.active ? tr("Active", "نشط") : tr("Disabled", "معطل"))]));
       }
+      function withdrawals() {
+        const rows = api("course-withdrawals").rows, active = rows.filter((x) => !x.withdrawal);
+        return '<p class="mut">' + tr("Withdrawal stops future access through the portal and preserves the enrollment, charges, receipts and teacher earnings. A refund-review flag is not an executed refund. Previously downloaded files cannot be recalled.", "الانسحاب يوقف الوصول اللاحق من البوابة ويحفظ الاشتراك والرسوم والإيصالات ومستحقات المدرس. طلب مراجعة الاسترداد لا يعني تنفيذ رد الأموال. الملفات التي نزلت سابقًا لا يمكن سحبها.") + "</p>" + (active.length && user.role !== "Accountant" ? '<form id="extension-withdrawal-form"><div class="fg"><label>' + tr("Student and recorded course", "الطالب والكورس المسجل") + '<select name="enrollment_id">' + active.map((x) => '<option value="' + x.id + '">' + esc(x.student + " · " + x.course + " · #" + x.id) + "</option>").join("") + "</select></label>" + field("withdrawn_on", "Withdrawal date", "تاريخ الانسحاب", "date", new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date)) + field("reason", "Reason visible to the student", "السبب الظاهر للطالب") + '</div><label><input type="checkbox" name="refund_requested">' + tr("Request financial review for a full or partial refund; no refund is recorded here.", "طلب مراجعة مالية لرد كامل أو جزئي؛ لن تسجل عملية رد أموال هنا.") + '</label><label><input type="checkbox" name="acknowledge_finance" required>' + tr("Confirm direct withdrawal. Access stops; amounts owed and installments are unchanged pending separate financial settlement.", "تأكيد الانسحاب المباشر. يتوقف الوصول وتظل المستحقات والأقساط كما هي لحين التسوية المالية المنفصلة.") + '</label><button class="b" type="submit">' + tr("Confirm withdrawal", "تأكيد الانسحاب") + "</button></form>" : "") + table([tr("Student", "الطالب"), tr("Course", "الكورس"), tr("Recorded price", "القيمة المسجلة"), tr("Recorded paid amount", "المدفوع المسجل"), tr("Status", "الحالة"), tr("Withdrawal date", "تاريخ الانسحاب"), tr("Reason", "السبب"), tr("Refund review", "مراجعة الاسترداد")], rows.map((x) => [text(x.student), text(x.course), money(x.price, x.currency), money(x.recordedPaid, x.currency), text(x.withdrawal ? tr("Withdrawn", "منسحب") : tr("Enrolled", "مشترك")), text(x.withdrawal?.withdrawn_on), text(x.withdrawal?.reason), text(x.withdrawal?.refund_requested ? tr("Requested — review financial transactions", "مطلوبة — راجع الحركات المالية") : tr("Not requested", "غير مطلوبة"))]));
+      }
       function plans() {
         const prefix = picker("student"), s = api("plans?student=" + selection);
         return '<div class="bar">' + prefix + "</div>" + installments(s) + '<form id="extension-plan-form"><div class="fg">' + field("id", "Installment ID (blank for new)", "رقم القسط (فارغ للجديد)", "number") + "<label>" + tr("Existing obligation", "الالتزام القائم") + '<select name="contract_id">' + s.installments.map((c) => '<option value="' + c.id + '">' + esc(c.title) + " #" + c.id + "</option>").join("") + "</select></label>" + field("due_on", "Due date", "تاريخ الاستحقاق", "date") + field("amount", "Amount (original currency)", "المبلغ (العملة الأصلية)", "number") + field("reason", "Student-facing reason", "السبب الظاهر للطالب") + '</div><button class="b" type="submit">' + tr("Submit plan", "إرسال الخطة") + "</button></form>";
       }
-      const notificationsText = (k) => ({ RescheduleRequested: tr("Lesson time-change request awaiting your decision", "طلب تغيير موعد حصة بانتظار قرارك"), RescheduleRejected: tr("Lesson time-change request rejected", "تم رفض طلب تغيير موعد الحصة"), RescheduleAwaitingSecondApproval: tr("One approval recorded; waiting for the other party", "تم تسجيل موافقة وبانتظار الطرف الآخر"), PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
+      const notificationsText = (k) => ({ CourseWithdrawn: tr("Course enrollment withdrawn; review its financial settlement separately", "تم تسجيل الانسحاب من الكورس؛ التسوية المالية إجراء منفصل"), RescheduleRequested: tr("Lesson time-change request awaiting your decision", "طلب تغيير موعد حصة بانتظار قرارك"), RescheduleRejected: tr("Lesson time-change request rejected", "تم رفض طلب تغيير موعد الحصة"), RescheduleAwaitingSecondApproval: tr("One approval recorded; waiting for the other party", "تم تسجيل موافقة وبانتظار الطرف الآخر"), PaymentRecorded: tr("Payment recorded", "تم تسجيل دفعة"), TeacherPayment: tr("Teacher payment recorded", "تم تسجيل دفعة للمعلم"), FinancialCorrection: tr("Financial correction", "تصحيح مالي"), RefundRecorded: tr("Refund recorded", "تم تسجيل استرداد"), CreditChanged: tr("Credit changed", "تم تعديل الرصيد"), PlanChanged: tr("Installment plan approved or changed", "تم اعتماد أو تعديل خطة الأقساط"), ScheduleChanged: tr("Schedule change approved", "تمت الموافقة على تغيير الجدول"), MaterialReleased: tr("Learning item released", "تم نشر مادة تعليمية"), FeedbackPublished: tr("Feedback published", "تم نشر الملاحظات") })[k] || k;
       const zoneLabel = (zone) => {
         const z = TZ.ZONES.find((z) => z.id === zone);
         return z ? tr(z.en, z.ar) : zone;
@@ -43603,7 +43688,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
         if (page === "lessons")
           return table([tr("Date", "التاريخ"), tr("Subject", "المادة"), tr("Teacher", "المعلم"), tr("Hours", "الساعات"), tr("Attendance", "الحضور"), tr("Shared summary", "الملخص المشترك")], s.lessons.map((l) => [text(l.date), text(l.subject), text(l.teacher), text(l.hours), text(l.attendance), l.summary.map((x) => text(x.body)).join("<br>")]));
         if (page === "courses")
-          return s.courses.map((c) => "<h3>" + text(c.name) + "</h3>" + table([tr("Released material", "المادة المنشورة"), tr("Link", "الرابط")], c.materials.map((m) => [text(m.title), link(m.url)])) + s.shares.filter((x) => x.kind === "Course" && x.source_id === c.id).map((x) => "<p>" + text(x.title) + " · " + text(x.body) + " " + link(x.url) + "</p>").join("")).join("") || tr("No enrollments", "لا توجد تسجيلات");
+          return s.courses.map((c) => "<h3>" + text(c.name) + "</h3>" + (c.withdrawal ? "<p>" + tr("Withdrawn", "منسحب") + " · " + text(c.withdrawal.withdrawn_on) + " · " + text(c.withdrawal.reason) + "</p><p>" + tr("Financial settlement is separate. Review your statement; withdrawal alone does not waive charges or confirm a refund.", "التسوية المالية منفصلة. راجع كشف حسابك؛ الانسحاب وحده لا يلغي الرسوم ولا يؤكد رد الأموال.") + "</p>" : "") + table([tr("Released material", "المادة المنشورة"), tr("Link", "الرابط")], c.materials.map((m) => [text(m.title), link(m.url)])) + s.shares.filter((x) => x.kind === "Course" && x.source_id === c.id).map((x) => "<p>" + text(x.title) + " · " + text(x.body) + " " + link(x.url) + "</p>").join("")).join("") || tr("No enrollments", "لا توجد تسجيلات");
         return s.projects.map((p) => "<h3>" + text(p.name) + " · " + text(p.teacher) + "</h3>" + table([tr("Stage", "المرحلة"), tr("Deadline", "الموعد"), tr("Status", "الحالة")], p.stages.map((x) => [text(x.title), text(x.due_on), text(status(x.status))]))).join("") + "<h3>" + tr("Released assignments", "التكليفات المنشورة") + "</h3>" + s.shares.filter((x) => ["Assignment", "Project", "Stage"].includes(x.kind)).map((x) => {
           const sub = s.submissions.find((a) => a.share_id === x.id);
           return "<h4>" + text(x.title) + "</h4><p>" + text(x.body) + " " + link(x.url) + " · " + text(x.due_on) + '</p><form data-submit="' + x.id + '"><div class="fg">' + field("body", "Submission", "التسليم", "text", sub?.body || "") + field("url", "HTTPS link", "رابط HTTPS", "url", sub?.url || "") + '</div><button class="b" type="submit">' + tr("Submit", "تسليم") + "</button></form><p>" + tr("Published feedback", "الملاحظات المنشورة") + ": " + text(sub?.feedback || "") + "</p>";
@@ -43619,7 +43704,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
           if (!v)
             return;
           const name = pages.find((x) => x[0] === page);
-          v.innerHTML = '<section id="extension-view" data-ui-user-content><header class="extension-heading"><p class="extension-eyebrow">' + esc(NAV.groupFor(page) ? tr(NAV.groupFor(page).en, NAV.groupFor(page).ar) : "") + "</p><h2>" + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p class="extension-description">' + esc(tr(...descriptions[page] || ["", ""])) + '</p></header><div id="extension-error" aria-live="polite"></div>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.kind.startsWith("Reschedule") ? "requests" : n.kind === "ScheduleChanged" ? student ? "schedule" : "requests" : n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher || n.recipient_kind === "Admin" ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : learning()) + "</section>";
+          v.innerHTML = '<section id="extension-view" data-ui-user-content><header class="extension-heading"><p class="extension-eyebrow">' + esc(NAV.groupFor(page) ? tr(NAV.groupFor(page).en, NAV.groupFor(page).ar) : "") + "</p><h2>" + esc(tr(name?.[1] || "", name?.[2] || "")) + '</h2><p class="extension-description">' + esc(tr(...descriptions[page] || ["", ""])) + '</p></header><div id="extension-error" aria-live="polite"></div>' + (page === "student-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.students[0]?.id || ""))) : null, studentFinancial()) : page === "teacher-statement" ? (financial ? (directory || (directory = api("directory")), selection || (selection = String(directory.teachers[0]?.id || ""))) : null, teacherFinancial()) : page === "withdrawals" ? withdrawals() : page === "accounts" ? accounts() : page === "plans" ? plans() : page === "requests" ? requests() : page === "education" ? education() : page === "audit" ? table(["Date", "Actor", "Action", "Entity", "ID"], api("audit").rows.map((r) => [text(r.at), text(r.actor), text(r.action), text(r.entity), text(r.entity_id)])) : page === "notifications" ? table([tr("Date", "التاريخ"), tr("Notification", "الإشعار"), tr("Record", "السجل"), tr("Read", "قراءة")], api("notifications").rows.map((n) => [text(n.created_at), text(notificationsText(n.kind)), '<a href="#preview-' + (n.kind === "CourseWithdrawn" ? student ? "courses" : teacher ? "teacher-statement" : "withdrawals" : n.kind.startsWith("Reschedule") ? "requests" : n.kind === "ScheduleChanged" ? student ? "schedule" : "requests" : n.recipient_kind === "Teacher" ? "teacher-statement" : ["MaterialReleased", "FeedbackPublished"].includes(n.kind) ? "projects" : n.kind === "ScheduleChanged" ? "schedule" : "student-statement") + '">' + text("#" + n.reference) + "</a>", student || teacher || n.recipient_kind === "Admin" ? '<button class="b2" data-read="' + n.id + '" ' + (n.read_at ? "disabled" : "") + ">" + tr(n.read_at ? "Read" : "Mark read", n.read_at ? "مقروء" : "تحديد كمقروء") + "</button>" : ""])) : learning()) + "</section>";
           bindPeriod();
           form("extension-account-form", (r) => api("accounts", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), active: Number(r.active) }));
           form("extension-plan-form", (r) => api("plan", { request_key: token(), reason: r.reason, record: { id: r.id ? Number(r.id) : undefined, contract_id: Number(r.contract_id), due_on: r.due_on, amount: Math.round(Number(r.amount) * 1000), note: r.reason } }));
@@ -43629,6 +43714,7 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(\r
               selection = person.value;
               render();
             };
+          form("extension-withdrawal-form", (r) => api("course-withdrawals", { enrollment_id: Number(r.enrollment_id), withdrawn_on: r.withdrawn_on, reason: r.reason, refund_requested: r.refund_requested === "on", acknowledge_finance: r.acknowledge_finance === "on" }));
           bindReschedule();
           bindTimezone();
           form("extension-share-form", (r) => api("share", { ...r, id: r.id ? Number(r.id) : undefined, student_id: Number(r.student_id), source_id: Number(r.source_id), released: Number(r.released) }));

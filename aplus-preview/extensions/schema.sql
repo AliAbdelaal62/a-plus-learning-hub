@@ -51,3 +51,9 @@ CREATE TABLE IF NOT EXISTS preview_staff_notifications(
  kind TEXT NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT,
  UNIQUE(event_key,recipient_id)
 );
+
+CREATE TABLE IF NOT EXISTS preview_course_withdrawals(
+ enrollment_id INTEGER PRIMARY KEY REFERENCES course_enrollments(id),
+ withdrawn_on TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,
+ refund_requested INTEGER NOT NULL DEFAULT 0 CHECK(refund_requested IN(0,1))
+);
