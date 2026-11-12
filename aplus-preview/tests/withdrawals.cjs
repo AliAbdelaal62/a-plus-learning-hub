@@ -1,35 +1,50 @@
  'use strict';
 const assert=require('node:assert/strict'),path=require('node:path'),os=require('node:os');
 const {createRuntime}=require(path.join(os.tmpdir(),'aplus-node-core.cjs'));
-let rt,n=0;const check=(v,m)=>{assert.ok(v,m);n++;};
-const json=r=>JSON.parse(r.text()),get=p=>rt.dispatch('GET',p),post=(p,b={})=>rt.dispatch('POST',p,{'content-type':'application/json','x-aplus-token':rt.server.token},JSON.stringify(b));
-const login=username=>{post('/api/auth/logout');check(post('/api/auth/login',{username,password:'DevPreview-2026!'}).status===200,username+' login');};
-const db=()=>rt.server.ctx.db;
-const original=()=>JSON.stringify(['lessons','student_payments','teacher_payments','projects','project_payments','recorded_courses','course_enrollments','student_adjustments','billing_contracts','billing_installments'].map(t=>db().prepare('SELECT * FROM '+t+' ORDER BY id').all()));
-(async()=>{rt=await createRuntime({clock:()=>new Date('2026-11-08T10:00:00Z'),locateFile:f=>path.resolve('node_modules/sql.js/dist',f),log:()=>{}});try{
- login('dev.admin');const st=json(get('/api/state')).state;const e=st.re.find(e=>e.s===st.s[0].id);check(!!e,'enrollment fixture exists');
- const share=post('/api/preview/share',{student_id:e.s,kind:'Course',source_id:e.id,title:'Synthetic course link',body:'Lesson content',url:'https://example.com/lesson',released:1});check(share.status===200,'course material fixture');
- const before=original(),req={enrollment_id:e.id,withdrawn_on:'2026-11-08',reason:'Student withdrawal requested by administration',acknowledge_finance:true,refund_requested:true};
- const prior=json(get('/api/preview/student-statement?student='+e.s));
- for(const role of ['dev.student','dev.teacher','dev.accountant']){login(role);check(post('/api/preview/course-withdrawals',req).status===403,'direct withdrawal denied to '+role);check(get('/api/preview/course-withdrawals').status===(role==='dev.accountant'?200:403),'withdrawal list permission for '+role);}
- login('dev.student');check(json(get('/api/preview/student')).shares.some(s=>s.kind==='Course'&&s.source_id===e.id),'content visible before withdrawal');
- login('dev.admin');
- check(post('/api/preview/course-withdrawals',{...req,acknowledge_finance:false}).status===422,'financial acknowledgement required');
- check(post('/api/preview/course-withdrawals',{...req,reason:''}).status===422,'reason required');
- check(post('/api/preview/course-withdrawals',{...req,withdrawn_on:'2026-11-09'}).status===422,'future withdrawal denied');
- check(post('/api/preview/course-withdrawals',{...req,enrollment_id:999999}).status===404,'missing enrollment denied');
- check(post('/api/preview/course-withdrawals',req).status===200,'admin records withdrawal immediately');
- check(original()===before,'all original financial and academic records preserved');
- const after=json(get('/api/preview/student-statement?student='+e.s));for(const k of ['opening','charges','payments','student_adjustments','closing','services','installments'])check(JSON.stringify(prior[k])===JSON.stringify(after[k]),'financial statement unchanged '+k);
- const count=db().prepare('SELECT count(*) n FROM preview_notifications').get().n;
- check(post('/api/preview/course-withdrawals',req).status===200,'same retry idempotent');check(db().prepare('SELECT count(*) n FROM preview_notifications').get().n===count,'retry does not duplicate notification');
- check(post('/api/preview/course-withdrawals',{...req,reason:'Different reason'}).status===409,'conflicting replacement denied');
- check(post('/api/preview/share',{student_id:e.s,kind:'Course',source_id:e.id,title:'Cannot release more',body:'Denied',url:'',released:1}).status===422,'new course shares blocked after withdrawal');
- login('dev.student');const portal=json(get('/api/preview/student')),course=portal.courses.find(c=>c.id===e.id);check(!!course.withdrawal,'student retains withdrawal history');check(course.materials.length===0,'no delivery links after withdrawal');check(!portal.shares.some(s=>s.kind==='Course'&&s.source_id===e.id),'released course content removed from student projection');check(json(get('/api/preview/notifications')).rows.some(n=>n.kind==='CourseWithdrawn'),'student notified');
- login('dev.coordinator');const other=json(get('/api/preview/course-withdrawals')).rows.find(x=>x.id!==e.id&&!x.withdrawal);check(!!other,'second enrollment exists');check(post('/api/preview/course-withdrawals',{...req,enrollment_id:other.id,refund_requested:false}).status===200,'coordinator can record direct withdrawal');
- check(original()===before,'coordinator cannot change finances by withdrawal');
- const snap=rt.snapshot();await rt.stop();rt=await createRuntime({snapshot:snap,clock:()=>new Date('2026-11-08T10:00:00Z'),locateFile:f=>path.resolve('node_modules/sql.js/dist',f),log:()=>{}});
- login('dev.admin');check(json(get('/api/preview/course-withdrawals')).rows.find(x=>x.id===e.id).withdrawal.refund_requested===1,'withdrawal and refund-review flag survive restart');
- check(db().prepare("SELECT count(*) n FROM audit_log WHERE entity='preview-course-withdrawal'").get().n===2,'one audit record for each actual withdrawal');
- console.log('WITHDRAWALS REGRESSION OK: '+n+' checks');
- }finally{await rt.stop();}})().catch(e=>{console.error(e);process.exitCode=1;});
+let rt,n=0,pristine;const check=(v,m)=>{assert.ok(v,m);n++;},json=r=>JSON.parse(r.text());
+const get=p=>json(rt.dispatch('GET',p)),post=(p,b={})=>{const r=rt.dispatch('POST',p,{'content-type':'application/json','x-aplus-token':rt.server.token},JSON.stringify(b));return {status:r.status,...json(r)};};
+const ok=r=>{check(r.ok,JSON.stringify(r));return r;},db=()=>rt.server.ctx.db;
+const login=name=>{post('/api/auth/logout');ok(post('/api/auth/login',{username:name,password:'DevPreview-2026!'}));};
+const boot=async snapshot=>{rt=await createRuntime({snapshot:snapshot||pristine,clock:()=>new Date('2026-11-08T10:00:00Z'),locateFile:f=>path.resolve('node_modules/sql.js/dist',f),log:()=>{}});if(!pristine)pristine=rt.snapshot();login('dev.admin');};
+const management=(kind,record)=>post('/api/management',{kind,record,baseRev:get('/api/state').rev});
+const account=(currency='KWD',opening=1000000)=>ok(post('/api/treasury',{kind:'account',baseRev:get('/api/state').rev,record:{name:'DEV refund test '+currency+' '+Math.random(),kind:'Cash',currency,opened_on:'2026-08-01',opening,allow_overdraft:0}})).record.id;
+const quote=id=>get('/api/preview/course-settlement?enrollment='+id);
+const request=(q,account_id,refund=q.paid)=>({enrollment_id:q.id,quote:q.quote,request_key:'test-course-'+q.id,refund,date:'2026-11-08',reason:'Synthetic course withdrawal and refund',method:'Cash',account_id,confirm:true});
+const execute=r=>post('/api/preview/course-settlement',r);
+const service=(sid,id)=>get('/api/preview/student-statement?student='+sid).services.find(s=>s.key==='enrollment:'+id);
+const cash=()=>JSON.stringify(['course_enrollments','recorded_courses','course_payments','student_adjustments','treasury_entries','treasury_native_links','preview_course_settlements','id_registry','schema_meta','billing_contracts'].map(t=>db().prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+function agreement(id){const st=get('/api/state').state,e=st.re.find(e=>e.id===id),c=st.rc.find(c=>c.id===e.rc),reg=ok(post('/api/operations',{kind:'registration',baseRev:get('/api/state').rev,record:{student_id:e.s,teacher_id:c.inst,subject_id:c.subj,title:'DEV withdrawal test',starts_on:e.date,status:'Active',billing_basis:'Course',agreed_price:e.price,currency:c.cur,planned_sessions:1}}));return ok(management('contract',{registration_id:reg.record.id,target_id:e.id,total:e.price,currency:c.cur,sessions:1,starts_on:e.date})).record.id;}
+(async()=>{try{
+ await boot();const acct=account(),low=account('KWD',1000),foreign=account('SAR'),cid=agreement(146);ok(management('installment',{contract_id:cid,due_on:'2026-11-10',amount:30000,note:'DEV installment'}));
+ ok(post('/api/preview/share',{student_id:103,kind:'Course',source_id:146,title:'DEV shared course',body:'Test material',url:'https://example.com/course',released:1}));
+ const q=quote(146),r=request(q,acct);check(q.paid===30000&&q.price===30000,'opening balance quote uses recorded paid total');
+ for(const role of ['dev.coordinator','dev.accountant','dev.teacher','dev.student']){login(role);check(execute(r).status===403,'Admin alone may execute; '+role+' denied');}
+ login('dev.admin');let baseline=cash();
+ for(const [changes,label]of [[{refund:30001},'excess refund'],[{confirm:false},'missing confirmation'],[{reason:''},'missing reason'],[{date:'2026-11-09'},'future date'],[{date:'2026-08-20'},'predates enrollment'],[{account_id:foreign},'wrong currency'],[{account_id:low},'insufficient balance'],[{account_id:999999},'missing account']]){const out=execute({...r,...changes});check(out.status===422,label+' rejected: '+JSON.stringify(out));check(cash()===baseline,label+' leaves all money and IDs unchanged');}
+ account();check(execute(r).status===409,'stale quote rejected');const fresh=quote(146),ready=request(fresh,acct),teacherPayments=JSON.stringify(get('/api/state').state.tp),profit=get('/api/treasury').profit.beforeOperatingExpenses;
+ const done=ok(execute(ready));check(done.remaining===0&&done.refund===30000&&done.waived===30000,'full withdrawal refunds and cancels fees');
+ const s=service(103,146);check(s.charge===0&&s.paid===0&&s.remaining===0&&s.paymentStatus==='Settled','student service fully settled');check(s.history.some(e=>e.kind==='Charge'&&e.amount===-30000&&e.date==='2026-11-08'),'dated fee cancellation preserves original charge history');check(s.history.some(e=>e.kind==='Charge'&&e.amount===30000),'original charge still in statement history');
+ check(get('/api/preview/student-statement?student=103').parity===true,'student statement reconciles with original account');
+ check(get('/api/treasury').accounts.find(a=>a.id===acct).balance===970000,'treasury debited exactly once');check(profit-get('/api/treasury').profit.beforeOperatingExpenses===21000,'course profit reflects cancelled revenue and percentage entitlement');check(JSON.stringify(get('/api/state').state.tp)===teacherPayments,'paid teacher money never deleted or rewritten');
+ check(db().prepare('SELECT price,paid FROM course_enrollments WHERE id=146').get().price===30000,'historical enrollment price remains unchanged on disk');check(db().prepare('SELECT paid FROM course_enrollments WHERE id=146').get().paid===30000,'historical paid amount remains unchanged on disk');check(db().prepare('SELECT price,n,extra_json FROM recorded_courses WHERE id=140').get().n===3,'manual course count is not rewritten');const courseLedger=get('/api/ledger/courses').courses.find(c=>c.id===140);check(courseLedger.collected===10000&&courseLedger.grossCollected===40000&&courseLedger.refunded===30000,'course net collections deduct the refund while preserving gross receipts');check(quote(146).courseRevenue===60000&&quote(146).teacherEarned===18000,'course revenue and instructor percentage reflect settlement');
+ check(get('/api/management').contracts.find(c=>c.id===cid).status==='Cancelled','original agreement cancelled');check(get('/api/management').contracts.find(c=>c.id===cid).remaining===0,'cancelled original agreement has no new collectible debt');const plan=get('/api/preview/plans?student=103').installments.find(c=>c.id===cid);check(plan.installments.every(i=>i.status==='Cancelled'&&i.remaining===0),'installment history retained and cancelled');
+ baseline=cash();check(ok(execute(ready)).refundIds[0]===done.refundIds[0],'identical retry returns original result');check(cash()===baseline,'retry creates no cash, IDs or settlement duplication');check(execute({...ready,refund:20000}).status===409,'same request ID with changed amount denied');check(execute({...ready,request_key:'different-withdrawal-key'}).status===409,'new ID cannot settle same enrollment again');
+ check(post('/api/preview/course-withdrawals',{}).status===410,'obsolete standalone write disabled');
+ const current=get('/api/state');ok(post('/api/save',{baseRev:current.rev,state:current.state,reqId:'unchanged-after-withdrawal'}));
+ const malicious=get('/api/state');malicious.state.re.find(e=>e.id===146).price=30000;check(post('/api/save',{baseRev:malicious.rev,state:malicious.state,reqId:'tampered-settled-record'}).status===409,'ordinary save cannot reopen settled charge');
+ const forged=get('/api/state');forged.state.rc.find(c=>c.id===140).withdrawalReduction=0;check(post('/api/save',{baseRev:forged.rev,state:forged.state,reqId:'tampered-course-reduction'}).status===409,'ordinary save cannot remove revenue settlement');
+ check(management('refund',{contract_id:cid,receipt_id:1,amount:1,date:'2026-11-08',reason:'Must not refund settled enrollment twice'}).status===409,'legacy financial route cannot duplicate withdrawal refund');
+ const historical=get('/api/preview/student-statement?student=103&to=2026-11-07');check(!historical.entries.some(e=>e.description.startsWith('Withdrawal fee cancellation')),'statement before withdrawal excludes future cancellation');
+ login('dev.student');const portal=get('/api/preview/student');check(portal.courses.find(c=>c.id===146).withdrawal!==null,'student sees withdrawal');check(!portal.shares.some(s=>s.kind==='Course'&&s.source_id===146),'student course content revoked');
+ login('dev.admin');const pkg=ok(post('/api/preview/backups/export',{}));check(pkg.package.database.length>0,'full export includes completed settlement');
+ const snap=rt.snapshot();await rt.stop();await boot(snap);check(quote(146).settlement.refund===30000,'settlement survives snapshot restore');check(service(103,146).remaining===0,'restored statement stays settled');await rt.stop();
+ // Underpaid student: full refund also waives the unpaid fee.
+ await boot();const a2=account(),q2=quote(147);check(q2.price===30000&&q2.paid===10000&&q2.remaining===20000,'underpaid fixture');ok(execute(request(q2,a2)));check(service(106,147).charge===0&&service(106,147).paid===0&&service(106,147).remaining===0,'unpaid remainder is waived rather than recreated as debt');await rt.stop();
+ // Partial refund: retain only the displayed agreed fee and close the rest.
+ await boot();const a3=account(),q3=quote(147);const partial=ok(execute(request(q3,a3,4000)));check(partial.retained===6000&&partial.waived===24000,'partial refund calculates explicit retained fee');const s3=service(106,147);check(s3.charge===6000&&s3.paid===6000&&s3.remaining===0,'partial settlement has no residual student debt');await rt.stop();
+ // No paid money: cancellation has no fake refund or treasury movement.
+ await boot();const q4=quote(148),zero=ok(execute({...request(q4,null,0),method:''}));check(zero.refundIds.length===0,'unpaid enrollment creates no refund');check(db().prepare('SELECT count(*) n FROM treasury_entries').get().n===0,'unpaid cancellation creates no cash');check(service(104,148).remaining===0,'unpaid cancellation closes the fee');await rt.stop();
+ // Original dated receipt plus opening paid amount, both refunded with their original references.
+ await boot();const a5=account(),ct5=agreement(147);ok(management('receipt',{contract_id:ct5,amount:20000,date:'2026-11-08',rx:1,method:'DEV cash'}));const payments=JSON.stringify(get('/api/state').state.cp),q5=quote(147),full=ok(execute(request(q5,a5)));check(full.refundIds.length===2,'opening and dated receipt refunded independently');check(JSON.stringify(get('/api/state').state.cp)===payments,'dated receipt preserved verbatim');check(service(106,147).remaining===0,'mixed receipt history settles to zero');check(get('/api/treasury').accounts.find(a=>a.id===a5).balance===970000,'only one total payout across refund rows');
+ console.log('COURSE SETTLEMENT REGRESSION OK: '+n+' checks');
+ }finally{await rt?.stop();}})().catch(e=>{console.error(e);process.exitCode=1;});

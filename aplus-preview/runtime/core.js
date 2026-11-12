@@ -19,34 +19,37 @@ const PREVIEW_ACCOUNTS = [
   { username: 'dev.student', display_name: 'DEV Student (synthetic)', role: 'Student' },
 ];
 
-async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () => {}, log = (...a) => console.info('[A+ Hub preview]', ...a), clock } = {}) {
-  const S = await initSqlJs({ locateFile });
+async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () => {}, log = (...a) => console.info('[A+ Hub preview]', ...a), clock, mode='preview', csrfToken, wasmModule } = {}) {
+  const S = await initSqlJs({ locateFile, ...(wasmModule?{instantiateWasm:(imports,success)=>{WebAssembly.instantiate(wasmModule,imports).then(instance=>success(instance,wasmModule));return {};}}:{}) });
   globalThis.__APLUS_SQL = S;
   const FS = S.FS;
   const fs = require('aplus-shim:fs');
   const mk = (d) => { if (!fs.existsSync(d)) FS.mkdirTree(d); };
   mk('/tmp');
   for (const [p, txt] of Object.entries(EMBED)) { mk(p.slice(0, p.lastIndexOf('/'))); FS.writeFile(p, txt); }
+  fs.writeFileSync('/app/public/index.html',require('../extensions/course-original-adapt').adapt(fs.readFileSync('/app/public/index.html','utf8')));
+  if(mode==='server')for(const d of PERSIST_DIRS)fs.rmSync(d,{recursive:true,force:true});
   for (const d of PERSIST_DIRS) mk(d);
   if (snapshot) for (const [p, bytes] of snapshot) { if (bytes === null) mk(p); else { mk(p.slice(0, p.lastIndexOf('/'))); FS.writeFile(p, bytes); } }
 
   let created = false;
   if (!fs.existsSync(DB_FILE)) {
     // Same as scripts/init-synthetic-db.js: build the database from the synthetic fixture with the original importer.
+    if(mode!=='preview')throw new Error('Secure server requires an explicitly provisioned database.');
     const { migrate } = require('../original/src/importer');
     const r = migrate(fs.readFileSync('/app/fixtures/synthetic-v5.json', 'utf8'), { mode: 'apply', target: DB_FILE });
     log('Synthetic database created: ' + r.status);
     created = true;
   }
   const { start } = require('../original/src/server');
-  const opts = { port: PORT, dbFile: DB_FILE, backupDir: BACKUP_DIR, scheduler: true, authRequired: true, log };
+  const opts = { port: PORT, dbFile: DB_FILE, backupDir: BACKUP_DIR, scheduler: mode==='preview', csrfToken, authRequired: true, log };
   if (clock) opts.clock = clock;
   const server = await start(opts);
   const db = () => server.ctx.db;
 
   // Synthetic preview accounts, created with the original team module (same validation and scrypt hashing).
   const TEAM = require('../original/src/team');
-  if (!db().prepare('SELECT 1 FROM team_users LIMIT 1').get()) {
+  if (mode==='preview'&&!db().prepare('SELECT 1 FROM team_users LIMIT 1').get()) {
     const teacher = db().prepare('SELECT id FROM teachers ORDER BY id LIMIT 1').get();
     db().exec('BEGIN');
     try {
@@ -59,8 +62,8 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     } catch (e) { db().exec('ROLLBACK'); throw e; }
   }
 
-  const extension = require('../extensions/service').install(db, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { token: server.token, clock, cookieName: COOKIE });
-  const backups = require('../extensions/backups').install(() => server.ctx, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { actor: extension.actor, token: server.token, clock });
+  const extension = require('../extensions/service').install(db, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { token: server.token, clock, cookieName: COOKIE, seedDemo:mode==='preview' });
+  const backups = require('../extensions/backups').install(() => server.ctx, fs.readFileSync('/app/preview/schema.sql', 'utf8'), { actor: extension.actor, token: server.token, clock, durableStaging:mode!=='preview' });
   let transferring = false;
   let jar = cookie;
   function applySetCookie(v) {
@@ -132,7 +135,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
     return out;
   }
 
-  return { dispatch, restoreBackup, snapshot: snapshotFiles, server, created, cookie: () => jar, accounts: PREVIEW_ACCOUNTS, password: PREVIEW_PASSWORD, stop: () => server.close(), transferring: () => transferring,
+  return { dispatch, restoreBackup, actor:extension.actor, securityAudit:event=>require('../original/src/audit').log(db(),event), snapshot: snapshotFiles, server, created, cookie: () => jar, accounts: PREVIEW_ACCOUNTS, password: PREVIEW_PASSWORD, stop: () => server.close(), transferring: () => transferring,
     imported: () => !!db().prepare("SELECT value FROM preview_meta WHERE key='imported-database'").get() };
 }
 module.exports = { createRuntime, PREVIEW_ACCOUNTS, PREVIEW_PASSWORD, DB_FILE };
