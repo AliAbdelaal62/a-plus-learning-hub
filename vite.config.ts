@@ -10,7 +10,11 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   vite:{plugins:[{name:'secure-server-wasm-module',enforce:'pre',
-    resolveId(id){if(id.endsWith('/engine.wasm')||id==='aplus:engine-wasm')return {id:'aplus:engine-wasm',external:true};return null;},
+    configResolved(config){(globalThis as {__aplusCommand?:string}).__aplusCommand=config.command;},
+    // Dev preview: compile the server-only engine WASM from disk inside the dev SSR runtime (never sent to the browser).
+    // Build: keep it an external CompiledWasm module for the Worker bundle.
+    resolveId(id){if(id.endsWith('/engine.wasm')||id==='aplus:engine-wasm'){if((globalThis as {__aplusCommand?:string}).__aplusCommand==='serve'||this.environment?.mode==='dev')return '\0aplus-engine-wasm-dev';return {id:'aplus:engine-wasm',external:true};}return null;},
+    load(id){if(id==='\0aplus-engine-wasm-dev')return `import {readFileSync} from 'node:fs';export default new WebAssembly.Module(readFileSync(${JSON.stringify(resolve(import.meta.dirname,'secure-server/generated/engine.wasm'))}));`;return null;},
     renderChunk(code,chunk){if(this.environment.name!=='nitro')return null;const modulePath=relative(dirname(chunk.fileName),'engine.wasm').replaceAll('\\','/');return code.replaceAll('aplus:engine-wasm',modulePath.startsWith('.')?modulePath:'./'+modulePath);},
     generateBundle(){if(this.environment.name==='nitro')this.emitFile({type:'asset',fileName:'engine.wasm',source:readFileSync(resolve(import.meta.dirname,'secure-server/generated/engine.wasm'))});}
   }]},
