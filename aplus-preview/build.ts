@@ -12,7 +12,8 @@ const ORIG = join(HERE, "original");
 const SHIMS = join(HERE, "runtime", "shims");
 const ROOT = join(HERE, "..");
 const TEST = process.argv.includes("--test") ? process.argv[process.argv.indexOf("--test") + 1] : null;
-const NODE = process.argv.includes("--node") || !!TEST;
+const SECURE=process.argv.includes('--secure');
+const NODE = process.argv.includes("--node") || !!TEST || SECURE;
 const temp = process.env.APLUS_BUILD_TEMP || tmpdir();
 
 function walk(dir: string, out: string[] = []) {
@@ -54,7 +55,7 @@ const plugin: BunPlugin = {
       http: join(SHIMS, "http.js"), path: require.resolve("path-browserify"), "node:path": require.resolve("path-browserify"),
       buffer: require.resolve("buffer/"),
     };
-    build.onResolve({ filter: /^aplus-shim:/ }, (a) => ({ path: map[a.path.slice(11)] }));
+    build.onResolve({ filter: /^aplus-shim:/ }, (a) => NODE && a.path === "aplus-shim:buffer" ? ({ path: "node:buffer", external: true }) : ({ path: map[a.path.slice(11)] }));
     build.onResolve({ filter: /^aplus-embedded$/ }, () => ({ path: "aplus-embedded", namespace: "aplus" }));
     build.onLoad({ filter: /.*/, namespace: "aplus" }, () => ({ contents: "module.exports=" + JSON.stringify(embedded()), loader: "js" }));
     build.onLoad({ filter: /sql-wasm-debug\.js$/ }, (a) => {
@@ -71,6 +72,8 @@ const plugin: BunPlugin = {
       s = s.split("__dirname").join(JSON.stringify("/app/" + dirname(rel)));
       s = s.replace(/require\((['"])(node:sqlite|node:fs|fs|crypto|node:crypto|os|http|path|node:path|buffer)\1\)/g, (_m, _q, n) => `require("aplus-shim:${n}")`);
       if (rel === "src/server.js") {
+        s=replaceExact(s,"authSetupCode } = {})", "authSetupCode, csrfToken } = {})",rel,1);
+        s=replaceExact(s,"const token = crypto.randomBytes(24).toString('hex');", "const token = csrfToken||crypto.randomBytes(24).toString('hex');",rel,1);
         // the page uses synchronous XMLHttpRequest, so the handler must finish synchronously (body is already in memory)
         s = replaceExact(s, "async function api(req, res, url)", "function api(req, res, url)", rel, 1);
         s = replaceExact(s, "await readBody(req)", "req.__json()", rel);
@@ -79,6 +82,18 @@ const plugin: BunPlugin = {
         s = replaceExact(s, "require.main === module", "false", rel, 1);
         const body = s.slice(s.indexOf("function api("), s.indexOf("function serveStatic("));
         if (/\bawait\b/.test(body)) throw new Error("server.js api() still awaits");
+      }
+      if (rel === "src/state.js") s = replaceExact(s.replace(/\r\n/g,"\n"), "  return st;\n}\nmodule.exports", "  return require('../../extensions/course-projection').project(db,st);\n}\nmodule.exports", rel, 1);
+      if (rel === "src/store.js") s = replaceExact(s, "['__nullify', '__dropLinks']", "['__nullify', '__dropLinks', 'withdrawalReduction', 'withdrawalOriginalPrice', 'withdrawalClosedOn', 'withdrawalRefund', 'withdrawalNetPaid']", rel, 1);
+      if (rel === "src/finance.js") s = replaceExact(s, "const rev=Math.round(c.price*c.n),", "const rev=Math.round(c.price*c.n)-(c.withdrawalReduction||0),", rel, 1);
+      if (rel === "src/ledger.js") {
+        s = replaceExact(s, "a.ok === 'cp' ? g(db.cp, a.oid) : null", "a.ok === 'cp' ? g(db.cp, a.oid) : a.ok === 're' ? (()=>{const e=g(db.re,a.oid);return e?{amt:e.paid-arr(db,'cp').filter(p=>p.re===e.id).reduce((s,p)=>s+p.amt,0)}:null})() : null", rel, 1);
+        s = replaceExact(s, "add(r.charged, 'Recorded', e.price);", "add(r.charged, 'Recorded', E&&e.withdrawalClosedOn&&E<e.withdrawalClosedOn?e.withdrawalOriginalPrice:e.price);", rel, 1);
+      }
+      if (rel === "src/ledger.js") s = replaceExact(s, "collected: paid, opening:", "collected: en.reduce((q,e)=>q+(e.withdrawalClosedOn?e.withdrawalNetPaid:e.paid||0),0), grossCollected:paid, refunded:en.reduce((q,e)=>q+(e.withdrawalRefund||0),0), opening:", rel, 1);
+      if (rel === "src/management.js") {
+        s = replaceExact(s, "received,remaining:c.total-received,", "received,remaining:c.status==='Cancelled'&&c.source_kind==='Recorded'&&st.re.some(e=>e.id===c.target_id&&e.withdrawalClosedOn)?0:c.total-received,", rel, 1);
+        s = replaceExact(s, "a.ok==='cp'&&ids.includes(a.oid)&&a.kind==='refund'", "(a.ok==='cp'&&ids.includes(a.oid)||a.ok==='re'&&a.oid===c.target_id)&&a.kind==='refund'", rel, 1);
       }
       if (rel === "src/scheduler.js") s = replaceExact(s, "timer.unref();", "timer.unref && timer.unref();", rel, 1);
       return { contents: s, loader: "js" };
@@ -100,6 +115,10 @@ const code = await result.outputs[0].text();
 if (TEST) {
   await Bun.write(join(temp,"aplus-test-" + TEST + ".cjs"), code);
   console.log("test bundle -> " + join(temp,"aplus-test-" + TEST + ".cjs"));
+} else if (SECURE) {
+  const out=join(ROOT,'secure-server','generated');mkdirSync(out,{recursive:true});await Bun.write(join(out,'engine.cjs'),code);
+  copyFileSync(join(ROOT,'node_modules','sql.js','dist','sql-wasm-debug.wasm'),join(out,'engine.wasm'));
+  console.log('server-only engine -> secure-server/generated/engine.cjs');
 } else if (NODE) {
   await Bun.write(join(temp,"aplus-node-core.cjs"), code);
   console.log("node core -> " + join(temp,"aplus-node-core.cjs"));

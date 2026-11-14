@@ -17,8 +17,9 @@ const fail = (status, message) => { throw Object.assign(new Error(message), {cod
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const admin = u => { if (!u || u.role !== 'Admin') fail(u ? 403 : 401, 'Administrator access required.'); };
 
-function install(getCtx, schema, {actor, token, clock = () => new Date()} = {}) {
-  let staged = null;
+function install(getCtx, schema, {actor, token, clock = () => new Date(),durableStaging=false} = {}) {
+  const stageMeta='/app/data/secure-import-validation.json';let staged=null;if(durableStaging){try{staged=JSON.parse(fs.readFileSync(stageMeta,'utf8'));}catch(_){}};
+  const persistStage=()=>{if(durableStaging)fs.writeFileSync(stageMeta,JSON.stringify(staged));};
   const ctx = () => getCtx();
   const fingerprint = () => sha(JSON.stringify(B.fingerprint(ctx().db)));
   const has = (db,t) => !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(t);
@@ -102,7 +103,7 @@ function install(getCtx, schema, {actor, token, clock = () => new Date()} = {}) 
       if(d.prepare('SELECT a.id FROM preview_student_accounts a JOIN team_users u ON u.username=a.username').all().length)fail(422,'Staff and student usernames must be distinct.');
       if(d.prepare('SELECT password_hash FROM preview_student_accounts').all().some(a=>!/^([a-f0-9]{32}):([a-f0-9]{128})$/i.test(a.password_hash)))fail(422,'An imported student password hash is invalid.');
       staged={file,checksum:sha(bytes),input,validationId:uid(),baseline:fingerprint(),until:clock().getTime()+600000,actor:u.username,sourceTables,sourceVersion,summary:incoming,sidecars,needsAdmin};
-      return {ok:true,validationId:staged.validationId,checksum:staged.checksum,sourceVersion,targetVersion:SCHEMA_VERSION,needsMigration:sourceVersion<SCHEMA_VERSION,needsAdmin,
+      persistStage();return {ok:true,validationId:staged.validationId,checksum:staged.checksum,sourceVersion,targetVersion:SCHEMA_VERSION,needsMigration:sourceVersion<SCHEMA_VERSION,needsAdmin,
         missingExtensions,sourceTables,current:summary(ctx().db),incoming,warnings:[
           'REPLACE: this replaces the current browser database; no merge is performed.',
           'This preview stores data in this browser only. Other devices will not receive it.',
@@ -165,7 +166,7 @@ function install(getCtx, schema, {actor, token, clock = () => new Date()} = {}) 
       fs.writeFileSync(historyPath(),JSON.stringify(stage.sidecars.transferHistory||[]));
       recordHistory(event);
     } catch(e){try{undo();}catch(rollback){e.message+='; rollback failed: '+rollback.message;}throw e;}
-    return {rollback:()=>{if(switched){undo();switched=false;}},commit:()=>{staged=null;for(const file of [hold,stage.file])try{fs.rmSync(file,{force:true});}catch(_){}},
+    return {rollback:()=>{if(switched){undo();switched=false;}},commit:()=>{staged=null;persistStage();for(const file of [hold,stage.file])try{fs.rmSync(file,{force:true});}catch(_){}},
       result:{ok:true,safetyBackup:safety.name,checksum:stage.checksum,signInRequired:true}};
   }
   function handler(method,path,headers,body) {

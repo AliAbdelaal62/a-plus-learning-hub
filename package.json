@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "bun aplus-preview/build.ts --secure && bun secure-server/build-client.ts && vite build && node secure-server/finalize-build.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "secure:review": "bun aplus-preview/build.ts --secure && bun secure-server/build-client.ts && node secure-server/local.mjs",
+    "secure:test": "node secure-server/tests.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -73,7 +75,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "2.26.5",
+    "@lovable.dev/vite-tanstack-config": "2.27.1",
     "@noble/hashes": "1.4.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
