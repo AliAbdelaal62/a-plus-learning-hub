@@ -57,3 +57,10 @@ CREATE TABLE IF NOT EXISTS preview_course_withdrawals(
  withdrawn_on TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,
  refund_requested INTEGER NOT NULL DEFAULT 0 CHECK(refund_requested IN(0,1))
 );
+
+CREATE TABLE IF NOT EXISTS preview_course_settlements(
+ enrollment_id INTEGER PRIMARY KEY REFERENCES course_enrollments(id),course_id INTEGER NOT NULL REFERENCES recorded_courses(id),
+ original_price INTEGER NOT NULL,waived INTEGER NOT NULL,refund INTEGER NOT NULL,retained INTEGER NOT NULL,
+ settled_on TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,method TEXT NOT NULL,
+ refund_ids TEXT NOT NULL,created_at TEXT NOT NULL,request_key TEXT NOT NULL UNIQUE
+);

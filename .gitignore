@@ -30,3 +30,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Server-only configuration and staging data
+.env
+.env.*
+!.env.example
+.secure-data/
+secure-server/generated/
+security-reports.local/

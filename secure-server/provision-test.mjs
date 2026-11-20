@@ -1,0 +1,5 @@
+// Operator-only, synthetic TEST provisioning. Never exposed as an HTTP endpoint.
+import path from 'node:path';import {createRuntime} from './generated/engine.cjs';import {supabaseStore} from './snapshot-store.mjs';
+if(process.env.APLUS_DEPLOYMENT_STAGE!=='staging'||process.env.APLUS_SYNTHETIC_PROVISION!=='YES')throw Error('Explicit synthetic staging provisioning is required.');
+const store=supabaseStore({url:process.env.SUPABASE_URL,serviceKey:process.env.SUPABASE_SERVICE_ROLE_KEY,key:process.env.APLUS_STATE_KEY,instance:process.env.APLUS_STATE_INSTANCE});
+await store.run(async context=>{if(context.value)throw Error('Refusing to overwrite an existing secure database.');const rt=await createRuntime({locateFile:()=>path.resolve('secure-server/generated/engine.wasm'),log:()=>{}});try{return {value:{v:1,limits:{},mfa:{},environment:'synthetic-cloud-staging',files:rt.snapshot().map(([p,b])=>[p,b===null?null:Buffer.from(b).toString('base64')])},result:null};}finally{await rt.stop();}});console.log('Synthetic staging state provisioned; existing data was not overwritten.');

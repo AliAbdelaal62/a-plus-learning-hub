@@ -373,6 +373,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      aplus_secure_acquire: {
+        Args: { p_instance: string; p_token: string }
+        Returns: Json
+      }
+      aplus_secure_checkpoint: {
+        Args: {
+          p_instance: string
+          p_payload: Json
+          p_token: string
+          p_version: number
+        }
+        Returns: Json
+      }
+      aplus_secure_release: {
+        Args: { p_instance: string; p_token: string }
+        Returns: Json
+      }
       can_edit: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {

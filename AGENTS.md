@@ -41,3 +41,7 @@ use the editor.
 - Preview enhancements live in `aplus-preview/extensions/`; additive SQLite tables are installed by runtime initialization without changing the original schema version, preserving snapshots and reference sources.
 - Every Student API request is intercepted before the original handler and derives ownership from its session; original broad APIs are denied to Student because staff projections are not safe for students.
 - Financial extensions are read-only projections over original records; receipt links and installments never introduce new cash, and pending Accountant plan edits are applied through original management validation only after approval.
+
+## Secure staging (current preview)
+- `src/server.ts` sends every request to the secure gateway (`secure-server/`), which runs the original engine server-side and stores only an AES-GCM encrypted snapshot via service-role RPCs; missing or non-staging settings fail closed — keeps the browser free of the database and credentials.
+- In the sandbox dev server only, `vite.config.ts` regenerates the git-ignored engine if missing and loads it through Node, and `secure-backend.server.ts` maps loopback requests to the pinned preview origin — the built Worker keeps strict origin pinning and CompiledWasm loading.

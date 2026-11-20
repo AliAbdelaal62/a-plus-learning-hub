@@ -9,7 +9,7 @@ const password=p=>{if(typeof p!=='string'||p.length<12||p.length>200)fail(422,'U
 const matches=(p,h)=>{if(typeof p!=='string'||p.length>200)return false;const [s,k]=h.split(':');return crypto.timingSafeEqual(crypto.scryptSync(p,s,64),Buffer.from(k,'hex'))};
 const publicStudent=a=>({id:a.id,username:a.username,display_name:a.display_name,student_id:a.student_id,role:'Student',active:a.active});
 function response(data,status=200,headers={}){const bytes=Buffer.from(JSON.stringify(data));return {status,headers:{'content-type':'application/json',...headers},body:bytes,text:()=>bytes.toString()}}
-function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_3001',token}={}){
+function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_3001',token,seedDemo=true}={}){
  const db=()=>getDb(),now=()=>clock().toISOString();db().exec(schema);
  const auth=TEAM.service({prepare:(...a)=>db().prepare(...a),exec:(...a)=>db().exec(...a)},{cookieName,clock});
  const actor=headers=>{const cookie=String(headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='));if(cookie){const a=db().prepare('SELECT a.* FROM preview_student_sessions s JOIN preview_student_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1').get(hash(cookie.slice(cookieName.length+1)),now());if(a)return publicStudent(a)}return auth.current({headers})};
@@ -21,7 +21,7 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    db().prepare('DELETE FROM preview_student_sessions WHERE account_id=?').run(id);const after=publicStudent(db().prepare('SELECT * FROM preview_student_accounts WHERE id=?').get(id));audit(u,old?'update':'create','student-account',id,old?publicStudent(old):null,after);return after;});
  }
  // Upgrade existing snapshots additively; one explicitly synthetic account, never a data reset or historical notification backfill.
- if(!db().prepare("SELECT value FROM preview_meta WHERE key='student-demo-v1'").get()){
+ if(seedDemo&&!db().prepare("SELECT value FROM preview_meta WHERE key='student-demo-v1'").get()){
   const s=db().prepare('SELECT id FROM students ORDER BY id LIMIT 1').get();
   if(s&&!db().prepare("SELECT id FROM preview_student_accounts WHERE username='dev.student'").get())createAccount({username:'dev.student',display_name:'DEV Student (synthetic)',student_id:s.id,password:'DevPreview-2026!',active:1},{role:'Admin',username:'preview-setup'});
   db().prepare("INSERT OR REPLACE INTO preview_meta VALUES('student-demo-v1','1')").run();
@@ -39,7 +39,8 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
    courses:st.re.filter(e=>e.s===s).map(e=>({id:e.id,name:label(st.rc,e.rc),withdrawal:WITHDRAWALS.find(e.id)?{withdrawn_on:WITHDRAWALS.find(e.id).withdrawn_on,reason:WITHDRAWALS.find(e.id).reason,refund_requested:WITHDRAWALS.find(e.id).refund_requested}:null,materials:WITHDRAWALS.find(e.id)?[]:db().prepare("SELECT id,title,url,delivered_on,status FROM course_deliveries WHERE enrollment_id=? AND status IN('Sent','Confirmed')").all(e.id)})),shares,
    submissions:db().prepare('SELECT s.id,s.share_id,s.body,s.url,s.updated_at,f.body feedback FROM preview_submissions s LEFT JOIN preview_feedback f ON f.submission_id=s.id AND f.published=1 WHERE s.student_id=?').all(s)};
  }
- const contracts=(s)=>MAN.read(db(),{role:'Admin'},clock()).contracts.filter(c=>c.student_id===s).map(c=>({...c,installments:c.installments.map(i=>({id:i.id,due_on:i.due_on,amount:i.amount,paid:i.paid,remaining:i.remaining,reason:i.note,status:c.status==='Cancelled'?'Cancelled':i.remaining===0?'Paid':i.overdue?'Overdue':i.paid>0?'Partially paid':i.due_on===require('../original/src/cairo').today(clock())?'Due':'Upcoming'}))}));
+ const settledContract=c=>c.status==='Cancelled'&&c.source_kind==='Recorded'&&!!db().prepare('SELECT enrollment_id FROM preview_course_settlements WHERE enrollment_id=?').get(c.target_id);
+ const contracts=(s)=>MAN.read(db(),{role:'Admin'},clock()).contracts.filter(c=>c.student_id===s).map(c=>({...c,...(settledContract(c)?{remaining:0,unplanned:0}:{}),installments:c.installments.map(i=>({id:i.id,due_on:i.due_on,amount:i.amount,paid:i.paid,remaining:settledContract(c)?0:i.remaining,reason:i.note,status:c.status==='Cancelled'?'Cancelled':i.remaining===0?'Paid':i.overdue?'Overdue':i.paid>0?'Partially paid':i.due_on===require('../original/src/cairo').today(clock())?'Due':'Upcoming'}))}));
  function studentStatement(st,s,opt){return {...F.student(st,s,{...opt,contracts:contracts(s),receipts:db().prepare('SELECT * FROM billing_receipts').all(),usage:db().prepare('SELECT * FROM package_usage').all()}),installments:contracts(s).map(c=>{
   const source=c.source_kind==='Project'?st.pr.find(p=>p.id===c.target_id):c.source_kind==='Recorded'?st.rc.find(course=>st.re.some(e=>e.id===c.target_id&&e.rc===course.id)):null;
   const value=n=>c.currency==='KWD'?n:source?F.kwd(source,n,c.currency,Math.round(n*source.rx),source.rx).value:null;
@@ -49,6 +50,7 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
  function request(u,kind,record,key,reason,student){if(!key||typeof key!=='string'||key.length>100)fail(422,'Request identifier required.');const old=db().prepare('SELECT * FROM preview_requests WHERE request_key=?').get(key);if(old){if(old.actor!==u.username)fail(409,'Request identifier already used.');return old}const id=Number(db().prepare('INSERT INTO preview_requests(request_key,kind,actor,student_id,record,reason,created_at) VALUES(?,?,?,?,?,?,?)').run(key,kind,u.username,student||null,JSON.stringify(record),plain(reason,500),now()).lastInsertRowid);audit(u,'create','approval',id,null,{kind,status:'Pending'});return db().prepare('SELECT * FROM preview_requests WHERE id=?').get(id)}
  const RESCHEDULE=require('./rescheduling').install(db,{clock,request,audit,notify});
  const WITHDRAWALS=require('./withdrawals').install(db,{clock,audit,notify});
+ const SETTLEMENT=require('./course-settlement').install(db,{clock,audit,notify});
  function handler(method,path,headers,body){const url=new URL(path,'http://localhost'),p=url.pathname,u=actor(headers),write=!['GET','HEAD'].includes(method);let b;
   const parse=()=>{if(b)return b;try{b=typeof body==='string'?JSON.parse(body):body?JSON.parse(new TextDecoder().decode(body)):{};}catch(_){fail(400,'Invalid JSON.')}return b};
   try{
@@ -67,10 +69,13 @@ function install(getDb,schema,{clock=()=>new Date(),cookieName='aplus_session_30
      const input=parse(),r=input.record||{};if(input.kind==='installment'&&(r.id||db().prepare('SELECT id FROM billing_installments WHERE contract_id=?').get(r.contract_id||0))){const old=r.id?db().prepare('SELECT * FROM billing_installments WHERE id=?').get(r.id):null;if(r.id&&!old)fail(404,'Installment not found.');const c=contractsForId(old?.contract_id||r.contract_id);return response({ok:true,pending:true,request:request(u,'installment',r,input.request_key||'installment:'+(r.id||r.contract_id)+':'+input.baseRev,'Accountant requested installment change',c.student_id)});}
      if(input.kind==='contract'&&r.id)return response({ok:true,pending:true,request:request(u,'contract',r,input.request_key||'contract:'+r.id+':'+input.baseRev,'Accountant requested agreement change',contractsForId(r.id).student_id)});
     }
+    if(p==='/api/save'&&method==='POST'&&u)SETTLEMENT.guardSave(u,parse());
+    if(p==='/api/management'&&method==='POST'&&u){const input=parse(),ct=(input.record?.contract_id||input.kind==='contract'&&input.record?.id)&&db().prepare("SELECT target_id FROM billing_contracts WHERE id=? AND source_kind='Recorded'").get(input.record.contract_id||input.record.id);if(ct&&db().prepare('SELECT enrollment_id FROM preview_course_settlements WHERE enrollment_id=?').get(ct.target_id)&&['receipt','installment','refund','contract'].includes(input.kind))fail(409,'This enrollment is settled. No new receipt, refund or installment is allowed.');}
     return null;
    }
    if(!u)fail(401,'Sign in to access your account.');
-   if(p==='/api/preview/course-withdrawals'){if(method==='GET')return response({ok:true,rows:WITHDRAWALS.list(u)});if(method==='POST')return response({ok:true,withdrawal:WITHDRAWALS.create(u,parse())});fail(405,'Method not allowed.');}
+   if(p==='/api/preview/course-withdrawals'){if(method==='GET')return response({ok:true,rows:WITHDRAWALS.list(u)});if(method==='POST')fail(410,'Open the recorded course and use Withdrawal and refund beside the student.');fail(405,'Method not allowed.');}
+   if(p==='/api/preview/course-settlement'){if(method==='GET')return response({ok:true,...SETTLEMENT.details(u,Number(url.searchParams.get('enrollment')))});if(method==='POST')return response(SETTLEMENT.execute(u,parse()));fail(405,'Method not allowed.');}
    if(method==='GET'){
     if(p==='/api/preview/student')return response({ok:true,...educational(assemble(db()),sid(u,url))});
     if(p==='/api/preview/student-statement')return response({ok:true,...studentStatement(assemble(db()),sid(u,url),opts(url))});

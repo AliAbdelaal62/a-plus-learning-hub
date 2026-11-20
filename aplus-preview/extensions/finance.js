@@ -32,7 +32,7 @@ function student(st,sid,opt={}) {
   if(p.paid0)add('Payment',p,'',p.paid0,p.cur,Math.round(p.paid0*p.rx),p.rx,key,'Opening payment · '+p.name);
   for(const r of st.pp.filter(r=>r.pr===p.id))add('Payment',r,r.date,r.amt,r.cur||p.cur,r.bamt,r.rx,key,'Project payment #'+r.id);
  }
- for(const e of enrollments){const c=st.rc.find(c=>c.id===e.rc);if(!c)continue;const key='enrollment:'+e.id;service(key,c.name,'Recorded');add('Charge',c,e.date||c.date,e.price,c.cur,Math.round(e.price*c.rx),c.rx,key,c.name);
+ for(const e of enrollments){const c=st.rc.find(c=>c.id===e.rc);if(!c)continue;const key='enrollment:'+e.id;service(key,c.name,'Recorded',{status:e.withdrawalClosedOn?'Withdrawn':'Enrolled'});const original=e.withdrawalOriginalPrice??e.price;add('Charge',c,e.date||c.date,original,c.cur,Math.round(original*c.rx),c.rx,key,c.name);if(e.withdrawalClosedOn){const waived=original-e.price;add('Charge',c,e.withdrawalClosedOn,-waived,c.cur,-Math.round(waived*c.rx),c.rx,key,'Withdrawal fee cancellation · '+c.name);}
   const receipts=st.cp.filter(p=>p.re===e.id),opening=(e.paid||0)-receipts.reduce((s,p)=>s+p.amt,0);
   if(opening)add('Payment',c,'',opening,c.cur,Math.round(opening*c.rx),c.rx,key,'Opening payment · '+c.name);
   for(const p of receipts)add('Payment',p,p.date,p.amt,p.cur||c.cur,p.bamt,p.rx,key,'Course payment #'+p.id);
@@ -56,7 +56,7 @@ function student(st,sid,opt={}) {
  for(const a of st.ad.filter(a=>a.s===sid)){
   if(a.kind==='credit')continue;const paid=a.kind==='credit-used'?a.amt:-a.amt;
   const e=add('Adjustment',a,a.date,paid,a.cur,a.bamt==null?null:(a.kind==='credit-used'?a.bamt:-a.bamt),a.rx,null,a.kind+' #'+a.id);
-  if(a.kind==='refund'){let key=a.pr?'project:'+a.pr:null;const cp=a.ok==='cp'&&st.cp.find(p=>p.id===a.oid);if(cp)key='enrollment:'+cp.re;
+  if(a.kind==='refund'){let key=a.enrollment_id?'enrollment:'+a.enrollment_id:a.ok==='re'?'enrollment:'+a.oid:a.pr?'project:'+a.pr:null;const cp=a.ok==='cp'&&st.cp.find(p=>p.id===a.oid);if(cp)key='enrollment:'+cp.re;
    if(key&&services.has(key)){const s=services.get(key);s.paid=s.paid===null||e.amount===null?null:s.paid+e.amount;s.history.push(e);}}
  }
  events.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
@@ -67,7 +67,7 @@ function student(st,sid,opt={}) {
  const account=F.SS(st,sid),complete=closing!==null;
  // Original account remains authoritative: require parity whenever all source values have a valid saved KWD basis.
  const parity=st.set.base!=='KWD'||from||to||!complete?null:closing===account.rem;
- const rows=[...services.values()].map(s=>({...s,remaining:s.charge===null||s.paid===null?null:s.charge-s.paid,paymentStatus:s.charge===null||s.paid===null?'Incomplete':s.paid===0?'Unpaid':s.paid<s.charge?'Partially paid':s.paid===s.charge?'Paid':'Credit'}));
+ const rows=[...services.values()].map(s=>({...s,remaining:s.charge===null||s.paid===null?null:s.charge-s.paid,paymentStatus:s.status==='Withdrawn'&&s.charge===s.paid?'Settled':s.charge===null||s.paid===null?'Incomplete':s.paid===0?'Unpaid':s.paid<s.charge?'Partially paid':s.paid===s.charge?'Paid':'Credit'}));
  const allServiceRemaining=rows.some(s=>s.remaining===null)?null:rows.reduce((q,s)=>q+s.remaining,0),allClosing=total(events,delta),unalloc=total(unallocated,e=>e.amount);
  return {studentId:sid,student:name(st.s,sid),currency:'KWD',from,to,generatedAt:new Date().toISOString(),opening,charges,payments,adjustments,closing,complete:complete&&parity!==false,parity,entries:selected,services:rows,unallocated,
   confirmedCredit:kwdNative&&kwdNative.net<0?-kwdNative.net:0,outstanding:closing!==null&&closing>0?closing:0,credit:closing!==null&&closing<0?-closing:0,
