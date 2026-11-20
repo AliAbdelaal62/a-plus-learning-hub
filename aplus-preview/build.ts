@@ -35,7 +35,7 @@ function embedded() {
   for (const p of walk(join(ORIG, "fixtures"))) add(p);
   add(join(ORIG, "package.json"));
   for (const p of walk(join(HERE, "extensions"))) {
-    if (p.endsWith('.sql') || p.endsWith('.css')) files['/app/preview/' + relative(join(HERE, 'extensions'), p)] = readFileSync(p, 'utf8');
+    if (p.endsWith('.sql') || p.endsWith('.css') || p === join(HERE, 'extensions', 'teacher-payment-ui.js')) files['/app/preview/' + relative(join(HERE, 'extensions'), p)] = readFileSync(p, 'utf8');
   }
   return files;
 }

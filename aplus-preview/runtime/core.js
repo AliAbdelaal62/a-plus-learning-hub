@@ -29,6 +29,7 @@ async function createRuntime({ locateFile, snapshot, cookie = '', onCookie = () 
   for (const [p, txt] of Object.entries(EMBED)) { mk(p.slice(0, p.lastIndexOf('/'))); FS.writeFile(p, txt); }
   fs.writeFileSync('/app/public/index.html',require('../extensions/course-original-adapt').adapt(fs.readFileSync('/app/public/index.html','utf8')));
   fs.writeFileSync('/app/public/index.html',require('../extensions/cashflow-original-adapt').adapt(fs.readFileSync('/app/public/index.html','utf8')));
+  fs.writeFileSync('/app/public/index.html',require('../extensions/teacher-payment-original-adapt').adapt(fs.readFileSync('/app/public/index.html','utf8'),fs.readFileSync('/app/preview/teacher-payment-ui.js','utf8')));
   if(mode==='server')for(const d of PERSIST_DIRS)fs.rmSync(d,{recursive:true,force:true});
   for (const d of PERSIST_DIRS) mk(d);
   if (snapshot) for (const [p, bytes] of snapshot) { if (bytes === null) mk(p); else { mk(p.slice(0, p.lastIndexOf('/'))); FS.writeFile(p, bytes); } }
